@@ -51,7 +51,7 @@ export async function handleDocProposalsList(
     })
     .filter((p) => {
       if (args.scope) {
-        return p.file.startsWith(args.scope.replace('**', '').replace('*', ''));
+        return p.file.startsWith(args.scope.replace(/\*+/g, ''));
       }
       return true;
     });
