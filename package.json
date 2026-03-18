@@ -40,7 +40,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "better-sqlite3": "^11.9.1",
-    "diff": "^7.0.0",
+    "diff": "^8.0.3",
     "micromatch": "^4.0.8",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",
