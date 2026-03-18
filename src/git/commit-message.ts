@@ -40,8 +40,8 @@ export function buildProposalBranch(caller: string, filePath: string): string {
     .replace(/\.\d+Z$/, 'Z');
 
   const sanitisedPath = filePath
-    .replace(/\.md$/, '')
-    .replace(/\//g, '/');
+    .replace(/\.mdx?$/, '')
+    .replace(/\//g, '-');
 
   return `propose/${caller}/${sanitisedPath}/${timestamp}`;
 }

@@ -36,6 +36,6 @@ describe('buildCommitMessage', () => {
 describe('buildProposalBranch', () => {
   it('builds a branch name with expected format', () => {
     const branch = buildProposalBranch('michelle', 'skills/triage-agent.md');
-    expect(branch).toMatch(/^propose\/michelle\/skills\/triage-agent\/\d{8}T\d{4}\d{2}Z$/);
+    expect(branch).toMatch(/^propose\/michelle\/skills-triage-agent\/\d{8}T\d{4}\d{2}Z$/);
   });
 });
