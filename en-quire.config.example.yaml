@@ -1,0 +1,68 @@
+# Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
+#
+# en-quire configuration
+# Copy this file to en-quire.config.yaml and adjust as needed.
+
+# Required: path to the directory containing your markdown documents.
+# Should be a git repository for full governance features.
+document_root: /data/docs
+
+# Server transport
+transport: stdio                    # stdio | streamable-http
+port: 3100                          # Port for streamable-http transport
+
+# Search configuration
+search:
+  fulltext: true                    # Full-text search via SQLite FTS5 (always on)
+  sync_on_start: blocking           # "blocking" (default) or "background" (use for 100k+ docs)
+  batch_size: 500                   # Files per index transaction batch
+  semantic:
+    enabled: false                  # Opt-in semantic vector search
+    endpoint: "http://localhost:11434/api/embeddings"  # e.g. Ollama
+    model: "nomic-embed-text"
+    dimensions: 768
+
+# Logging
+logging:
+  level: info                         # error | warn | info | debug
+  dir: null                           # null = stderr only; set a path for file logging
+  # dir: /app/logs                    # Docker: mount a volume at /app/logs
+
+# Git integration
+git:
+  # enabled: null                   # Auto-detect (checks for .git directory)
+  auto_commit: true                 # Commit on every write operation
+  remote: null                      # Optional: push proposals to remote
+  pr_hook: null                     # Optional: webhook/script to open PRs
+
+# Caller permissions (RBAC)
+# Each caller has a unique ID, optional API key, and scoped permissions.
+callers:
+  default:
+    scopes:
+      - path: "**"
+        permissions:
+          - read
+          - write
+          - propose
+          - search
+
+  # Example: read-only analyst
+  # analyst:
+  #   key: "sk-analyst-..."
+  #   scopes:
+  #     - path: "**"
+  #       permissions:
+  #         - read
+  #         - search
+
+  # Example: scoped agent with different permissions per directory
+  # michelle:
+  #   key: "sk-michelle-ops-..."
+  #   scopes:
+  #     - path: "sops/**"
+  #       permissions: [read, write, propose, search]
+  #     - path: "skills/**"
+  #       permissions: [read, propose, search]
+  #     - path: "memory/**"
+  #       permissions: [read, write, search]

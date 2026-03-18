@@ -1,0 +1,45 @@
+---
+title: Button Component
+---
+
+import { Button } from '@components/Button'
+
+# Button Component
+
+A reusable button component for the en-quire design system.
+
+## Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| variant | `'primary' \| 'secondary'` | `'primary'` | Visual style |
+| size | `'sm' \| 'md' \| 'lg'` | `'md'` | Button size |
+| disabled | `boolean` | `false` | Disabled state |
+
+## Usage
+
+<Button variant="primary">Click me</Button>
+
+### Basic Example
+
+```tsx
+import { Button } from '@components/Button'
+
+export default function Page() {
+  return <Button variant="primary">Submit</Button>
+}
+```
+
+### With Custom Styling
+
+```tsx
+<Button variant="secondary" size="lg">
+  Cancel
+</Button>
+```
+
+## Accessibility
+
+- Uses native `<button>` element
+- Supports keyboard navigation
+- Includes ARIA labels when icon-only
