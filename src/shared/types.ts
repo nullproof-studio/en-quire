@@ -65,6 +65,8 @@ export interface OutlineEntry {
   line_end: number;
   char_count: number;
   has_children: boolean;
+  /** Whether the section has its own body text (vs being a structural container) */
+  has_content: boolean;
 }
 
 /** Search result entry */
