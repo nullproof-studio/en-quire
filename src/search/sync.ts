@@ -2,9 +2,8 @@
 import type Database from 'better-sqlite3';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
-import { listMarkdownFiles, readDocument } from '../shared/file-utils.js';
-import { parseMarkdown } from '../document/parser.js';
-import { buildSectionTree } from '../document/section-tree.js';
+import { listDocumentFiles, readDocument } from '../shared/file-utils.js';
+import { parserRegistry } from '../document/parser-registry.js';
 import { indexDocument, removeFromIndex } from './indexer.js';
 
 /** Default number of files to index per transaction batch. */
@@ -38,7 +37,7 @@ export function syncIndex(
   const start = performance.now();
   const prefix = rootName + '/';
 
-  const files = listMarkdownFiles(documentRoot);
+  const files = listDocumentFiles(documentRoot);
   let indexed = 0;
   let skipped = 0;
   let removed = 0;
@@ -83,8 +82,8 @@ export function syncIndex(
       for (const { file, prefixedPath, mtime } of batch) {
         try {
           const { content } = readDocument(documentRoot, file);
-          const ast = parseMarkdown(content);
-          const tree = buildSectionTree(ast, content);
+          const parser = parserRegistry.getParser(file);
+          const tree = parser.parse(content);
           indexDocument(db, prefixedPath, tree, content, mtime);
           indexed++;
         } catch {

@@ -2,10 +2,8 @@
 import { z } from 'zod';
 import type { ToolContext } from '../context.js';
 import { readDocument } from '../../shared/file-utils.js';
-import { parseMarkdown } from '../../document/parser.js';
-import { buildSectionTree } from '../../document/section-tree.js';
+import { parserRegistry } from '../../document/parser-registry.js';
 import { buildOutline } from '../../document/section-ops.js';
-import { parseAddress } from '../../document/section-address.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
 
@@ -23,10 +21,10 @@ export async function handleDocOutline(
 
   const resolved = resolveFilePath(ctx.config.document_roots, args.file);
   const { content } = readDocument(resolved.root.path, resolved.relativePath);
-  const ast = parseMarkdown(content);
-  const tree = buildSectionTree(ast, content);
+  const parser = parserRegistry.getParser(resolved.relativePath);
+  const tree = parser.parse(content);
 
-  const rootAddress = args.root_section ? parseAddress(args.root_section) : undefined;
+  const rootAddress = args.root_section ? parser.parseAddress(args.root_section) : undefined;
   const headings = buildOutline(content, tree, rootAddress, args.max_depth);
 
   return { headings };

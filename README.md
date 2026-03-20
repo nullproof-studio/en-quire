@@ -1,8 +1,8 @@
 # en-quire
 
-**Structured markdown document management for agent systems, with governance.**
+**Structured document management for agent systems, with governance.**
 
-An MCP server that treats markdown files as structured, section-addressable documents with built-in RBAC, approval workflows via git, and semantic search. Designed for operational use cases where agents need to read, propose edits to, and maintain markdown documents — SOPs, skill files, memory, runbooks — under governance.
+An MCP server that treats markdown and YAML files as structured, section-addressable documents with built-in RBAC, approval workflows via git, and semantic search. Designed for operational use cases where agents need to read, propose edits to, and maintain documents — SOPs, skill files, memory, runbooks, config files — under governance.
 
 > A [Nullproof Studio](https://github.com/nullproof-studio) open-source project.
 
@@ -17,16 +17,20 @@ Agent systems increasingly depend on markdown files as operational infrastructur
 - **Search-only MCPs** — read-only. No write or edit capability.
 - **None of them** have RBAC or approval flows. Every caller is fully trusted.
 
-en-quire fills this gap: a server that understands markdown structure, supports surgical section-level editing, and treats governance as a first-class concern.
+en-quire fills this gap: a server that understands document structure, supports surgical section-level editing, and treats governance as a first-class concern.
 
 ## Key Features
 
-- **Section-addressable editing** — read and write at the heading level, not the file level. Address sections by path (`2.7`), heading text (`## Checks`), or breadcrumb (`Procedures > Checks > Daily`).
+- **Multi-format support** — pluggable parser architecture handles markdown (`.md`, `.mdx`) and YAML (`.yaml`, `.yml`). Both produce the same section tree; all tools work uniformly across formats.
+- **Section-addressable editing** — read and write at the heading/key level, not the file level. Address sections by heading text (`## Checks`), breadcrumb path (`Procedures > Checks > Daily`), positional index (`[0, 1]`), or YAML dot-path (`services.api.environment.PORT`).
+- **Multi-root document management** — configure multiple named document roots with independent git repos, permissions, and search indices. Paths are prefixed by root name (`docs/sops/runbook.md`, `config/docker-compose.yaml`).
 - **Git-native governance** — edits from unprivileged callers land on branches, not main. Approval is a merge. Rejection is branch deletion. The audit trail is commit history.
 - **RBAC inside the MCP** — caller identity and permissions are resolved at the MCP layer. Different agents get different capabilities on different document sets.
 - **Full-text search** — SQLite FTS5 out of the box, with structural ranking (heading match boost, depth penalty, breadcrumb relevance).
 - **Semantic search** (optional) — local embeddings via sqlite-vec. No external API keys required.
 - **Git-optional mode** — full functionality without git for evaluation and local setups; governance features require git.
+- **Write validation** — output is validated before writing. Invalid YAML syntax is blocked; warnings are surfaced to the calling agent.
+- **Language-agnostic** — section addressing and search operate on document structure, not language. SOPs in Japanese, skill files in German, runbooks in Portuguese — en-quire works with any language that markdown supports.
 
 ## MCP Tools
 
@@ -34,7 +38,7 @@ en-quire fills this gap: a server that understands markdown structure, supports 
 `doc_outline` · `doc_read_section` · `doc_read` · `doc_list`
 
 ### Document Editing
-`doc_replace_section` · `doc_insert_section` · `doc_append_section` · `doc_delete_section` · `doc_create` · `doc_find_replace` · `doc_rename` · `doc_status`
+`doc_replace_section` · `doc_insert_section` · `doc_append_section` · `doc_delete_section` · `doc_set_value` · `doc_create` · `doc_find_replace` · `doc_rename` · `doc_generate_toc` · `doc_status`
 
 ### Search
 `doc_search` · `doc_list`
@@ -108,14 +112,16 @@ doc_read_section({ file: "sops/deployment.md", section: "2. Deployment Steps" })
     prev_sibling: "1. Pre-deployment", next_sibling: "3. Post-deployment" }
 ```
 
-Sections can be addressed four ways:
+Sections can be addressed in multiple ways:
 
 | Style | Example | Use when |
 |-------|---------|----------|
 | Heading text | `"2. Deployment Steps"` | You know the exact heading |
-| Breadcrumb path | `"Deployment Procedures > 2. Deployment Steps"` | Disambiguating duplicates |
+| Breadcrumb path | `"Procedures > Checks > Daily"` | Disambiguating duplicates |
 | Positional index | `"[0, 1]"` | Navigating programmatically |
 | Glob pattern | `"2.*"` | Matching multiple sections |
+| Dot-path (YAML) | `"services.api.environment.PORT"` | YAML key hierarchies |
+| Bracket notation (YAML) | `"services['my.dotted.key']"` | YAML keys containing dots |
 
 ### 4. Search across documents
 
@@ -166,7 +172,28 @@ doc_proposal_diff({ branch: "propose/michelle/sops/deployment/20260317T1423Z" })
 doc_proposal_approve({ branch: "propose/michelle/sops/deployment/20260317T1423Z" })
 ```
 
-### 7. Append, insert, and find-replace
+### 7. Work with YAML files
+
+YAML files are first-class citizens. The same tools work with dot-path addressing:
+
+```
+doc_outline({ file: "config/docker-compose.yaml" })
+→ { headings: [
+    { level: 1, text: "version", has_children: false },
+    { level: 1, text: "services", has_children: true },
+    ...
+  ]}
+
+doc_read_section({ file: "config/docker-compose.yaml", section: "services.api.environment" })
+→ { content: "      NODE_ENV: production\n      PORT: 3100\n", heading: "environment" }
+
+doc_set_value({ file: "config/docker-compose.yaml", path: "services.api.environment.PORT", value: "8080" })
+→ { success: true, mode: "write", commit: "d4e5f6a" }
+```
+
+`doc_set_value` preserves the original YAML quote style — if the value was `"quoted"`, the replacement stays quoted.
+
+### 8. Append, insert, and find-replace
 
 ```
 doc_append_section({
@@ -196,8 +223,12 @@ doc_find_replace({
 ```yaml
 # en-quire.config.yaml
 
-# Required
-document_root: /data/docs          # Must be a git repository
+# Document roots (multiple supported)
+document_roots:
+  docs:
+    path: /data/docs                # Must be a git repository for governance
+  config:
+    path: /data/config              # YAML configs, docker-compose, etc.
 
 # Server
 transport: stdio                    # stdio | streamable-http
@@ -238,6 +269,7 @@ callers:
 | Language | TypeScript |
 | Runtime | Node.js 22 (LTS) |
 | Markdown AST | unified / remark |
+| YAML parser | yaml (with source token preservation) |
 | Git operations | simple-git |
 | Full-text search | better-sqlite3 + FTS5 |
 | Vector search | sqlite-vec (optional) |

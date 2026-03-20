@@ -20,6 +20,7 @@ import { DocCreateSchema, handleDocCreate } from './tools/write/doc-create.js';
 import { DocFindReplaceSchema, handleDocFindReplace } from './tools/write/doc-find-replace.js';
 import { DocRenameSchema, handleDocRename } from './tools/write/doc-rename.js';
 import { DocGenerateTocSchema, handleDocGenerateToc } from './tools/write/doc-generate-toc.js';
+import { DocSetValueSchema, handleDocSetValue } from './tools/write/doc-set-value.js';
 
 // Status
 import { DocStatusSchema, handleDocStatus } from './tools/status/doc-status.js';
@@ -95,6 +96,7 @@ export function createServer(deps: ServerDependencies): McpServer {
   server.tool('doc_find_replace', 'Find and replace text in a document', DocFindReplaceSchema.shape, wrapHandler(handleDocFindReplace));
   server.tool('doc_rename', 'Rename a document (within the same root)', DocRenameSchema.shape, wrapHandler(handleDocRename));
   server.tool('doc_generate_toc', 'Generate or update table of contents', DocGenerateTocSchema.shape, wrapHandler(handleDocGenerateToc));
+  server.tool('doc_set_value', 'Set a scalar value at a path. For YAML: directly sets the value (e.g. path: "services.api.port", value: "8080"). For markdown: replaces the section body (syntactic sugar over doc_replace_section).', DocSetValueSchema.shape, wrapHandler(handleDocSetValue));
 
   // Status
   server.tool('doc_status', 'Check document status, pending proposals, and index health across roots', DocStatusSchema.shape, wrapHandler(handleDocStatus));

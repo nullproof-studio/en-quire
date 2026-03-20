@@ -1,7 +1,7 @@
 {
   "name": "@nullproof-studio/en-quire",
-  "version": "0.1.0",
-  "description": "Structured markdown document management for agent systems, with governance. An MCP server.",
+  "version": "0.1.5",
+  "description": "Structured document management for agent systems, with governance. An MCP server.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

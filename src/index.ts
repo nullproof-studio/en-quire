@@ -8,6 +8,9 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { loadConfig } from './config/loader.js';
 import { openDatabase } from './search/database.js';
 import { syncIndex } from './search/sync.js';
+// Register format parsers (side-effect imports)
+import './document/markdown-parser.js';
+import './document/yaml-parser.js';
 import { GitOperations } from './git/operations.js';
 import { resolveCaller } from './rbac/resolver.js';
 import { createServer } from './server.js';

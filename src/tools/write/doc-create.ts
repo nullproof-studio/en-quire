@@ -5,8 +5,7 @@ import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import type { ToolContext } from '../context.js';
 import { safePath, writeDocument } from '../../shared/file-utils.js';
-import { parseMarkdown } from '../../document/parser.js';
-import { buildSectionTree } from '../../document/section-tree.js';
+import { parserRegistry } from '../../document/parser-registry.js';
 import { indexDocument } from '../../search/indexer.js';
 import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
 import { requirePermission, resolveWriteMode } from '../../rbac/permissions.js';
@@ -53,6 +52,16 @@ export async function handleDocCreate(
       await git.createBranch(branch);
     }
 
+    // Validate content before writing
+    const parser = parserRegistry.getParser(resolved.relativePath);
+    const createWarnings = parser.validate(args.content);
+    const hasErrors = createWarnings.some((w) => w.includes('syntax error') || w.includes('parse error'));
+    if (hasErrors) {
+      throw new ValidationError(
+        `Write blocked — content has invalid syntax:\n${createWarnings.join('\n')}`,
+      );
+    }
+
     writeDocument(resolved.root.path, resolved.relativePath, args.content);
 
     let commit: string | undefined;
@@ -70,14 +79,17 @@ export async function handleDocCreate(
 
     // Index the new document (use prefixed path)
     try {
-      const ast = parseMarkdown(args.content);
-      const tree = buildSectionTree(ast, args.content);
+      const parser = parserRegistry.getParser(resolved.relativePath);
+      const tree = parser.parse(args.content);
       indexDocument(ctx.db, resolved.prefixedPath, tree, args.content);
     } catch {
       // Non-fatal
     }
 
-    return { success: true, file: args.file, mode, branch, commit };
+    return {
+      success: true, file: args.file, mode, branch, commit,
+      ...(createWarnings.length > 0 && { warnings: createWarnings }),
+    };
   } finally {
     if (mode === 'propose' && originalBranch && git?.available) {
       await git.switchBranch(originalBranch);
