@@ -18,9 +18,11 @@ export interface SyncResult {
 }
 
 /**
- * Synchronise the search index with the document root.
- * Re-indexes files that have changed since they were last indexed.
- * Removes files from the index that no longer exist.
+ * Synchronise the search index for a single document root.
+ *
+ * File paths are stored in the index with a rootName prefix
+ * (e.g. "codex/article.md") so cross-root search works via
+ * file_path GLOB 'rootName/*'.
  *
  * Optimised for large document roots (100k+ files):
  * - Bulk-loads all indexed mtimes into a Map (single query, no per-file lookups)
@@ -29,28 +31,33 @@ export interface SyncResult {
  */
 export function syncIndex(
   db: Database.Database,
+  rootName: string,
   documentRoot: string,
   batchSize: number = BATCH_SIZE,
 ): SyncResult {
   const start = performance.now();
+  const prefix = rootName + '/';
 
   const files = listMarkdownFiles(documentRoot);
   let indexed = 0;
   let skipped = 0;
   let removed = 0;
 
-  // Bulk-load all indexed mtimes in a single query
+  // Bulk-load indexed mtimes for this root only (prefixed paths)
+  const allMtimes = db.prepare('SELECT file_path, mtime_ms FROM index_metadata').all() as Array<{ file_path: string; mtime_ms: number }>;
   const indexedMtimes = new Map<string, number>(
-    (db.prepare('SELECT file_path, mtime_ms FROM index_metadata').all() as Array<{ file_path: string; mtime_ms: number }>)
+    allMtimes
+      .filter((row) => row.file_path.startsWith(prefix))
       .map((row) => [row.file_path, row.mtime_ms]),
   );
 
   // Collect files that need (re-)indexing
-  const toIndex: Array<{ file: string; absolutePath: string; mtime: number }> = [];
-  const fileSet = new Set<string>();
+  const toIndex: Array<{ file: string; prefixedPath: string; absolutePath: string; mtime: number }> = [];
+  const prefixedFileSet = new Set<string>();
 
   for (const file of files) {
-    fileSet.add(file);
+    const prefixedPath = prefix + file;
+    prefixedFileSet.add(prefixedPath);
     const absolutePath = join(documentRoot, file);
     let mtime: number;
     try {
@@ -59,13 +66,13 @@ export function syncIndex(
       continue;
     }
 
-    const lastIndexed = indexedMtimes.get(file);
+    const lastIndexed = indexedMtimes.get(prefixedPath);
     if (lastIndexed !== undefined && lastIndexed >= mtime) {
       skipped++;
       continue;
     }
 
-    toIndex.push({ file, absolutePath, mtime });
+    toIndex.push({ file, prefixedPath, absolutePath, mtime });
   }
 
   // Index in batched transactions
@@ -73,12 +80,12 @@ export function syncIndex(
     const batch = toIndex.slice(i, i + batchSize);
 
     const runBatch = db.transaction(() => {
-      for (const { file, mtime } of batch) {
+      for (const { file, prefixedPath, mtime } of batch) {
         try {
           const { content } = readDocument(documentRoot, file);
           const ast = parseMarkdown(content);
           const tree = buildSectionTree(ast, content);
-          indexDocument(db, file, tree, content, mtime);
+          indexDocument(db, prefixedPath, tree, content, mtime);
           indexed++;
         } catch {
           // Skip files that can't be parsed (encoding errors, etc.)
@@ -90,10 +97,10 @@ export function syncIndex(
     runBatch();
   }
 
-  // Remove files from index that no longer exist on disk
+  // Remove files from index that no longer exist on disk (for this root)
   const toRemove: string[] = [];
   for (const [filePath] of indexedMtimes) {
-    if (!fileSet.has(filePath)) {
+    if (!prefixedFileSet.has(filePath)) {
       toRemove.push(filePath);
     }
   }

@@ -1,15 +1,11 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import Database from 'better-sqlite3';
-import { join } from 'node:path';
 import { initSearchSchema } from './schema.js';
-
-const DB_FILENAME = '.enquire.db';
 
 /**
  * Open (or create) the SQLite database for search indexing.
  */
-export function openDatabase(documentRoot: string): Database.Database {
-  const dbPath = join(documentRoot, DB_FILENAME);
+export function openDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
 
   // Performance pragmas
