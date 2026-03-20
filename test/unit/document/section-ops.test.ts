@@ -117,6 +117,74 @@ describe('insertSection', () => {
   });
 });
 
+describe('insertSection — heading sanitisation', () => {
+  it('strips leading # markers from heading parameter', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n';
+    const tree = parse(md);
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', '## New Section', 'Body.');
+    expect(result).toContain('## New Section');
+    expect(result).not.toContain('## ## New Section');
+  });
+
+  it('strips multiple # markers from heading', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n';
+    const tree = parse(md);
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', '### Deep Section', 'Body.', 3);
+    expect(result).toContain('### Deep Section');
+    expect(result).not.toContain('### ### Deep Section');
+  });
+
+  it('handles headings without # markers (normal case)', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n';
+    const tree = parse(md);
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'Clean Heading', 'Body.');
+    expect(result).toContain('## Clean Heading');
+  });
+});
+
+describe('replaceSection — heading preservation', () => {
+  it('preserves heading when replaceHeading=true but content has no heading line', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(
+      md, tree,
+      { type: 'text', text: 'A' },
+      'New body only.\n',
+      true,
+    );
+    expect(result).toContain('## A');
+    expect(result).toContain('New body only.');
+    expect(result).not.toContain('Old content.');
+  });
+
+  it('replaces heading text when replaceHeading is a string', () => {
+    const md = '# Doc\n\n## A\n\nContent.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(
+      md, tree,
+      { type: 'text', text: 'A' },
+      'New body.\n',
+      'Renamed Section',
+    );
+    expect(result).toContain('## Renamed Section');
+    expect(result).toContain('New body.');
+    expect(result).not.toContain('## A\n');
+  });
+
+  it('strips # markers when replaceHeading is a string with markers', () => {
+    const md = '# Doc\n\n## A\n\nContent.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(
+      md, tree,
+      { type: 'text', text: 'A' },
+      'New body.\n',
+      '## Renamed Section',
+    );
+    expect(result).toContain('## Renamed Section');
+    expect(result).not.toContain('## ## Renamed Section');
+  });
+});
+
 describe('appendToSection', () => {
   it('appends content to section body', () => {
     const md = '# Doc\n\n## A\n\nExisting content.\n\n## B\n\nContent B.\n';
