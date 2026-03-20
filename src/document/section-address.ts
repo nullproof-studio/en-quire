@@ -5,6 +5,15 @@ import { AddressResolutionError } from '../shared/errors.js';
 import { flattenTree } from './section-tree.js';
 
 /**
+ * Strip leading markdown heading markers (e.g. "## Foo" → "Foo").
+ * Agents frequently include these when addressing sections; since the
+ * level is structural, the markers are always redundant in addresses.
+ */
+function stripAddressMarkers(text: string): string {
+  return text.replace(/^#+\s+/, '');
+}
+
+/**
  * Parse a raw address string into a typed SectionAddress.
  *
  * Rules:
@@ -12,6 +21,9 @@ import { flattenTree } from './section-tree.js';
  * - If it contains " > " → PathAddress
  * - If it contains glob characters (*, ?) → PatternAddress
  * - Otherwise → TextAddress
+ *
+ * Leading heading markers (e.g. "## ") are silently stripped from text
+ * and path segments so that agents don't get stuck in retry loops.
  */
 export function parseAddress(raw: string): SectionAddress {
   const trimmed = raw.trim();
@@ -32,7 +44,7 @@ export function parseAddress(raw: string): SectionAddress {
   if (trimmed.includes(' > ')) {
     return {
       type: 'path',
-      segments: trimmed.split(' > ').map((s) => s.trim()),
+      segments: trimmed.split(' > ').map((s) => stripAddressMarkers(s.trim())),
     };
   }
 
@@ -41,8 +53,8 @@ export function parseAddress(raw: string): SectionAddress {
     return { type: 'pattern', pattern: trimmed };
   }
 
-  // Default: text address
-  return { type: 'text', text: trimmed };
+  // Default: text address (strip heading markers)
+  return { type: 'text', text: stripAddressMarkers(trimmed) };
 }
 
 /**
@@ -103,21 +115,21 @@ function resolveTextAddress(tree: SectionNode[], text: string): SectionNode[] {
 function resolvePathAddress(tree: SectionNode[], segments: string[]): SectionNode[] {
   if (segments.length === 0) return [];
 
-  let candidates = tree;
-  let matches: SectionNode[] = [];
+  // First segment: search the entire tree (not just top-level roots)
+  // so that partial paths like "Section Two > Subsection 2.1" work
+  // without requiring the full path from the document root.
+  const all = flattenTree(tree);
+  let matches = all.filter((n) => n.heading.text === segments[0]);
 
-  for (let i = 0; i < segments.length; i++) {
+  if (matches.length === 0) return [];
+
+  // Subsequent segments: walk children of current matches
+  for (let i = 1; i < segments.length; i++) {
     const segment = segments[i];
+    const candidates = matches.flatMap((n) => n.children);
     matches = candidates.filter((n) => n.heading.text === segment);
 
-    if (matches.length === 0) {
-      return [];
-    }
-
-    if (i < segments.length - 1) {
-      // Collect all children of current matches for next segment
-      candidates = matches.flatMap((n) => n.children);
-    }
+    if (matches.length === 0) return [];
   }
 
   return matches;

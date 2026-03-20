@@ -125,6 +125,73 @@ describe('resolveAddress', () => {
   });
 });
 
+describe('heading marker stripping in addresses', () => {
+  it('strips ## prefix from text address', () => {
+    expect(parseAddress('## Section One')).toEqual({ type: 'text', text: 'Section One' });
+  });
+
+  it('strips ### prefix from text address', () => {
+    expect(parseAddress('### Deep Section')).toEqual({ type: 'text', text: 'Deep Section' });
+  });
+
+  it('strips markers from each path segment', () => {
+    expect(parseAddress('## Parent > ### Child')).toEqual({
+      type: 'path',
+      segments: ['Parent', 'Child'],
+    });
+  });
+
+  it('resolves section with ## prefix in address', () => {
+    const tree = loadTree('simple.md');
+    const matches = resolveAddress(tree, parseAddress('## Section One'));
+    expect(matches.length).toBe(1);
+    expect(matches[0].heading.text).toBe('Section One');
+  });
+
+  it('does not strip # from non-heading text', () => {
+    // A single # followed by no space is not a heading marker
+    expect(parseAddress('#hashtag')).toEqual({ type: 'text', text: '#hashtag' });
+  });
+});
+
+describe('partial path addressing', () => {
+  it('resolves partial path without document root', () => {
+    const tree = loadTree('simple.md');
+    const matches = resolveAddress(tree, {
+      type: 'path',
+      segments: ['Section Two', 'Subsection 2.1'],
+    });
+    expect(matches.length).toBe(1);
+    expect(matches[0].heading.text).toBe('Subsection 2.1');
+  });
+
+  it('resolves full path from root', () => {
+    const tree = loadTree('simple.md');
+    const matches = resolveAddress(tree, {
+      type: 'path',
+      segments: ['Simple Document', 'Section Two', 'Subsection 2.1'],
+    });
+    expect(matches.length).toBe(1);
+    expect(matches[0].heading.text).toBe('Subsection 2.1');
+  });
+
+  it('resolves via parseAddress with > separator', () => {
+    const tree = loadTree('simple.md');
+    const address = parseAddress('Section Two > Subsection 2.1');
+    const section = resolveSingleSection(tree, address);
+    expect(section.heading.text).toBe('Subsection 2.1');
+  });
+
+  it('returns empty for non-matching partial path', () => {
+    const tree = loadTree('simple.md');
+    const matches = resolveAddress(tree, {
+      type: 'path',
+      segments: ['Section One', 'Subsection 2.1'],
+    });
+    expect(matches.length).toBe(0);
+  });
+});
+
 describe('resolveSingleSection', () => {
   it('returns the single match', () => {
     const tree = loadTree('simple.md');
