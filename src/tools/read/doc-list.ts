@@ -7,6 +7,7 @@ import { listMarkdownFiles, readDocument } from '../../shared/file-utils.js';
 import { parseMarkdown } from '../../document/parser.js';
 import { buildSectionTree } from '../../document/section-tree.js';
 import { requirePermission } from '../../rbac/permissions.js';
+import { resolveScope } from '../../config/roots.js';
 
 export const DocListSchema = z.object({
   scope: z.string().optional(),
@@ -19,44 +20,64 @@ export async function handleDocList(
 ) {
   requirePermission(ctx.caller, 'read', args.scope ?? '**');
 
-  const files = listMarkdownFiles(ctx.documentRoot, args.scope);
+  const { rootName, scopeWithinRoot } = resolveScope(ctx.config.document_roots, args.scope);
 
-  const fileList = files.map((file) => {
-    const absolutePath = join(ctx.documentRoot, file);
-    const stat = statSync(absolutePath);
+  // Determine which roots to list
+  const rootsToList = rootName
+    ? { [rootName]: ctx.config.document_roots[rootName] }
+    : ctx.config.document_roots;
 
-    const entry: {
-      path: string;
-      size: number;
-      modified: string;
-      outline?: Array<{ level: number; text: string }>;
-    } = {
-      path: file,
-      size: stat.size,
-      modified: stat.mtime.toISOString(),
-    };
+  const fileList: Array<{
+    path: string;
+    root: string;
+    size: number;
+    modified: string;
+    outline?: Array<{ level: number; text: string }>;
+  }> = [];
 
-    if (args.include_outline) {
+  for (const [name, root] of Object.entries(rootsToList)) {
+    const files = listMarkdownFiles(root.path, scopeWithinRoot);
+
+    for (const file of files) {
+      const absolutePath = join(root.path, file);
+      let stat;
       try {
-        const { content } = readDocument(ctx.documentRoot, file);
-        const ast = parseMarkdown(content);
-        const tree = buildSectionTree(ast, content);
-        const flatOutline = (function flatten(nodes: typeof tree): Array<{ level: number; text: string }> {
-          const result: Array<{ level: number; text: string }> = [];
-          for (const node of nodes) {
-            result.push({ level: node.heading.level, text: node.heading.text });
-            result.push(...flatten(node.children));
-          }
-          return result;
-        })(tree);
-        entry.outline = flatOutline;
+        stat = statSync(absolutePath);
       } catch {
-        // Skip outline on error
+        continue;
       }
-    }
 
-    return entry;
-  });
+      const prefixedPath = `${name}/${file}`;
+
+      const entry: typeof fileList[number] = {
+        path: prefixedPath,
+        root: name,
+        size: stat.size,
+        modified: stat.mtime.toISOString(),
+      };
+
+      if (args.include_outline) {
+        try {
+          const { content } = readDocument(root.path, file);
+          const ast = parseMarkdown(content);
+          const tree = buildSectionTree(ast, content);
+          const flatOutline = (function flatten(nodes: typeof tree): Array<{ level: number; text: string }> {
+            const result: Array<{ level: number; text: string }> = [];
+            for (const node of nodes) {
+              result.push({ level: node.heading.level, text: node.heading.text });
+              result.push(...flatten(node.children));
+            }
+            return result;
+          })(tree);
+          entry.outline = flatOutline;
+        } catch {
+          // Skip outline on error
+        }
+      }
+
+      fileList.push(entry);
+    }
+  }
 
   return { files: fileList };
 }

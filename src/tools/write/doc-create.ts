@@ -11,6 +11,7 @@ import { indexDocument } from '../../search/indexer.js';
 import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
 import { requirePermission, resolveWriteMode } from '../../rbac/permissions.js';
 import { GitRequiredError, ValidationError } from '../../shared/errors.js';
+import { resolveFilePath } from '../../config/roots.js';
 
 export const DocCreateSchema = z.object({
   file: z.string(),
@@ -24,13 +25,17 @@ export async function handleDocCreate(
   ctx: ToolContext,
 ) {
   requirePermission(ctx.caller, 'read', args.file);
+
+  const resolved = resolveFilePath(ctx.config.document_roots, args.file);
+  const rootCtx = ctx.roots[resolved.rootName];
+  const git = rootCtx?.git;
   const mode = resolveWriteMode(ctx.caller, args.file, args.mode);
 
-  if (mode === 'propose' && !ctx.git?.available) {
+  if (mode === 'propose' && !git?.available) {
     throw new GitRequiredError('Proposal workflows');
   }
 
-  const absolutePath = safePath(ctx.documentRoot, args.file);
+  const absolutePath = safePath(resolved.root.path, resolved.relativePath);
   if (existsSync(absolutePath)) {
     throw new ValidationError(`File already exists: ${args.file}. Use doc_replace_section or doc_find_replace to modify existing files.`);
   }
@@ -40,18 +45,18 @@ export async function handleDocCreate(
   mkdirSync(dir, { recursive: true });
 
   let branch: string | undefined;
-  const originalBranch = ctx.git?.available ? await ctx.git.getCurrentBranch() : undefined;
+  const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
 
   try {
-    if (mode === 'propose' && ctx.git?.available) {
+    if (mode === 'propose' && git?.available) {
       branch = buildProposalBranch(ctx.caller.id, args.file);
-      await ctx.git.createBranch(branch);
+      await git.createBranch(branch);
     }
 
-    writeDocument(ctx.documentRoot, args.file, args.content);
+    writeDocument(resolved.root.path, resolved.relativePath, args.content);
 
     let commit: string | undefined;
-    if (ctx.git?.available) {
+    if (git?.available) {
       const commitMsg = buildCommitMessage({
         operation: 'Create document',
         target: args.file,
@@ -60,22 +65,22 @@ export async function handleDocCreate(
         mode,
         userMessage: args.message,
       });
-      commit = await ctx.git.commitFile(args.file, commitMsg);
+      commit = await git.commitFile(resolved.relativePath, commitMsg);
     }
 
-    // Index the new document
+    // Index the new document (use prefixed path)
     try {
       const ast = parseMarkdown(args.content);
       const tree = buildSectionTree(ast, args.content);
-      indexDocument(ctx.db, args.file, tree, args.content);
+      indexDocument(ctx.db, resolved.prefixedPath, tree, args.content);
     } catch {
       // Non-fatal
     }
 
     return { success: true, file: args.file, mode, branch, commit };
   } finally {
-    if (mode === 'propose' && originalBranch && ctx.git?.available) {
-      await ctx.git.switchBranch(originalBranch);
+    if (mode === 'propose' && originalBranch && git?.available) {
+      await git.switchBranch(originalBranch);
     }
   }
 }

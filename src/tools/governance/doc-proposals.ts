@@ -3,6 +3,73 @@ import { z } from 'zod';
 import type { ToolContext } from '../context.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { GitRequiredError } from '../../shared/errors.js';
+import type { GitOperations } from '../../git/operations.js';
+
+/**
+ * Find a git-enabled root. If rootName is provided, use that specific root.
+ * Otherwise return the first git-enabled root.
+ */
+function findGitRoot(ctx: ToolContext, rootName?: string): { name: string; git: GitOperations } {
+  if (rootName) {
+    const rootCtx = ctx.roots[rootName];
+    if (!rootCtx?.git?.available) {
+      throw new GitRequiredError(`Proposals (root "${rootName}" has no git)`);
+    }
+    return { name: rootName, git: rootCtx.git };
+  }
+
+  for (const [name, rootCtx] of Object.entries(ctx.roots)) {
+    if (rootCtx.git?.available) {
+      return { name, git: rootCtx.git };
+    }
+  }
+
+  throw new GitRequiredError('Proposals (no git-enabled roots)');
+}
+
+/**
+ * Collect proposals across all git-enabled roots.
+ */
+async function collectProposals(ctx: ToolContext) {
+  const allProposals: Array<{
+    branch: string;
+    caller: string;
+    file: string;
+    root: string;
+    section: string;
+    operation: string;
+    message: string;
+    created: string;
+    diff_summary: string;
+  }> = [];
+
+  for (const [name, rootCtx] of Object.entries(ctx.roots)) {
+    if (!rootCtx.git?.available) continue;
+
+    const branches = await rootCtx.git.listBranches('propose/');
+    for (const branch of branches) {
+      const parts = branch.replace('propose/', '').split('/');
+      const caller = parts[0];
+      const timestamp = parts[parts.length - 1];
+      const fileParts = parts.slice(1, -1);
+      const file = `${name}/${fileParts.join('/')}.md`;
+
+      allProposals.push({
+        branch,
+        caller,
+        file,
+        root: name,
+        section: '',
+        operation: '',
+        message: '',
+        created: timestamp,
+        diff_summary: '',
+      });
+    }
+  }
+
+  return allProposals;
+}
 
 // --- doc_proposals_list ---
 
@@ -17,37 +84,14 @@ export async function handleDocProposalsList(
 ) {
   requirePermission(ctx.caller, 'read', args.scope ?? '**');
 
-  if (!ctx.git?.available) {
-    throw new GitRequiredError('Listing proposals');
-  }
+  const proposals = await collectProposals(ctx);
 
-  const branches = await ctx.git.listBranches('propose/');
-
-  const proposals = branches
-    .filter((b) => {
+  const filtered = proposals
+    .filter((p) => {
       if (args.caller) {
-        return b.startsWith(`propose/${args.caller}/`);
+        return p.caller === args.caller;
       }
       return true;
-    })
-    .map((branch) => {
-      // Parse branch name: propose/{caller}/{path}/{timestamp}
-      const parts = branch.replace('propose/', '').split('/');
-      const caller = parts[0];
-      const timestamp = parts[parts.length - 1];
-      const fileParts = parts.slice(1, -1);
-      const file = fileParts.join('/') + '.md';
-
-      return {
-        branch,
-        caller,
-        file,
-        section: '', // Would need to parse the commit to get this
-        operation: '',
-        message: '',
-        created: timestamp,
-        diff_summary: '',
-      };
     })
     .filter((p) => {
       if (args.scope) {
@@ -56,22 +100,21 @@ export async function handleDocProposalsList(
       return true;
     });
 
-  return { proposals };
+  return { proposals: filtered };
 }
 
 // --- doc_proposal_diff ---
 
 export const DocProposalDiffSchema = z.object({
   branch: z.string(),
+  root: z.string().optional().describe('Root name where the proposal lives. Required if multiple git-enabled roots.'),
 });
 
 export async function handleDocProposalDiff(
   args: z.infer<typeof DocProposalDiffSchema>,
   ctx: ToolContext,
 ) {
-  if (!ctx.git?.available) {
-    throw new GitRequiredError('Viewing proposal diff');
-  }
+  const { git } = findGitRoot(ctx, args.root);
 
   // Parse caller and file from branch name
   const parts = args.branch.replace('propose/', '').split('/');
@@ -81,7 +124,7 @@ export async function handleDocProposalDiff(
 
   requirePermission(ctx.caller, 'read', file);
 
-  const diff = await ctx.git.getDiff(args.branch);
+  const diff = await git.getDiff(args.branch);
 
   return { diff, file, caller, message: '' };
 }
@@ -91,6 +134,7 @@ export async function handleDocProposalDiff(
 export const DocProposalApproveSchema = z.object({
   branch: z.string(),
   message: z.string().optional(),
+  root: z.string().optional(),
 });
 
 export async function handleDocProposalApprove(
@@ -99,22 +143,19 @@ export async function handleDocProposalApprove(
 ) {
   requirePermission(ctx.caller, 'approve', '**');
 
-  if (!ctx.git?.available) {
-    throw new GitRequiredError('Approving proposals');
-  }
+  const { git } = findGitRoot(ctx, args.root);
 
-  // Parse file from branch name
   const parts = args.branch.replace('propose/', '').split('/');
   const fileParts = parts.slice(1, -1);
   const file = fileParts.join('/') + '.md';
 
   const mergeMessage = args.message ?? `[en-quire] Approve proposal: ${args.branch}`;
-  await ctx.git.mergeBranch(args.branch, mergeMessage);
-  await ctx.git.deleteBranch(args.branch);
+  await git.mergeBranch(args.branch, mergeMessage);
+  await git.deleteBranch(args.branch);
 
   return {
     success: true,
-    merge_commit: '', // Would need to capture from merge result
+    merge_commit: '',
     file,
     branch: args.branch,
   };
@@ -125,6 +166,7 @@ export async function handleDocProposalApprove(
 export const DocProposalRejectSchema = z.object({
   branch: z.string(),
   reason: z.string().optional(),
+  root: z.string().optional(),
 });
 
 export async function handleDocProposalReject(
@@ -133,11 +175,9 @@ export async function handleDocProposalReject(
 ) {
   requirePermission(ctx.caller, 'approve', '**');
 
-  if (!ctx.git?.available) {
-    throw new GitRequiredError('Rejecting proposals');
-  }
+  const { git } = findGitRoot(ctx, args.root);
 
-  await ctx.git.deleteBranch(args.branch);
+  await git.deleteBranch(args.branch);
 
   return { success: true, branch: args.branch };
 }

@@ -7,6 +7,7 @@ import { removeFromIndex } from '../../search/indexer.js';
 import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
 import { requirePermission, resolveWriteMode } from '../../rbac/permissions.js';
 import { NotFoundError, ValidationError, GitRequiredError } from '../../shared/errors.js';
+import { resolveFilePath } from '../../config/roots.js';
 
 export const DocRenameSchema = z.object({
   source: z.string(),
@@ -20,14 +21,27 @@ export async function handleDocRename(
   ctx: ToolContext,
 ) {
   requirePermission(ctx.caller, 'read', args.source);
+
+  const srcResolved = resolveFilePath(ctx.config.document_roots, args.source);
+  const destResolved = resolveFilePath(ctx.config.document_roots, args.destination);
+
+  // Cross-root rename not supported (different git repos / governance)
+  if (srcResolved.rootName !== destResolved.rootName) {
+    throw new ValidationError(
+      `Cannot rename across roots ("${srcResolved.rootName}" → "${destResolved.rootName}"). Use doc_read + doc_create + doc_delete instead.`,
+    );
+  }
+
+  const rootCtx = ctx.roots[srcResolved.rootName];
+  const git = rootCtx?.git;
   const mode = resolveWriteMode(ctx.caller, args.source, args.mode);
 
-  if (mode === 'propose' && !ctx.git?.available) {
+  if (mode === 'propose' && !git?.available) {
     throw new GitRequiredError('Proposal workflows');
   }
 
-  const sourcePath = safePath(ctx.documentRoot, args.source);
-  const destPath = safePath(ctx.documentRoot, args.destination);
+  const sourcePath = safePath(srcResolved.root.path, srcResolved.relativePath);
+  const destPath = safePath(destResolved.root.path, destResolved.relativePath);
 
   if (!existsSync(sourcePath)) {
     throw new NotFoundError('file', args.source);
@@ -37,18 +51,18 @@ export async function handleDocRename(
   }
 
   let branch: string | undefined;
-  const originalBranch = ctx.git?.available ? await ctx.git.getCurrentBranch() : undefined;
+  const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
 
   try {
-    if (mode === 'propose' && ctx.git?.available) {
+    if (mode === 'propose' && git?.available) {
       branch = buildProposalBranch(ctx.caller.id, args.source);
-      await ctx.git.createBranch(branch);
+      await git.createBranch(branch);
     }
 
     renameSync(sourcePath, destPath);
 
     let commit: string | undefined;
-    if (ctx.git?.available) {
+    if (git?.available) {
       const commitMsg = buildCommitMessage({
         operation: 'Rename document',
         target: `${args.source} → ${args.destination}`,
@@ -57,16 +71,19 @@ export async function handleDocRename(
         mode,
         userMessage: args.message,
       });
-      commit = await ctx.git.commitFiles([args.source, args.destination], commitMsg);
+      commit = await git.commitFiles(
+        [srcResolved.relativePath, destResolved.relativePath],
+        commitMsg,
+      );
     }
 
-    // Update search index
-    removeFromIndex(ctx.db, args.source);
+    // Update search index (remove old prefixed path)
+    removeFromIndex(ctx.db, srcResolved.prefixedPath);
 
     return { success: true, source: args.source, destination: args.destination, mode, branch, commit };
   } finally {
-    if (mode === 'propose' && originalBranch && ctx.git?.available) {
-      await ctx.git.switchBranch(originalBranch);
+    if (mode === 'propose' && originalBranch && git?.available) {
+      await git.switchBranch(originalBranch);
     }
   }
 }

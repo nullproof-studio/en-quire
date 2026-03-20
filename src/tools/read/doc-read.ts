@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ToolContext } from '../context.js';
 import { readDocument } from '../../shared/file-utils.js';
 import { requirePermission } from '../../rbac/permissions.js';
+import { resolveFilePath } from '../../config/roots.js';
 
 export const DocReadSchema = z.object({
   file: z.string(),
@@ -16,7 +17,8 @@ export async function handleDocRead(
 ) {
   requirePermission(ctx.caller, 'read', args.file);
 
-  const { content } = readDocument(ctx.documentRoot, args.file);
+  const resolved = resolveFilePath(ctx.config.document_roots, args.file);
+  const { content } = readDocument(resolved.root.path, resolved.relativePath);
   const lines = content.split('\n');
   const totalLines = lines.length;
   const totalPages = Math.ceil(totalLines / args.page_size);
