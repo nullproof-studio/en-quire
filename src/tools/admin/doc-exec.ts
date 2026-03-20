@@ -13,6 +13,7 @@ export const DocExecSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).optional(),
   working_dir: z.string().optional(),
+  root: z.string().optional().describe('Root name to use as working directory. If omitted, uses the first configured root.'),
 });
 
 /**
@@ -77,9 +78,15 @@ export async function handleDocExec(
 ) {
   requirePermission(ctx.caller, 'exec', '**');
 
+  // Resolve working directory: explicit working_dir within a root, or the root itself
+  const rootName = args.root ?? Object.keys(ctx.config.document_roots)[0];
+  const root = ctx.config.document_roots[rootName];
+  if (!root) {
+    throw new Error(`Unknown root "${rootName}". Available: ${Object.keys(ctx.config.document_roots).join(', ')}`);
+  }
   const workDir = args.working_dir
-    ? safePath(ctx.documentRoot, args.working_dir)
-    : ctx.documentRoot;
+    ? safePath(root.path, args.working_dir)
+    : root.path;
 
   let stdout = '';
   let stderr = '';

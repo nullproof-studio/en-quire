@@ -12,6 +12,7 @@ import { GitOperations } from './git/operations.js';
 import { resolveCaller } from './rbac/resolver.js';
 import { createServer } from './server.js';
 import { initLogger, getLogger } from './shared/logger.js';
+import type { RootContext } from './tools/context.js';
 
 async function main() {
   const { values } = parseArgs({
@@ -30,66 +31,82 @@ async function main() {
   initLogger(config.logging);
   const log = getLogger();
 
-  // Open search database
-  const db = openDatabase(config.document_root);
+  // Open search database (shared across all roots)
+  const db = openDatabase(config.database);
 
-  // Initialise git operations
-  const git = new GitOperations(config.document_root, config.git.enabled);
+  // Initialise per-root state (git operations)
+  const roots: Record<string, RootContext> = {};
+  for (const [name, root] of Object.entries(config.document_roots)) {
+    const git = new GitOperations(root.path, root.git.enabled);
+    roots[name] = { root, git };
+    log.info('Root configured', {
+      name,
+      path: root.path,
+      git: git.available,
+      description: root.description,
+    });
+  }
 
   // Resolve caller identity (for stdio, uses config defaults)
   const caller = resolveCaller(config);
 
-  // Sync search index
-  if (config.search.sync_on_start === 'background') {
-    log.info('Index sync starting in background');
-    setImmediate(() => {
-      try {
-        const syncResult = syncIndex(db, config.document_root, config.search.batch_size);
-        log.info('Index sync complete', {
-          indexed: syncResult.indexed,
-          skipped: syncResult.skipped,
-          removed: syncResult.removed,
-          elapsed_ms: syncResult.elapsed_ms,
-        });
-      } catch (err) {
-        log.error('Index sync failed', { error: String(err) });
-      }
-    });
-  } else {
-    const syncResult = syncIndex(db, config.document_root, config.search.batch_size);
-    log.info('Index sync', {
-      indexed: syncResult.indexed,
-      skipped: syncResult.skipped,
-      removed: syncResult.removed,
-      elapsed_ms: syncResult.elapsed_ms,
-    });
+  // Sync search index per root
+  for (const [name, root] of Object.entries(config.document_roots)) {
+    if (config.search.sync_on_start === 'background') {
+      log.info('Index sync starting in background', { root: name });
+      setImmediate(() => {
+        try {
+          const syncResult = syncIndex(db, name, root.path, config.search.batch_size);
+          log.info('Index sync complete', {
+            root: name,
+            indexed: syncResult.indexed,
+            skipped: syncResult.skipped,
+            removed: syncResult.removed,
+            elapsed_ms: syncResult.elapsed_ms,
+          });
+        } catch (err) {
+          log.error('Index sync failed', { root: name, error: String(err) });
+        }
+      });
+    } else {
+      const syncResult = syncIndex(db, name, root.path, config.search.batch_size);
+      log.info('Index sync', {
+        root: name,
+        indexed: syncResult.indexed,
+        skipped: syncResult.skipped,
+        removed: syncResult.removed,
+        elapsed_ms: syncResult.elapsed_ms,
+      });
+    }
   }
 
   if (config.transport === 'streamable-http') {
-    await startHttpTransport(config, db, git, caller);
+    await startHttpTransport(config, db, roots, caller);
   } else {
-    await startStdioTransport(config, db, git, caller);
+    await startStdioTransport(config, db, roots, caller);
   }
 }
 
 async function startStdioTransport(
   config: ReturnType<typeof loadConfig>,
   db: ReturnType<typeof openDatabase>,
-  git: GitOperations,
+  roots: Record<string, RootContext>,
   caller: ReturnType<typeof resolveCaller>,
 ) {
   const log = getLogger();
-  const server = createServer({ config, db, git, caller });
+  const server = createServer({ config, db, roots, caller });
   const transport = new StdioServerTransport();
 
-  log.info('Server starting on stdio', { document_root: config.document_root });
+  log.info('Server starting on stdio', {
+    roots: Object.keys(config.document_roots),
+  });
   await server.connect(transport);
 }
 
 async function startHttpTransport(
   config: ReturnType<typeof loadConfig>,
   db: ReturnType<typeof openDatabase>,
-  git: GitOperations,
+  roots: Record<string, RootContext>,
   caller: ReturnType<typeof resolveCaller>,
 ) {
   const log = getLogger();
@@ -161,7 +178,7 @@ async function startHttpTransport(
       sessionIdGenerator: () => randomUUID(),
     });
 
-    const server = createServer({ config, db, git, caller });
+    const server = createServer({ config, db, roots, caller });
     await server.connect(transport);
 
     // Store session once we know the ID (after handleRequest processes the init)
@@ -188,7 +205,11 @@ async function startHttpTransport(
 
   const port = config.port;
   httpServer.listen(port, () => {
-    log.info('Server listening', { transport: 'streamable-http', port, document_root: config.document_root });
+    log.info('Server listening', {
+      transport: 'streamable-http',
+      port,
+      roots: Object.keys(config.document_roots),
+    });
   });
 
   // Graceful shutdown

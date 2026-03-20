@@ -7,6 +7,7 @@ import { buildSectionTree } from '../../document/section-tree.js';
 import { buildOutline } from '../../document/section-ops.js';
 import { parseAddress } from '../../document/section-address.js';
 import { requirePermission } from '../../rbac/permissions.js';
+import { resolveFilePath } from '../../config/roots.js';
 
 export const DocOutlineSchema = z.object({
   file: z.string(),
@@ -20,7 +21,8 @@ export async function handleDocOutline(
 ) {
   requirePermission(ctx.caller, 'read', args.file);
 
-  const { content } = readDocument(ctx.documentRoot, args.file);
+  const resolved = resolveFilePath(ctx.config.document_roots, args.file);
+  const { content } = readDocument(resolved.root.path, resolved.relativePath);
   const ast = parseMarkdown(content);
   const tree = buildSectionTree(ast, content);
 

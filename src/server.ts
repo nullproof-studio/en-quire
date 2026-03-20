@@ -2,8 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import type { ResolvedConfig, CallerIdentity } from './shared/types.js';
-import type { GitOperations } from './git/operations.js';
-import type { ToolContext } from './tools/context.js';
+import type { ToolContext, RootContext } from './tools/context.js';
 import { EnquireError } from './shared/errors.js';
 
 // Read tools
@@ -42,22 +41,21 @@ import { DocExecSchema, handleDocExec } from './tools/admin/doc-exec.js';
 export interface ServerDependencies {
   config: ResolvedConfig;
   db: Database.Database;
-  git: GitOperations | null;
+  roots: Record<string, RootContext>;
   caller: CallerIdentity;
 }
 
 export function createServer(deps: ServerDependencies): McpServer {
   const server = new McpServer({
     name: 'en-quire',
-    version: '0.1.0',
+    version: '0.2.0',
   });
 
   const ctx: ToolContext = {
     config: deps.config,
-    documentRoot: deps.config.document_root,
+    roots: deps.roots,
     caller: deps.caller,
     db: deps.db,
-    git: deps.git,
   };
 
   // Helper to wrap handlers with error handling
@@ -86,7 +84,7 @@ export function createServer(deps: ServerDependencies): McpServer {
   server.tool('doc_outline', 'Get the heading structure of a document', DocOutlineSchema.shape, wrapHandler(handleDocOutline));
   server.tool('doc_read_section', 'Read a specific section by address', DocReadSectionSchema.shape, wrapHandler(handleDocReadSection));
   server.tool('doc_read', 'Read a document with pagination', DocReadSchema.shape, wrapHandler(handleDocRead));
-  server.tool('doc_list', 'List documents in scope', DocListSchema.shape, wrapHandler(handleDocList));
+  server.tool('doc_list', 'List documents across all roots or within a scope', DocListSchema.shape, wrapHandler(handleDocList));
 
   // Write tools
   server.tool('doc_replace_section', 'Replace a section body or heading. When replace_heading is true, content must include the full heading line (e.g. "## New Title\\n\\nBody"). If content lacks a heading line, the original heading is preserved.', DocReplaceSectionSchema.shape, wrapHandler(handleDocReplaceSection));
@@ -95,23 +93,23 @@ export function createServer(deps: ServerDependencies): McpServer {
   server.tool('doc_delete_section', 'Delete a section and its children', DocDeleteSectionSchema.shape, wrapHandler(handleDocDeleteSection));
   server.tool('doc_create', 'Create a new document', DocCreateSchema.shape, wrapHandler(handleDocCreate));
   server.tool('doc_find_replace', 'Find and replace text in a document', DocFindReplaceSchema.shape, wrapHandler(handleDocFindReplace));
-  server.tool('doc_rename', 'Rename a document', DocRenameSchema.shape, wrapHandler(handleDocRename));
+  server.tool('doc_rename', 'Rename a document (within the same root)', DocRenameSchema.shape, wrapHandler(handleDocRename));
   server.tool('doc_generate_toc', 'Generate or update table of contents', DocGenerateTocSchema.shape, wrapHandler(handleDocGenerateToc));
 
   // Status
-  server.tool('doc_status', 'Check document status, pending proposals, and index health', DocStatusSchema.shape, wrapHandler(handleDocStatus));
+  server.tool('doc_status', 'Check document status, pending proposals, and index health across roots', DocStatusSchema.shape, wrapHandler(handleDocStatus));
 
   // Search
-  server.tool('doc_search', 'Search documents with full-text or semantic search', DocSearchSchema.shape, wrapHandler(handleDocSearch));
+  server.tool('doc_search', 'Search documents across all roots with full-text search', DocSearchSchema.shape, wrapHandler(handleDocSearch));
 
   // Governance
-  server.tool('doc_proposals_list', 'List pending proposals', DocProposalsListSchema.shape, wrapHandler(handleDocProposalsList));
+  server.tool('doc_proposals_list', 'List pending proposals across all git-enabled roots', DocProposalsListSchema.shape, wrapHandler(handleDocProposalsList));
   server.tool('doc_proposal_diff', 'View the diff of a proposal', DocProposalDiffSchema.shape, wrapHandler(handleDocProposalDiff));
   server.tool('doc_proposal_approve', 'Approve and merge a proposal', DocProposalApproveSchema.shape, wrapHandler(handleDocProposalApprove));
   server.tool('doc_proposal_reject', 'Reject and delete a proposal', DocProposalRejectSchema.shape, wrapHandler(handleDocProposalReject));
 
   // Admin
-  server.tool('doc_exec', 'Execute a command in the document root (admin)', DocExecSchema.shape, wrapHandler(handleDocExec));
+  server.tool('doc_exec', 'Execute a command in a document root (admin)', DocExecSchema.shape, wrapHandler(handleDocExec));
 
   return server;
 }

@@ -3,9 +3,36 @@
 # en-quire configuration
 # Copy this file to en-quire.config.yaml and adjust as needed.
 
-# Required: path to the directory containing your markdown documents.
-# Should be a git repository for full governance features.
-document_root: /data/docs
+# Document roots — named mount points into en-quire's unified namespace.
+# Each root has its own path, git config, and description.
+# Files are addressed with a root prefix: docs/article.md, skills/triage.md
+document_roots:
+  docs:
+    path: /data/docs
+    description: "Main documentation"
+    git:
+      # enabled: null                 # Auto-detect (checks for .git directory)
+      auto_commit: true               # Commit on every write operation
+      remote: null                    # Optional: push proposals to remote
+      pr_hook: null                   # Optional: webhook/script to open PRs
+
+  # Example: a second root for agent skill files
+  # skills:
+  #   path: /data/skills
+  #   description: "Agent skill files — governed"
+  #   git:
+  #     enabled: true
+  #     auto_commit: true
+
+  # Example: a root without git (session memory, scratch)
+  # memory:
+  #   path: /data/memory
+  #   description: "Session memory files"
+  #   git:
+  #     enabled: false
+
+# Database path (defaults to .enquire.db next to this config file)
+# database: /data/enquire.db
 
 # Server transport
 transport: stdio                    # stdio | streamable-http
@@ -28,15 +55,9 @@ logging:
   dir: null                           # null = stderr only; set a path for file logging
   # dir: /app/logs                    # Docker: mount a volume at /app/logs
 
-# Git integration
-git:
-  # enabled: null                   # Auto-detect (checks for .git directory)
-  auto_commit: true                 # Commit on every write operation
-  remote: null                      # Optional: push proposals to remote
-  pr_hook: null                     # Optional: webhook/script to open PRs
-
 # Caller permissions (RBAC)
 # Each caller has a unique ID, optional API key, and scoped permissions.
+# Paths use root-prefixed notation: "docs/**", "skills/triage.md"
 callers:
   default:
     scopes:
@@ -56,11 +77,11 @@ callers:
   #         - read
   #         - search
 
-  # Example: scoped agent with different permissions per directory
+  # Example: scoped agent with different permissions per root
   # michelle:
   #   key: "sk-michelle-ops-..."
   #   scopes:
-  #     - path: "sops/**"
+  #     - path: "docs/sops/**"
   #       permissions: [read, write, propose, search]
   #     - path: "skills/**"
   #       permissions: [read, propose, search]

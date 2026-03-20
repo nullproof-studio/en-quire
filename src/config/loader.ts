@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname, join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { ConfigSchema } from './schema.js';
 import { ValidationError } from '../shared/errors.js';
-import type { ResolvedConfig } from '../shared/types.js';
+import type { ResolvedConfig, ResolvedRoot } from '../shared/types.js';
 
 /**
  * Load and validate configuration from a YAML file.
@@ -12,6 +12,7 @@ import type { ResolvedConfig } from '../shared/types.js';
  */
 export function loadConfig(configPath: string): ResolvedConfig {
   const absolutePath = resolve(configPath);
+  const configDir = dirname(absolutePath);
 
   let raw: string;
   try {
@@ -43,8 +44,30 @@ export function loadConfig(configPath: string): ResolvedConfig {
 
   const validated = result.data;
 
+  // Resolve document roots
+  const document_roots: Record<string, ResolvedRoot> = {};
+  for (const [name, root] of Object.entries(validated.document_roots)) {
+    document_roots[name] = {
+      name,
+      path: resolve(configDir, root.path),
+      description: root.description,
+      git: {
+        enabled: root.git.enabled,
+        auto_commit: root.git.auto_commit,
+        remote: root.git.remote,
+        pr_hook: root.git.pr_hook,
+      },
+    };
+  }
+
+  // Resolve database path (defaults to .enquire.db next to config file)
+  const database = validated.database
+    ? resolve(configDir, validated.database)
+    : join(configDir, '.enquire.db');
+
   return {
-    document_root: resolve(validated.document_root),
+    document_roots,
+    database,
     transport: validated.transport,
     port: validated.port,
     search: {
@@ -60,13 +83,7 @@ export function loadConfig(configPath: string): ResolvedConfig {
     },
     logging: {
       level: validated.logging.level,
-      dir: validated.logging.dir ? resolve(validated.logging.dir) : null,
-    },
-    git: {
-      enabled: validated.git.enabled,
-      auto_commit: validated.git.auto_commit,
-      remote: validated.git.remote,
-      pr_hook: validated.git.pr_hook,
+      dir: validated.logging.dir ? resolve(configDir, validated.logging.dir) : null,
     },
     callers: validated.callers,
   };

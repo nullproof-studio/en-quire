@@ -9,6 +9,7 @@ import { buildCommitMessage, buildProposalBranch } from '../../git/commit-messag
 import { generateDiff } from '../../shared/diff.js';
 import { resolveWriteMode } from '../../rbac/permissions.js';
 import { GitRequiredError } from '../../shared/errors.js';
+import { resolveFilePath } from '../../config/roots.js';
 
 export interface WriteOperationParams {
   file: string;
@@ -45,28 +46,31 @@ export async function executeWrite(
   newContent: string,
   encoding: EncodingInfo,
 ): Promise<WriteOperationResult> {
+  const resolved = resolveFilePath(ctx.config.document_roots, params.file);
+  const rootCtx = ctx.roots[resolved.rootName];
+  const git = rootCtx?.git;
   const mode = resolveWriteMode(ctx.caller, params.file, params.mode);
 
-  if (mode === 'propose' && !ctx.git?.available) {
+  if (mode === 'propose' && !git?.available) {
     throw new GitRequiredError('Proposal workflows');
   }
 
   let branch: string | undefined;
-  const originalBranch = ctx.git?.available ? await ctx.git.getCurrentBranch() : undefined;
+  const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
 
   try {
     // Create proposal branch if needed
-    if (mode === 'propose' && ctx.git?.available) {
+    if (mode === 'propose' && git?.available) {
       branch = buildProposalBranch(ctx.caller.id, params.file);
-      await ctx.git.createBranch(branch);
+      await git.createBranch(branch);
     }
 
     // Write the file
-    writeDocument(ctx.documentRoot, params.file, newContent, encoding.lineEnding);
+    writeDocument(resolved.root.path, resolved.relativePath, newContent, encoding.lineEnding);
 
     // Git commit
     let commit: string | undefined;
-    if (ctx.git?.available) {
+    if (git?.available) {
       const commitMsg = buildCommitMessage({
         operation: params.operation,
         target: params.target,
@@ -75,14 +79,14 @@ export async function executeWrite(
         mode,
         userMessage: params.message,
       });
-      commit = await ctx.git.commitFile(params.file, commitMsg);
+      commit = await git.commitFile(resolved.relativePath, commitMsg);
     }
 
-    // Update search index
+    // Update search index (use prefixed path for index key)
     try {
       const ast = parseMarkdown(newContent);
       const tree = buildSectionTree(ast, newContent);
-      indexDocument(ctx.db, params.file, tree, newContent);
+      indexDocument(ctx.db, resolved.prefixedPath, tree, newContent);
     } catch {
       // Index update failure is non-fatal
     }
@@ -93,8 +97,8 @@ export async function executeWrite(
     return { success: true, file: params.file, mode, branch, commit, diff };
   } finally {
     // Switch back to original branch after proposal
-    if (mode === 'propose' && originalBranch && ctx.git?.available) {
-      await ctx.git.switchBranch(originalBranch);
+    if (mode === 'propose' && originalBranch && git?.available) {
+      await git.switchBranch(originalBranch);
     }
   }
 }
@@ -103,7 +107,8 @@ export async function executeWrite(
  * Load a document's content, AST, and section tree.
  */
 export function loadDocument(ctx: ToolContext, file: string) {
-  const { content, encoding } = readDocument(ctx.documentRoot, file);
+  const resolved = resolveFilePath(ctx.config.document_roots, file);
+  const { content, encoding } = readDocument(resolved.root.path, resolved.relativePath);
   const ast = parseMarkdown(content);
   const tree = buildSectionTree(ast, content);
   return { content, encoding, ast, tree };
