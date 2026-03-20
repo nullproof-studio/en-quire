@@ -10,7 +10,7 @@ export const DocInsertSectionSchema = z.object({
   file: z.string(),
   anchor: z.string(),
   position: z.enum(['before', 'after', 'child_start', 'child_end']),
-  heading: z.string(),
+  heading: z.string().describe('Plain text heading without # markers (e.g. "My Section", not "## My Section"). The heading level is set by the level parameter.'),
   content: z.string(),
   level: z.number().int().min(1).max(6).optional(),
   mode: z.enum(['write', 'propose']).optional(),

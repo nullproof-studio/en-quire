@@ -51,22 +51,48 @@ export function readSection(
 }
 
 /**
- * Replace a section's body content (and optionally heading).
+ * Replace a section's body content (and optionally heading text).
  * Returns the new markdown string.
+ *
+ * When `replaceHeading` is a string, the heading text is replaced while
+ * preserving the correct heading level and markdown structure.
+ * When `replaceHeading` is `true`, the newContent must include the full
+ * heading line (e.g. "## New Heading\n\nBody"); the existing heading is
+ * replaced from headingStart to bodyEnd.
+ * When `replaceHeading` is `false` (default), only the body is replaced.
  */
 export function replaceSection(
   markdown: string,
   tree: SectionNode[],
   address: SectionAddress,
   newContent: string,
-  replaceHeading = false,
+  replaceHeading: boolean | string = false,
 ): string {
   const node = resolveSingleSection(tree, address);
 
-  if (replaceHeading) {
-    // Replace from heading start to section end (excluding children)
+  if (typeof replaceHeading === 'string') {
+    // Replace heading text only, then replace body
+    const cleanHeading = stripHeadingMarkers(replaceHeading);
+    const headingPrefix = '#'.repeat(node.heading.level);
+    const newHeadingLine = `${headingPrefix} ${cleanHeading}`;
     const before = markdown.slice(0, node.headingStartOffset);
     const after = markdown.slice(node.bodyEndOffset);
+    const separator = newContent.startsWith('\n') ? '' : '\n';
+    return before + newHeadingLine + separator + newContent + after;
+  }
+
+  if (replaceHeading === true) {
+    // Replace from heading start to body end — newContent must include heading line.
+    // Guard: if newContent doesn't start with a heading marker, preserve the
+    // existing heading to prevent accidental heading deletion.
+    const before = markdown.slice(0, node.headingStartOffset);
+    const after = markdown.slice(node.bodyEndOffset);
+    if (!newContent.trimStart().startsWith('#')) {
+      // Content doesn't include a heading — preserve the original heading
+      const headingLine = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
+      const separator = newContent.startsWith('\n') ? '' : '\n';
+      return before + headingLine + separator + newContent + after;
+    }
     return before + newContent + after;
   }
 
@@ -77,6 +103,16 @@ export function replaceSection(
   // Ensure newContent starts with a newline for proper separation from heading
   const separator = newContent.startsWith('\n') ? '' : '\n';
   return before + separator + newContent + after;
+}
+
+/**
+ * Strip leading '#' markers from a heading string.
+ * Agents sometimes pass "## My Heading" instead of "My Heading";
+ * since the level is controlled separately, these markers are redundant
+ * and cause double-heading bugs like "## ## My Heading".
+ */
+function stripHeadingMarkers(heading: string): string {
+  return heading.replace(/^#+\s*/, '');
 }
 
 /**
@@ -101,8 +137,9 @@ export function insertSection(
       : anchorNode.heading.level
   );
 
+  const cleanHeading = stripHeadingMarkers(heading);
   const headingPrefix = '#'.repeat(headingLevel);
-  const newSection = `\n${headingPrefix} ${heading}\n\n${content}\n`;
+  const newSection = `\n${headingPrefix} ${cleanHeading}\n\n${content}\n`;
 
   let insertOffset: number;
 

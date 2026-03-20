@@ -89,8 +89,8 @@ export function createServer(deps: ServerDependencies): McpServer {
   server.tool('doc_list', 'List documents in scope', DocListSchema.shape, wrapHandler(handleDocList));
 
   // Write tools
-  server.tool('doc_replace_section', 'Replace a section body or heading', DocReplaceSectionSchema.shape, wrapHandler(handleDocReplaceSection));
-  server.tool('doc_insert_section', 'Insert a new section relative to an anchor', DocInsertSectionSchema.shape, wrapHandler(handleDocInsertSection));
+  server.tool('doc_replace_section', 'Replace a section body or heading. When replace_heading is true, content must include the full heading line (e.g. "## New Title\\n\\nBody"). If content lacks a heading line, the original heading is preserved.', DocReplaceSectionSchema.shape, wrapHandler(handleDocReplaceSection));
+  server.tool('doc_insert_section', 'Insert a new section relative to an anchor. The heading parameter should be plain text without # markers (e.g. "My Section", not "## My Section"); the level parameter controls heading depth.', DocInsertSectionSchema.shape, wrapHandler(handleDocInsertSection));
   server.tool('doc_append_section', 'Append content to a section body', DocAppendSectionSchema.shape, wrapHandler(handleDocAppendSection));
   server.tool('doc_delete_section', 'Delete a section and its children', DocDeleteSectionSchema.shape, wrapHandler(handleDocDeleteSection));
   server.tool('doc_create', 'Create a new document', DocCreateSchema.shape, wrapHandler(handleDocCreate));
