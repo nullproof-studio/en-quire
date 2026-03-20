@@ -34,20 +34,26 @@ const LoggingSchema = z.object({
   dir: z.string().nullable().default(null),
 });
 
-const GitSchema = z.object({
-  enabled: z.boolean().nullable().default(null),
+const RootGitSchema = z.object({
+  enabled: z.boolean().nullable().default(null), // null = auto-detect
   auto_commit: z.boolean().default(true),
   remote: z.string().nullable().default(null),
   pr_hook: z.string().nullable().default(null),
 });
 
+const DocumentRootSchema = z.object({
+  path: z.string(),
+  description: z.string().optional(),
+  git: RootGitSchema.default({}),
+});
+
 export const ConfigSchema = z.object({
-  document_root: z.string(),
+  document_roots: z.record(z.string(), DocumentRootSchema),
+  database: z.string().optional(), // Path to .enquire.db; defaults to next to config file
   transport: z.enum(['stdio', 'streamable-http']).default('stdio'),
   port: z.number().int().positive().default(3100),
   search: SearchSchema.default({}),
   logging: LoggingSchema.default({}),
-  git: GitSchema.default({}),
   callers: z.record(z.string(), CallerConfigSchema).default({}),
 });
 

@@ -133,18 +133,26 @@ export interface CallerScope {
   permissions: Permission[];
 }
 
-/** Tool context passed to all tool handlers */
-export interface ToolContext {
-  config: ResolvedConfig;
-  documentRoot: string;
-  caller: CallerIdentity;
-  db: unknown; // better-sqlite3 Database (typed loosely to avoid import here)
-  git: unknown | null; // GitOperations or null in lite mode
+/** Git configuration per document root */
+export interface RootGitConfig {
+  enabled: boolean | null; // null = auto-detect
+  auto_commit: boolean;
+  remote: string | null;
+  pr_hook: string | null;
+}
+
+/** A resolved document root */
+export interface ResolvedRoot {
+  name: string;
+  path: string; // absolute path
+  description?: string;
+  git: RootGitConfig;
 }
 
 /** Resolved (validated + defaults applied) configuration */
 export interface ResolvedConfig {
-  document_root: string;
+  document_roots: Record<string, ResolvedRoot>;
+  database: string; // absolute path to .enquire.db
   transport: 'stdio' | 'streamable-http';
   port: number;
   search: {
@@ -161,12 +169,6 @@ export interface ResolvedConfig {
   logging: {
     level: 'error' | 'warn' | 'info' | 'debug';
     dir: string | null;
-  };
-  git: {
-    enabled: boolean | null; // null = auto-detect
-    auto_commit: boolean;
-    remote: string | null;
-    pr_hook: string | null;
   };
   callers: Record<string, CallerConfig>;
 }

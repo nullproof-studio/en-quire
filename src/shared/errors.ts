@@ -12,7 +12,7 @@ export class EnquireError extends Error {
 
 export class NotFoundError extends EnquireError {
   constructor(
-    public readonly resource: 'file' | 'section',
+    public readonly resource: 'file' | 'section' | 'root',
     public readonly target: string,
     public readonly candidates?: string[],
   ) {
