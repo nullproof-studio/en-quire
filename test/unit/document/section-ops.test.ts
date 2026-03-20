@@ -217,6 +217,38 @@ describe('replaceSection — heading preservation', () => {
   });
 });
 
+describe('replaceSection — blank line between heading and body', () => {
+  it('ensures blank line when content has no leading newline', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, 'New content.');
+    expect(result).toContain('## A\n\nNew content.');
+    expect(result).not.toMatch(/## A\nNew content\./);
+  });
+
+  it('normalises multiple leading newlines in content', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, '\n\n\nNew content.');
+    expect(result).toContain('## A\n\nNew content.');
+    expect(result).not.toContain('## A\n\n\n');
+  });
+
+  it('ensures blank line with replaceHeading as string', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, 'Body text.', 'Renamed');
+    expect(result).toContain('## Renamed\n\nBody text.');
+  });
+
+  it('ensures blank line with replaceHeading=true and no heading in content', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, 'Body only.', true);
+    expect(result).toContain('## A\n\nBody only.');
+  });
+});
+
 describe('appendToSection', () => {
   it('appends content to section body', () => {
     const md = '# Doc\n\n## A\n\nExisting content.\n\n## B\n\nContent B.\n';
@@ -270,6 +302,33 @@ describe('buildOutline', () => {
     const outline = buildOutline(md, tree, { type: 'text', text: 'Section Two' });
     expect(outline[0].text).toBe('Section Two');
     expect(outline.length).toBe(3); // Section Two + 2 subsections
+  });
+});
+
+describe('buildOutline — has_content', () => {
+  it('reports has_content=true for sections with body text', () => {
+    const md = '# Doc\n\n## A\n\nBody text here.\n\n## B\n\nMore body.\n';
+    const tree = parse(md);
+    const outline = buildOutline(md, tree);
+    const sectionA = outline.find((e) => e.text === 'A');
+    expect(sectionA?.has_content).toBe(true);
+  });
+
+  it('reports has_content=false for container-only sections', () => {
+    const md = '# Doc\n\n## Container\n\n### Child A\n\nContent.\n\n### Child B\n\nContent.\n';
+    const tree = parse(md);
+    const outline = buildOutline(md, tree);
+    const container = outline.find((e) => e.text === 'Container');
+    expect(container?.has_content).toBe(false);
+  });
+
+  it('reports has_content=true for sections with body and children', () => {
+    const md = '# Doc\n\n## Parent\n\nParent body text.\n\n### Child\n\nChild content.\n';
+    const tree = parse(md);
+    const outline = buildOutline(md, tree);
+    const parent = outline.find((e) => e.text === 'Parent');
+    expect(parent?.has_content).toBe(true);
+    expect(parent?.has_children).toBe(true);
   });
 });
 
