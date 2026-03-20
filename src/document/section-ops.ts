@@ -78,7 +78,7 @@ export function replaceSection(
     const before = markdown.slice(0, node.headingStartOffset);
     const after = markdown.slice(node.bodyEndOffset);
     const separator = newContent.startsWith('\n') ? '' : '\n';
-    return before + newHeadingLine + separator + newContent + after;
+    return before + newHeadingLine + separator + ensureTrailingNewlines(newContent) + after;
   }
 
   if (replaceHeading === true) {
@@ -91,9 +91,9 @@ export function replaceSection(
       // Content doesn't include a heading — preserve the original heading
       const headingLine = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
       const separator = newContent.startsWith('\n') ? '' : '\n';
-      return before + headingLine + separator + newContent + after;
+      return before + headingLine + separator + ensureTrailingNewlines(newContent) + after;
     }
-    return before + newContent + after;
+    return before + ensureTrailingNewlines(newContent) + after;
   }
 
   // Replace body only, preserve heading
@@ -102,7 +102,7 @@ export function replaceSection(
 
   // Ensure newContent starts with a newline for proper separation from heading
   const separator = newContent.startsWith('\n') ? '' : '\n';
-  return before + separator + newContent + after;
+  return before + separator + ensureTrailingNewlines(newContent) + after;
 }
 
 /**
@@ -113,6 +113,16 @@ export function replaceSection(
  */
 function stripHeadingMarkers(heading: string): string {
   return heading.replace(/^#+\s*/, '');
+}
+
+/**
+ * Ensure content ends with a double newline so the next section's
+ * heading isn't concatenated to the replaced content.
+ */
+function ensureTrailingNewlines(content: string): string {
+  if (content.endsWith('\n\n')) return content;
+  if (content.endsWith('\n')) return content + '\n';
+  return content + '\n\n';
 }
 
 /**

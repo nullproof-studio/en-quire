@@ -117,6 +117,38 @@ describe('insertSection', () => {
   });
 });
 
+describe('replaceSection — trailing newline preservation', () => {
+  it('ensures next section heading is not concatenated when content lacks trailing newline', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, 'Replaced content.');
+    expect(result).toContain('Replaced content.\n\n## B');
+    expect(result).not.toMatch(/Replaced content\.## B/);
+  });
+
+  it('does not add extra newlines when content already ends with \\n\\n', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, 'Replaced content.\n\n');
+    expect(result).toContain('Replaced content.\n\n## B');
+    expect(result).not.toContain('Replaced content.\n\n\n');
+  });
+
+  it('ensures trailing newlines with replaceHeading=true', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, '## A\n\nNew content.', true);
+    expect(result).toContain('New content.\n\n## B');
+  });
+
+  it('ensures trailing newlines with replaceHeading as string', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, 'New content.', 'Renamed');
+    expect(result).toContain('New content.\n\n## B');
+  });
+});
+
 describe('insertSection — heading sanitisation', () => {
   it('strips leading # markers from heading parameter', () => {
     const md = '# Doc\n\n## A\n\nContent A.\n';
