@@ -77,8 +77,8 @@ export function replaceSection(
     const newHeadingLine = `${headingPrefix} ${cleanHeading}`;
     const before = markdown.slice(0, node.headingStartOffset);
     const after = markdown.slice(node.bodyEndOffset);
-    const separator = newContent.startsWith('\n') ? '' : '\n';
-    return before + newHeadingLine + separator + ensureTrailingNewlines(newContent) + after;
+    const normalized = newContent.replace(/^\n*/, '');
+    return before + newHeadingLine + '\n\n' + ensureTrailingNewlines(normalized) + after;
   }
 
   if (replaceHeading === true) {
@@ -90,8 +90,8 @@ export function replaceSection(
     if (!newContent.trimStart().startsWith('#')) {
       // Content doesn't include a heading — preserve the original heading
       const headingLine = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
-      const separator = newContent.startsWith('\n') ? '' : '\n';
-      return before + headingLine + separator + ensureTrailingNewlines(newContent) + after;
+      const normalized = newContent.replace(/^\n*/, '');
+      return before + headingLine + '\n\n' + ensureTrailingNewlines(normalized) + after;
     }
     return before + ensureTrailingNewlines(newContent) + after;
   }
@@ -100,9 +100,10 @@ export function replaceSection(
   const before = markdown.slice(0, node.bodyStartOffset);
   const after = markdown.slice(node.bodyEndOffset);
 
-  // Ensure newContent starts with a newline for proper separation from heading
-  const separator = newContent.startsWith('\n') ? '' : '\n';
-  return before + separator + ensureTrailingNewlines(newContent) + after;
+  // Ensure a blank line between the heading and body content.
+  // bodyStartOffset is right after the heading line; we need \n\n before body text.
+  const normalized = newContent.replace(/^\n*/, '');
+  return before + '\n\n' + ensureTrailingNewlines(normalized) + after;
 }
 
 /**
@@ -240,6 +241,10 @@ export function buildOutline(
 
       const bodyContent = markdown.slice(node.headingStartOffset, node.sectionEndOffset);
 
+      // Body text is the content between heading end and body end (before children)
+      const bodyText = markdown.slice(node.bodyStartOffset, node.bodyEndOffset);
+      const hasContent = bodyText.trim().length > 0;
+
       entries.push({
         level: node.heading.level,
         text: node.heading.text,
@@ -248,6 +253,7 @@ export function buildOutline(
         line_end: offsetToLine(markdown, node.sectionEndOffset),
         char_count: countCodePoints(bodyContent),
         has_children: node.children.length > 0,
+        has_content: hasContent,
       });
 
       walk(node.children, depth + 1);
