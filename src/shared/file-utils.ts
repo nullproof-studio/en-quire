@@ -79,12 +79,17 @@ export function writeDocument(
   return absolutePath;
 }
 
+/** Default supported extensions */
+const DEFAULT_EXTENSIONS = ['.md', '.mdx', '.yaml', '.yml'];
+
 /**
- * List all markdown files under a directory (relative to document root).
+ * List all document files under a directory (relative to document root).
+ * Supports configurable file extensions; defaults to all registered parser formats.
  */
-export function listMarkdownFiles(
+export function listDocumentFiles(
   documentRoot: string,
   scope?: string,
+  extensions: string[] = DEFAULT_EXTENSIONS,
 ): string[] {
   const baseDir = scope ? safePath(documentRoot, scope) : documentRoot;
 
@@ -92,20 +97,27 @@ export function listMarkdownFiles(
     return [];
   }
 
+  const extSet = new Set(extensions.map((e) => e.toLowerCase()));
   const files: string[] = [];
-  walkDir(baseDir, documentRoot, files);
+  walkDir(baseDir, documentRoot, files, extSet);
   return files.sort();
 }
 
-function walkDir(dir: string, root: string, result: string[]): void {
+/** @deprecated Use listDocumentFiles instead */
+export const listMarkdownFiles = listDocumentFiles;
+
+function walkDir(dir: string, root: string, result: string[], extensions: Set<string>): void {
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
-      walkDir(fullPath, root, result);
-    } else if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.mdx'))) {
-      result.push(relative(root, fullPath));
+      walkDir(fullPath, root, result, extensions);
+    } else if (entry.isFile()) {
+      const ext = entry.name.slice(entry.name.lastIndexOf('.'));
+      if (extensions.has(ext.toLowerCase())) {
+        result.push(relative(root, fullPath));
+      }
     }
   }
 }

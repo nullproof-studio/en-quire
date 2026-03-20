@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import type { ToolContext } from '../context.js';
-import { parseAddress } from '../../document/section-address.js';
 import { appendToSection } from '../../document/section-ops.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
@@ -20,8 +19,8 @@ export async function handleDocAppendSection(
 ) {
   requirePermission(ctx.caller, 'read', args.file);
 
-  const { content, encoding, tree } = loadDocument(ctx, args.file);
-  const address = parseAddress(args.section);
+  const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
+  const address = parser.parseAddress(args.section);
   const newContent = appendToSection(content, tree, address, args.content);
 
   const result = await executeWrite(ctx, {

@@ -51,7 +51,13 @@ export interface PatternAddress {
   pattern: string;
 }
 
-export type SectionAddress = TextAddress | PathAddress | IndexAddress | PatternAddress;
+/** Dot-separated key path address for YAML: "services.api.environment" */
+export interface DotPathAddress {
+  type: 'dotpath';
+  segments: string[];
+}
+
+export type SectionAddress = TextAddress | PathAddress | IndexAddress | PatternAddress | DotPathAddress;
 
 /** Position for inserting a new section relative to an anchor */
 export type InsertPosition = 'before' | 'after' | 'child_start' | 'child_end';

@@ -2,13 +2,13 @@
 import type { ToolContext } from '../context.js';
 import type { EncodingInfo } from '../../shared/types.js';
 import { writeDocument, readDocument } from '../../shared/file-utils.js';
-import { parseMarkdown } from '../../document/parser.js';
-import { buildSectionTree } from '../../document/section-tree.js';
+import { parserRegistry } from '../../document/parser-registry.js';
+import type { DocumentParser } from '../../document/parser-registry.js';
 import { indexDocument } from '../../search/indexer.js';
 import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
 import { generateDiff } from '../../shared/diff.js';
 import { resolveWriteMode } from '../../rbac/permissions.js';
-import { GitRequiredError } from '../../shared/errors.js';
+import { GitRequiredError, ValidationError } from '../../shared/errors.js';
 import { resolveFilePath } from '../../config/roots.js';
 
 export interface WriteOperationParams {
@@ -26,6 +26,7 @@ export interface WriteOperationResult {
   branch?: string;
   commit?: string;
   diff?: string;
+  warnings?: string[];
 }
 
 /**
@@ -58,6 +59,16 @@ export async function executeWrite(
   let branch: string | undefined;
   const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
 
+  // Validate output before writing
+  const parser = parserRegistry.getParser(resolved.relativePath);
+  const warnings = parser.validate(newContent);
+  const hasErrors = warnings.some((w) => w.includes('syntax error') || w.includes('parse error'));
+  if (hasErrors) {
+    throw new ValidationError(
+      `Write blocked — output would produce invalid syntax:\n${warnings.join('\n')}`,
+    );
+  }
+
   try {
     // Create proposal branch if needed
     if (mode === 'propose' && git?.available) {
@@ -84,8 +95,8 @@ export async function executeWrite(
 
     // Update search index (use prefixed path for index key)
     try {
-      const ast = parseMarkdown(newContent);
-      const tree = buildSectionTree(ast, newContent);
+      const parser = parserRegistry.getParser(resolved.relativePath);
+      const tree = parser.parse(newContent);
       indexDocument(ctx.db, resolved.prefixedPath, tree, newContent);
     } catch {
       // Index update failure is non-fatal
@@ -94,7 +105,10 @@ export async function executeWrite(
     // Generate diff
     const diff = generateDiff(params.file, oldContent, newContent);
 
-    return { success: true, file: params.file, mode, branch, commit, diff };
+    return {
+      success: true, file: params.file, mode, branch, commit, diff,
+      ...(warnings.length > 0 && { warnings }),
+    };
   } finally {
     // Switch back to original branch after proposal
     if (mode === 'propose' && originalBranch && git?.available) {
@@ -104,12 +118,12 @@ export async function executeWrite(
 }
 
 /**
- * Load a document's content, AST, and section tree.
+ * Load a document's content, section tree, and parser.
  */
 export function loadDocument(ctx: ToolContext, file: string) {
   const resolved = resolveFilePath(ctx.config.document_roots, file);
   const { content, encoding } = readDocument(resolved.root.path, resolved.relativePath);
-  const ast = parseMarkdown(content);
-  const tree = buildSectionTree(ast, content);
-  return { content, encoding, ast, tree };
+  const parser = parserRegistry.getParser(resolved.relativePath);
+  const tree = parser.parse(content);
+  return { content, encoding, tree, parser };
 }

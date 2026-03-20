@@ -10,6 +10,7 @@ import { parseMarkdown } from './parser.js';
 import { buildSectionTree, getSectionPath, getBreadcrumb, flattenTree } from './section-tree.js';
 import { resolveSingleSection, resolveAddress } from './section-address.js';
 import { countCodePoints, offsetToLine } from './ast-utils.js';
+import { ValidationError } from '../shared/errors.js';
 
 /**
  * Read a section's content from the markdown string.
@@ -100,8 +101,19 @@ export function replaceSection(
   const before = markdown.slice(0, node.bodyStartOffset);
   const after = markdown.slice(node.bodyEndOffset);
 
-  // Ensure a blank line between the heading and body content.
-  // bodyStartOffset is right after the heading line; we need \n\n before body text.
+  // For sections without a heading line (e.g. __preamble, YAML keys),
+  // don't add a blank line separator — just replace the body directly.
+  if (node.headingStartOffset === node.bodyStartOffset) {
+    return before + ensureTrailingNewlines(newContent) + after;
+  }
+
+  // YAML keys: `before` ends with \n (bodyStartOffset is at a line start).
+  // No blank line separator needed — strip leading newlines and splice directly.
+  if (before.endsWith('\n')) {
+    const stripped = newContent.replace(/^\n*/, '');
+    return before + ensureTrailingNewlines(stripped) + after;
+  }
+
   const normalized = newContent.replace(/^\n*/, '');
   return before + '\n\n' + ensureTrailingNewlines(normalized) + after;
 }
@@ -192,10 +204,71 @@ export function appendToSection(
   const before = markdown.slice(0, insertOffset);
   const after = markdown.slice(insertOffset);
 
-  // Ensure proper spacing
-  const separator = before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  // Ensure proper spacing.
+  // For YAML (no blank line between heading and body), keep content contiguous.
+  const headingToBody = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
+  const isContiguous = node.headingStartOffset !== node.bodyStartOffset && !headingToBody.includes('\n\n');
 
-  return before + separator + content + '\n' + after;
+  let separator: string;
+  if (isContiguous) {
+    // YAML-style: no blank lines, just ensure we're on a new line
+    separator = before.endsWith('\n') ? '' : '\n';
+  } else {
+    // Markdown-style: blank line separation
+    separator = before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+  }
+
+  return before + separator + content + (content.endsWith('\n') ? '' : '\n') + after;
+}
+
+/**
+ * Set a scalar value at the addressed section.
+ *
+ * For YAML: splices the value directly at the scalar's byte offsets.
+ *   Throws if the target is a container node (map/sequence) — use
+ *   replaceSection for wholesale subtree replacement.
+ * For markdown: delegates to replaceSection (body-only replacement).
+ */
+export function setValue(
+  markdown: string,
+  tree: SectionNode[],
+  address: SectionAddress,
+  value: string,
+): string {
+  const node = resolveSingleSection(tree, address);
+
+  // If the node has children, it's a container — reject for YAML clarity
+  if (node.children.length > 0) {
+    throw new ValidationError(
+      `Cannot set a scalar value on "${node.heading.text}" because it is a container (has child keys). Use doc_replace_section to replace the entire subtree.`,
+    );
+  }
+
+  // Detect YAML-style scalar: bodyStartOffset is mid-line (after "key: ")
+  // vs markdown where bodyStartOffset is at the end of the heading node.
+  const beforeBody = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
+  const isYamlScalar = beforeBody.includes(':') && !beforeBody.trimStart().startsWith('#');
+
+  if (isYamlScalar) {
+    // Direct scalar splice — replace from bodyStart to bodyEnd
+    const before = markdown.slice(0, node.bodyStartOffset);
+    const after = markdown.slice(node.bodyEndOffset);
+
+    // Preserve the original quote style (", ', or none)
+    const originalValue = markdown.slice(node.bodyStartOffset, node.bodyEndOffset).trimEnd();
+    let quoted = value;
+    if (originalValue.startsWith('"') && !value.startsWith('"')) {
+      quoted = `"${value}"`;
+    } else if (originalValue.startsWith("'") && !value.startsWith("'")) {
+      quoted = `'${value}'`;
+    }
+
+    const needsNewline = !quoted.endsWith('\n');
+    return before + quoted + (needsNewline ? '\n' : '') + after;
+  }
+
+  // Markdown fallback — delegate to body-only replaceSection
+  return replaceSection(markdown, tree, address, value);
 }
 
 /**

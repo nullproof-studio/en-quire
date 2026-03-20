@@ -130,6 +130,38 @@ function fixSectionEndOffsets(nodes: SectionNode[], docEnd: number): void {
 }
 
 /**
+ * Build a preamble pseudo-section for content before the first heading.
+ * Returns null if there is no non-whitespace content before the first heading.
+ */
+export function buildPreambleNode(
+  markdown: string,
+  firstHeadingOffset: number | null,
+): SectionNode | null {
+  const endOffset = firstHeadingOffset ?? markdown.length;
+  const preambleText = markdown.slice(0, endOffset);
+  if (preambleText.trim().length === 0) return null;
+
+  return {
+    heading: {
+      text: '__preamble',
+      level: 0,
+      position: {
+        start: { line: 1, column: 1, offset: 0 },
+        end: { line: 1, column: 1, offset: 0 },
+      },
+    },
+    headingStartOffset: 0,
+    bodyStartOffset: 0,
+    bodyEndOffset: endOffset,
+    sectionEndOffset: endOffset,
+    children: [],
+    parent: null,
+    index: 0,
+    depth: 0,
+  };
+}
+
+/**
  * Get the breadcrumb path for a section node (e.g., ["RBAC Model", "Permission Types"]).
  */
 export function getBreadcrumb(node: SectionNode): string[] {

@@ -1,9 +1,10 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
+import { extname } from 'node:path';
 import type { ToolContext } from '../context.js';
-import { parseAddress } from '../../document/section-address.js';
 import { insertSection } from '../../document/section-ops.js';
 import { requirePermission } from '../../rbac/permissions.js';
+import { ValidationError } from '../../shared/errors.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocInsertSectionSchema = z.object({
@@ -23,8 +24,15 @@ export async function handleDocInsertSection(
 ) {
   requirePermission(ctx.caller, 'read', args.file);
 
-  const { content, encoding, tree } = loadDocument(ctx, args.file);
-  const address = parseAddress(args.anchor);
+  const ext = extname(args.file).toLowerCase();
+  if (ext === '.yaml' || ext === '.yml') {
+    throw new ValidationError(
+      'Section insertion is not supported for YAML files. Use doc_replace_section or doc_find_replace to modify YAML content.',
+    );
+  }
+
+  const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
+  const address = parser.parseAddress(args.anchor);
   const newContent = insertSection(
     content, tree, address, args.position,
     args.heading, args.content, args.level,

@@ -78,6 +78,8 @@ export function resolveAddress(
       return resolveIndexAddress(tree, address.indices);
     case 'pattern':
       return resolvePatternAddress(tree, address.pattern);
+    case 'dotpath':
+      return resolveDotPathAddress(tree, address.segments);
   }
 }
 
@@ -161,6 +163,27 @@ function resolvePatternAddress(tree: SectionNode[], pattern: string): SectionNod
   return all.filter((n) => matched.includes(n.heading.text));
 }
 
+function resolveDotPathAddress(tree: SectionNode[], segments: string[]): SectionNode[] {
+  if (segments.length === 0) return [];
+
+  let candidates = tree;
+
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const matches = candidates.filter((n) => n.heading.text === segment);
+
+    if (matches.length === 0) return [];
+
+    if (i < segments.length - 1) {
+      candidates = matches.flatMap((n) => n.children);
+    } else {
+      return matches;
+    }
+  }
+
+  return [];
+}
+
 function addressToString(address: SectionAddress): string {
   switch (address.type) {
     case 'text':
@@ -171,6 +194,8 @@ function addressToString(address: SectionAddress): string {
       return JSON.stringify(address.indices);
     case 'pattern':
       return address.pattern;
+    case 'dotpath':
+      return address.segments.join('.');
   }
 }
 

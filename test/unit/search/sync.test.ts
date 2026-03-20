@@ -8,6 +8,8 @@ import { randomUUID } from 'node:crypto';
 import { initSearchSchema } from '../../../src/search/schema.js';
 import { syncIndex } from '../../../src/search/sync.js';
 import { getIndexedCount, getIndexedFiles } from '../../../src/search/indexer.js';
+// Register parsers
+import '../../../src/document/markdown-parser.js';
 
 const ROOT_NAME = 'test';
 

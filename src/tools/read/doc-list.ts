@@ -3,9 +3,8 @@ import { z } from 'zod';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ToolContext } from '../context.js';
-import { listMarkdownFiles, readDocument } from '../../shared/file-utils.js';
-import { parseMarkdown } from '../../document/parser.js';
-import { buildSectionTree } from '../../document/section-tree.js';
+import { listDocumentFiles, readDocument } from '../../shared/file-utils.js';
+import { parserRegistry } from '../../document/parser-registry.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { resolveScope } from '../../config/roots.js';
 
@@ -36,7 +35,7 @@ export async function handleDocList(
   }> = [];
 
   for (const [name, root] of Object.entries(rootsToList)) {
-    const files = listMarkdownFiles(root.path, scopeWithinRoot);
+    const files = listDocumentFiles(root.path, scopeWithinRoot);
 
     for (const file of files) {
       const absolutePath = join(root.path, file);
@@ -59,8 +58,8 @@ export async function handleDocList(
       if (args.include_outline) {
         try {
           const { content } = readDocument(root.path, file);
-          const ast = parseMarkdown(content);
-          const tree = buildSectionTree(ast, content);
+          const parser = parserRegistry.getParser(file);
+          const tree = parser.parse(content);
           const flatOutline = (function flatten(nodes: typeof tree): Array<{ level: number; text: string }> {
             const result: Array<{ level: number; text: string }> = [];
             for (const node of nodes) {

@@ -1,36 +1,35 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import type { ToolContext } from '../context.js';
-import { replaceSection } from '../../document/section-ops.js';
+import { setValue } from '../../document/section-ops.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
-export const DocReplaceSectionSchema = z.object({
+export const DocSetValueSchema = z.object({
   file: z.string(),
-  section: z.string(),
-  content: z.string(),
-  replace_heading: z.boolean().default(false),
+  path: z.string(),
+  value: z.string(),
   mode: z.enum(['write', 'propose']).optional(),
   message: z.string().optional(),
 });
 
-export async function handleDocReplaceSection(
-  args: z.infer<typeof DocReplaceSectionSchema>,
+export async function handleDocSetValue(
+  args: z.infer<typeof DocSetValueSchema>,
   ctx: ToolContext,
 ) {
   requirePermission(ctx.caller, 'read', args.file);
 
   const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
-  const address = parser.parseAddress(args.section);
-  const newContent = replaceSection(content, tree, address, args.content, args.replace_heading);
+  const address = parser.parseAddress(args.path);
+  const newContent = setValue(content, tree, address, args.value);
 
   const result = await executeWrite(ctx, {
     file: args.file,
-    operation: 'Replace section',
-    target: args.section,
+    operation: 'Set value',
+    target: args.path,
     mode: args.mode,
     message: args.message,
   }, content, newContent, encoding);
 
-  return { ...result, section: args.section };
+  return { ...result, path: args.path };
 }
