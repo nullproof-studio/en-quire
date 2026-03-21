@@ -74,4 +74,31 @@ describe('DocumentParser — validate', () => {
     const mdParser = parserRegistry.getParser('test.md');
     expect(mdParser.validate('')).toEqual([]);
   });
+
+  it('returns warning for duplicate sibling headings in markdown', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('# Title\n\n## Section A\n\nContent.\n\n## Section A\n\nMore content.\n');
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('Section A');
+    expect(warnings[0]).toContain('Duplicate');
+  });
+
+  it('allows same heading text under different parents', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('# Doc\n\n## Part 1\n\n### Overview\n\n## Part 2\n\n### Overview\n');
+    expect(warnings).toEqual([]);
+  });
+
+  it('returns no warnings for unique sibling headings', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('# Title\n\n## A\n\n## B\n\n## C\n');
+    expect(warnings).toEqual([]);
+  });
+
+  it('detects duplicates at nested levels', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('# Doc\n\n## Parent\n\n### Child\n\nText.\n\n### Child\n\nText.\n');
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('Child');
+  });
 });

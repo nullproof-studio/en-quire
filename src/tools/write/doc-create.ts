@@ -55,10 +55,11 @@ export async function handleDocCreate(
     // Validate content before writing
     const parser = parserRegistry.getParser(resolved.relativePath);
     const createWarnings = parser.validate(args.content);
-    const hasErrors = createWarnings.some((w) => w.includes('syntax error') || w.includes('parse error'));
+    const hasErrors = createWarnings.some((w) =>
+      w.includes('syntax error') || w.includes('parse error') || w.includes('Duplicate sibling'));
     if (hasErrors) {
       throw new ValidationError(
-        `Write blocked — content has invalid syntax:\n${createWarnings.join('\n')}`,
+        `Write blocked — content has structural issues:\n${createWarnings.join('\n')}`,
       );
     }
 

@@ -152,6 +152,21 @@ export function insertSection(
   level?: number,
 ): string {
   const anchorNode = resolveSingleSection(tree, anchor);
+  const cleanHeading = stripHeadingMarkers(heading);
+
+  // Check for duplicate sibling
+  const siblings = (position === 'child_start' || position === 'child_end')
+    ? anchorNode.children
+    : (anchorNode.parent ? anchorNode.parent.children : tree);
+
+  if (siblings.some((s) => s.heading.text === cleanHeading)) {
+    const parentName = (position === 'child_start' || position === 'child_end')
+      ? anchorNode.heading.text
+      : (anchorNode.parent?.heading.text ?? 'top level');
+    throw new ValidationError(
+      `Section "${cleanHeading}" already exists under "${parentName}". Use doc_replace_section to update it.`,
+    );
+  }
 
   // Determine heading level
   const headingLevel = level ?? (
@@ -160,7 +175,6 @@ export function insertSection(
       : anchorNode.heading.level
   );
 
-  const cleanHeading = stripHeadingMarkers(heading);
   const headingPrefix = '#'.repeat(headingLevel);
   const newSection = `\n${headingPrefix} ${cleanHeading}\n\n${content}\n`;
 
