@@ -37,12 +37,41 @@ class MarkdownParser implements DocumentParser {
   validate(content: string): string[] {
     if (content.trim().length === 0) return [];
     try {
-      this.parse(content);
-      return [];
+      const tree = this.parse(content);
+      return findDuplicateSiblings(tree);
     } catch (err) {
       return [`Markdown parse error: ${err instanceof Error ? err.message : String(err)}`];
     }
   }
+}
+
+/**
+ * Walk the section tree and find duplicate sibling headings
+ * (same heading text under the same parent).
+ */
+function findDuplicateSiblings(nodes: SectionNode[], parentPath?: string): string[] {
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+
+  for (const node of nodes) {
+    // Skip preamble — it's synthetic and always unique
+    if (node.heading.text === '__preamble') continue;
+
+    const key = node.heading.text;
+    if (seen.has(key)) {
+      const context = parentPath ? ` under "${parentPath}"` : ' at top level';
+      warnings.push(`Duplicate sibling heading "${key}"${context} — this will cause ambiguous section addressing.`);
+    } else {
+      seen.add(key);
+    }
+
+    // Recurse into children
+    if (node.children.length > 0) {
+      warnings.push(...findDuplicateSiblings(node.children, node.heading.text));
+    }
+  }
+
+  return warnings;
 }
 
 parserRegistry.register(new MarkdownParser());

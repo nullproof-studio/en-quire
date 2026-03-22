@@ -401,3 +401,33 @@ describe('generateToc', () => {
     expect(toc).not.toContain('Subsection');
   });
 });
+
+describe('insertSection — duplicate sibling guard', () => {
+  it('throws when inserting a duplicate sibling heading', () => {
+    const md = '# Doc\n\n## Existing\n\nContent.\n';
+    const tree = parse(md);
+    expect(() => insertSection(md, tree,
+      { type: 'text', text: 'Existing' }, 'after',
+      'Existing', 'New content.'
+    )).toThrow(/already exists/);
+  });
+
+  it('allows inserting a heading that exists under a different parent', () => {
+    const md = '# Doc\n\n## Part 1\n\n### Details\n\n## Part 2\n\nContent.\n';
+    const tree = parse(md);
+    // Inserting "Details" as a child of "Part 2" is fine — different parent
+    expect(() => insertSection(md, tree,
+      { type: 'text', text: 'Part 2' }, 'child_end',
+      'Details', 'More details.'
+    )).not.toThrow();
+  });
+
+  it('allows inserting a heading with a different name', () => {
+    const md = '# Doc\n\n## A\n\nContent.\n';
+    const tree = parse(md);
+    expect(() => insertSection(md, tree,
+      { type: 'text', text: 'A' }, 'after',
+      'B', 'Content.'
+    )).not.toThrow();
+  });
+});

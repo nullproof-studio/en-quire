@@ -62,10 +62,11 @@ export async function executeWrite(
   // Validate output before writing
   const parser = parserRegistry.getParser(resolved.relativePath);
   const warnings = parser.validate(newContent);
-  const hasErrors = warnings.some((w) => w.includes('syntax error') || w.includes('parse error'));
+  const hasErrors = warnings.some((w) =>
+    w.includes('syntax error') || w.includes('parse error') || w.includes('Duplicate sibling'));
   if (hasErrors) {
     throw new ValidationError(
-      `Write blocked — output would produce invalid syntax:\n${warnings.join('\n')}`,
+      `Write blocked — output has structural issues:\n${warnings.join('\n')}`,
     );
   }
 
