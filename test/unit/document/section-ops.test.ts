@@ -431,3 +431,55 @@ describe('insertSection — duplicate sibling guard', () => {
     )).not.toThrow();
   });
 });
+
+describe('appendToSection — heading guard', () => {
+  it('rejects content with a same-level heading', () => {
+    const md = '# Doc\n\n## Tools\n\nExisting tools.\n';
+    const tree = parse(md);
+    expect(() => appendToSection(md, tree,
+      { type: 'text', text: 'Tools' },
+      '## Another Section\n\nContent.\n'
+    )).toThrow(/heading/i);
+  });
+
+  it('rejects content with a higher-level heading', () => {
+    const md = '# Doc\n\n## Tools\n\nExisting tools.\n';
+    const tree = parse(md);
+    expect(() => appendToSection(md, tree,
+      { type: 'text', text: 'Tools' },
+      '# Top Level\n\nContent.\n'
+    )).toThrow(/heading/i);
+  });
+
+  it('allows plain body content without headings', () => {
+    const md = '# Doc\n\n## Tools\n\nExisting tools.\n';
+    const tree = parse(md);
+    const result = appendToSection(md, tree,
+      { type: 'text', text: 'Tools' },
+      '- New tool item\n- Another item\n'
+    );
+    expect(result).toContain('New tool item');
+    expect(result).toContain('Existing tools.');
+  });
+
+  it('allows content with lower-level (child) headings', () => {
+    const md = '# Doc\n\n## Tools\n\nExisting tools.\n';
+    const tree = parse(md);
+    const result = appendToSection(md, tree,
+      { type: 'text', text: 'Tools' },
+      '### Sub-tool\n\nDetail.\n'
+    );
+    expect(result).toContain('### Sub-tool');
+  });
+
+  it('does not reject headings inside code blocks', () => {
+    const md = '# Doc\n\n## Guide\n\nSome guide.\n';
+    const tree = parse(md);
+    const result = appendToSection(md, tree,
+      { type: 'text', text: 'Guide' },
+      '```markdown\n## Example Heading\n```\n'
+    );
+    expect(result).toContain('## Example Heading');
+  });
+
+});

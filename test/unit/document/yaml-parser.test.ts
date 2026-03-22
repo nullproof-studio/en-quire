@@ -295,6 +295,17 @@ version: '3.8'
   });
 });
 
+describe('YAML parser — append does not check for markdown headings', () => {
+  it('allows appending content with # characters (YAML comments)', () => {
+    const yaml = 'config:\n  key: value\n';
+    const tree = parser.parse(yaml);
+    const address = parser.parseAddress('config');
+    // # in YAML is a comment, not a heading — should not be rejected
+    const result = appendToSection(yaml, tree, address, '  # new comment\n  other: data\n');
+    expect(result).toContain('# new comment');
+  });
+});
+
 describe('YAML parser — comment preservation', () => {
   it('preserves comments when deleting a section', () => {
     const yaml = '# Top comment\na: 1\n# Middle comment\nb: 2\nc: 3\n';
