@@ -139,6 +139,33 @@ function ensureTrailingNewlines(content: string): string {
 }
 
 /**
+ * Check if content contains ATX headings at or above the given level.
+ * Ignores headings inside fenced code blocks.
+ */
+function checkForBreakingHeadings(content: string, sectionLevel: number): void {
+  let inCodeBlock = false;
+  for (const line of content.split('\n')) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+
+    const match = trimmed.match(/^(#{1,6})\s/);
+    if (match) {
+      const headingLevel = match[1].length;
+      if (headingLevel <= sectionLevel) {
+        throw new ValidationError(
+          `Cannot append content containing a level-${headingLevel} heading to a level-${sectionLevel} section. ` +
+          `Use doc_insert_section to add sibling or higher-level sections.`,
+        );
+      }
+    }
+  }
+}
+
+/**
  * Insert a new section relative to an anchor section.
  * Returns the new markdown string.
  */
@@ -213,6 +240,16 @@ export function appendToSection(
   content: string,
 ): string {
   const node = resolveSingleSection(tree, address);
+
+  // Guard: reject content containing markdown headings at the same or higher level.
+  // Only applies to markdown sections (heading level > 0 with # markers).
+  if (node.heading.level > 0) {
+    const headingLine = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
+    const isMarkdown = headingLine.trimStart().startsWith('#');
+    if (isMarkdown) {
+      checkForBreakingHeadings(content, node.heading.level);
+    }
+  }
 
   const insertOffset = node.bodyEndOffset;
   const before = markdown.slice(0, insertOffset);
