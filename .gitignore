@@ -35,6 +35,8 @@ npm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+
 en-quire.config.yaml
 a2a-poc/
 docs/session-memory/
