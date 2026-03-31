@@ -1,0 +1,9 @@
+name: "quote-test"
+version: "1.0.0"
+
+settings:
+  api_key: "sk-original-key-123"
+  endpoint: "http://localhost:3000"
+  enabled: true
+  count: 42
+  unquoted_string: hello-world

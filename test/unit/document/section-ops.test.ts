@@ -483,3 +483,91 @@ describe('appendToSection — heading guard', () => {
   });
 
 });
+
+describe('replaceSection — auto-strip duplicate heading from content (#27)', () => {
+  it('strips leading heading from content when it matches the target section', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      '## A\n\nNew content.\n');
+    expect(result).toContain('## A');
+    expect(result).toContain('New content.');
+    // Should NOT have a duplicate heading
+    expect(result).not.toMatch(/## A[\s\S]*## A/);
+  });
+
+  it('strips leading heading with different marker level', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    // Agent uses ### instead of ## but same text
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      '### A\n\nNew content.\n');
+    expect(result).toContain('## A');
+    expect(result).toContain('New content.');
+    expect(result).not.toMatch(/## A[\s\S]*### A/);
+  });
+
+  it('does not strip heading when text differs', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      '### Different Heading\n\nNew content.\n');
+    // Different heading text should be kept as body content
+    expect(result).toContain('### Different Heading');
+  });
+
+  it('strips heading with leading newlines in content', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      '\n\n## A\n\nNew content.\n');
+    expect(result).toContain('## A');
+    expect(result).toContain('New content.');
+    expect(result).not.toMatch(/## A[\s\S]*## A/);
+  });
+
+  it('strips heading with trailing ATX closing markers', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      '## A ##\n\nNew content.\n');
+    expect(result).toContain('## A');
+    expect(result).toContain('New content.');
+    expect(result).not.toMatch(/## A[\s\S]*## A/);
+  });
+
+  it('strips heading with extra spaces after markers', () => {
+    const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      '##  A\n\nNew content.\n');
+    expect(result).toContain('## A');
+    expect(result).toContain('New content.');
+    expect(result).not.toMatch(/## A[\s\S]*## A/);
+  });
+
+  it('strips heading at all six ATX levels', () => {
+    // Test with a deeply nested h6 section
+    const md = '# A\n\n## B\n\n### C\n\n#### D\n\n##### E\n\n###### F\n\nDeep content.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'F' },
+      '###### F\n\nUpdated deep content.\n');
+    expect(result).toContain('###### F');
+    expect(result).toContain('Updated deep content.');
+    const matches = result.match(/###### F/g);
+    expect(matches?.length).toBe(1);
+  });
+
+  it('handles real-world agent content with heading and body', () => {
+    const md = '# WTW\n\n## Operational Excellence & Capabilities\n\n### Digital Transformation Initiatives (2024-2026)\n\nOld data.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree,
+      { type: 'text', text: 'Digital Transformation Initiatives (2024-2026)' },
+      '### Digital Transformation Initiatives (2024-2026)\n\n**Strategic Investments:**\n- WIRL Platform Enhancement\n- Cloud Migration\n');
+    expect(result).toContain('### Digital Transformation Initiatives (2024-2026)');
+    expect(result).toContain('Strategic Investments');
+    // No duplicate heading
+    const matches = result.match(/Digital Transformation Initiatives \(2024-2026\)/g);
+    expect(matches?.length).toBe(1);
+  });
+});

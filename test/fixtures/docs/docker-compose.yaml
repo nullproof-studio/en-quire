@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  api:
+    image: node:22-slim
+
+      
+
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      LOG_LEVEL: debug
+      DATABASE_URL: postgres://localhost:5432/app
+
+
+    volumes:
+      - ./data:/data
+      - ./config:/app/config:ro
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+
+  worker:
+    image: node:22-slim
+    command: node worker.js
+    environment:
+      NODE_ENV: production
+      QUEUE_URL: redis://redis:6379
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+
+volumes:
+  redis-data:
+    driver: local

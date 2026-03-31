@@ -1,0 +1,56 @@
+name: en-quire
+version: "0.2.0"
+
+server:
+  transport: stdio
+  port: 8080
+  log_level: error
+
+search:
+  fulltext: true
+  semantic:
+    enabled: false
+    endpoint: "http://localhost:8000/v1/embeddings"
+    model: "all-MiniLM-L6-v2"
+    dimensions: 768
+
+
+git:
+  auto_commit: true
+  remote: null
+
+callers:
+  michelle:
+    key: sk-michelle-ops-v3
+    scopes:
+      - path: "sops/**"
+        permissions:
+          - read
+          - write
+          - search
+      - path: "skills/**"
+        permissions:
+          - read
+          - propose
+          - search
+  analyst:
+    key: "sk-analyst-v2"
+    scopes:
+      - path: "**"
+        permissions:
+          - read
+          - search
+      - path: "reports/**"
+        permissions:
+          - read
+          - write
+          - search
+  sofia:
+    key: "sk-sofia-ops"
+    scopes:
+      - path: "sops/**"
+        permissions:
+          - read
+          - write
+          - search
+

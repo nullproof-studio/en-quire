@@ -35,4 +35,10 @@ npm-debug.log*
 
 # TypeScript
 *.tsbuildinfo
+
+
 en-quire.config.yaml
+a2a-poc/
+docs/session-memory/
+en-quire-repo-setup.md
+en-quire-spec.md

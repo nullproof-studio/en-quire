@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  api:
+    image: node:22-slim
+    environment:
+      NODE_ENV: production
+      PORT: 3100
+      LOG_LEVEL: info
+
+      DEBUG: "true"
+
+    volumes:
+      - ./data:/data
+    ports:
+      - "3100:3100"
+
+  worker:
+    image: node:22-slim
+    environment:
+      NODE_ENV: production
+      QUEUE_URL: redis://redis:6379
+
+volumes:
+  redis-data:
+    driver: local

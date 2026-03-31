@@ -98,23 +98,28 @@ export function replaceSection(
   }
 
   // Replace body only, preserve heading
+  // Auto-strip a leading heading from content if it matches the target section.
+  // Agents frequently include "### Heading\n\n" at the start of replacement content,
+  // which would create a duplicate heading since replaceSection preserves the original.
+  const strippedContent = stripLeadingDuplicateHeading(newContent, node.heading.text);
+
   const before = markdown.slice(0, node.bodyStartOffset);
   const after = markdown.slice(node.bodyEndOffset);
 
   // For sections without a heading line (e.g. __preamble, YAML keys),
   // don't add a blank line separator — just replace the body directly.
   if (node.headingStartOffset === node.bodyStartOffset) {
-    return before + ensureTrailingNewlines(newContent) + after;
+    return before + ensureTrailingNewlines(strippedContent) + after;
   }
 
   // YAML keys: `before` ends with \n (bodyStartOffset is at a line start).
   // No blank line separator needed — strip leading newlines and splice directly.
   if (before.endsWith('\n')) {
-    const stripped = newContent.replace(/^\n*/, '');
+    const stripped = strippedContent.replace(/^\n*/, '');
     return before + ensureTrailingNewlines(stripped) + after;
   }
 
-  const normalized = newContent.replace(/^\n*/, '');
+  const normalized = strippedContent.replace(/^\n*/, '');
   return before + '\n\n' + ensureTrailingNewlines(normalized) + after;
 }
 
@@ -126,6 +131,27 @@ export function replaceSection(
  */
 function stripHeadingMarkers(heading: string): string {
   return heading.replace(/^#+\s*/, '');
+}
+
+/**
+ * Strip a leading heading line from content if its text matches the
+ * target section heading.  Agents often include the heading in
+ * replacement content even though replaceSection preserves it.
+ */
+function stripLeadingDuplicateHeading(content: string, headingText: string): string {
+  // Strip leading whitespace/newlines before checking for a heading line
+  const trimmed = content.replace(/^\n*/, '');
+  // Match ATX heading: #{1,6}, space(s), text, optional trailing ##+ markers
+  const match = trimmed.match(/^#{1,6}\s+(.+?)(?:\s+#+\s*)?$/m);
+  if (!match) return content;
+  const contentHeadingText = match[1].trim();
+  if (contentHeadingText === headingText) {
+    // Remove the heading line and any blank lines after it
+    const headingEnd = trimmed.indexOf('\n', match.index!);
+    if (headingEnd === -1) return '';
+    return trimmed.slice(headingEnd).replace(/^\n*/, '');
+  }
+  return content;
 }
 
 /**
