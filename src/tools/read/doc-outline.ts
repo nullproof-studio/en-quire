@@ -8,9 +8,9 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
 
 export const DocOutlineSchema = z.object({
-  file: z.string(),
-  max_depth: z.number().int().positive().optional(),
-  root_section: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  max_depth: z.number().int().positive().optional().describe('Maximum heading depth to return. Omit for full depth.'),
+  root_section: z.string().optional().describe('Section address to use as the root of the outline. Omit to outline the entire document.'),
 });
 
 export async function handleDocOutline(

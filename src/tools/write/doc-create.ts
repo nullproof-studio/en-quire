@@ -13,10 +13,10 @@ import { GitRequiredError, ValidationError } from '../../shared/errors.js';
 import { resolveFilePath } from '../../config/roots.js';
 
 export const DocCreateSchema = z.object({
-  file: z.string(),
-  content: z.string(),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md"). Must not already exist — use doc_replace_section or doc_find_replace to modify existing files.'),
+  content: z.string().describe('Full document content including headings. For markdown, start with a top-level heading (e.g. "# Title"). Structure is validated before writing.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocCreate(

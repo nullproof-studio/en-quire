@@ -5,12 +5,12 @@ import { searchDocuments } from '../../search/query.js';
 import { requirePermission } from '../../rbac/permissions.js';
 
 export const DocSearchSchema = z.object({
-  query: z.string(),
-  scope: z.string().optional(),
-  section_filter: z.string().optional(),
-  search_type: z.enum(['fulltext', 'semantic', 'hybrid']).default('fulltext'),
-  max_results: z.number().int().positive().default(10),
-  include_context: z.boolean().default(true),
+  query: z.string().describe('Search query text.'),
+  scope: z.string().optional().describe('Limit search to a specific root or path prefix (e.g. "root-name" or "root-name/subfolder"). Omit to search all roots.'),
+  section_filter: z.string().optional().describe('Filter results to sections matching this heading text or path pattern.'),
+  search_type: z.enum(['fulltext', 'semantic', 'hybrid']).default('fulltext').describe('Search mode: "fulltext" (default) for keyword matching, "semantic" for meaning-based search, "hybrid" for both.'),
+  max_results: z.number().int().positive().default(10).describe('Maximum number of results to return (default: 10).'),
+  include_context: z.boolean().default(true).describe('When true (default), includes surrounding text context with each result.'),
 });
 
 export async function handleDocSearch(

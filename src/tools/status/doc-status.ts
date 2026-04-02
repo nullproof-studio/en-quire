@@ -7,7 +7,7 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { resolveScope } from '../../config/roots.js';
 
 export const DocStatusSchema = z.object({
-  scope: z.string().optional(),
+  scope: z.string().optional().describe('Limit to a specific root or path prefix. Omit to check status across all roots.'),
 });
 
 export async function handleDocStatus(

@@ -6,10 +6,10 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocDeleteSectionSchema = z.object({
-  file: z.string(),
-  section: z.string(),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  section: z.string().describe('Section address — heading text (e.g. "Appendix") or path (e.g. "Parent > Child"). WARNING: deleting a section removes its heading, body, AND all children. Deleting an h1 section removes the entire document content beneath that heading.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocDeleteSection(
