@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
+import type { Root } from 'mdast';
 import type { DocumentParser } from './parser-registry.js';
 import type { SectionNode, SectionAddress } from '../shared/types.js';
 import { parseMarkdown } from './parser.js';
@@ -37,12 +38,52 @@ class MarkdownParser implements DocumentParser {
   validate(content: string): string[] {
     if (content.trim().length === 0) return [];
     try {
-      const tree = this.parse(content);
-      return findDuplicateSiblings(tree);
+      const ast = parseMarkdown(content);
+      const setextWarnings = findSetextHeadings(ast, content);
+      const tree = buildSectionTree(ast, content);
+      const preamble = buildPreambleNode(content, tree.length > 0 ? tree[0].headingStartOffset : null);
+      if (preamble) {
+        for (const node of tree) { node.index += 1; }
+        tree.unshift(preamble);
+      }
+      return [...setextWarnings, ...findDuplicateSiblings(tree)];
     } catch (err) {
       return [`Markdown parse error: ${err instanceof Error ? err.message : String(err)}`];
     }
   }
+}
+
+/**
+ * Detect setext-style headings (text followed by --- or ===).
+ * Agents almost always intend --- as a horizontal rule, not a heading underline.
+ * Returns actionable warnings so agents can diagnose the issue.
+ */
+function findSetextHeadings(ast: Root, content: string): string[] {
+  const warnings: string[] = [];
+  const lines = content.split('\n');
+
+  for (const child of ast.children) {
+    if (child.type !== 'heading' || !child.position) continue;
+    const { start, end } = child.position;
+    // Setext headings span 2+ lines; ATX headings span exactly 1
+    if (start.line === end.line) continue;
+
+    const underlineLine = lines[end.line - 1];
+    const marker = underlineLine?.trim();
+    if (!marker) continue;
+
+    const isSetext = /^-{3,}$/.test(marker) || /^={3,}$/.test(marker);
+    if (!isSetext) continue;
+
+    const headingText = lines[start.line - 1]?.trim() ?? '';
+    const separator = marker[0] === '=' ? '===' : '---';
+    warnings.push(
+      `Line ${end.line}: '${separator}' after text creates a heading ("${headingText}") — not a horizontal rule. ` +
+      `Add a blank line before '${separator}' if you intended a separator.`,
+    );
+  }
+
+  return warnings;
 }
 
 /**

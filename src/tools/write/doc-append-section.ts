@@ -6,11 +6,11 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocAppendSectionSchema = z.object({
-  file: z.string(),
-  section: z.string(),
-  content: z.string(),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  section: z.string().describe('Section address — heading text (e.g. "Overview") or path (e.g. "Parent > Child").'),
+  content: z.string().describe('Content to append to the end of the section body (before its children). Must not contain headings at or above the section level — use doc_insert_section to add siblings.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocAppendSection(

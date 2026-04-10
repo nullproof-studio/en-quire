@@ -103,8 +103,14 @@ export function replaceSection(
   // which would create a duplicate heading since replaceSection preserves the original.
   const strippedContent = stripLeadingDuplicateHeading(newContent, node.heading.text);
 
+  // If replacement content contains child-level headings, replace the entire section
+  // body including children (sectionEndOffset) to avoid duplicating existing children.
+  // Otherwise replace only the body text (bodyEndOffset), preserving children.
+  const contentHasChildHeadings = hasChildHeadings(strippedContent, node.heading.level);
+  const endOffset = contentHasChildHeadings ? node.sectionEndOffset : node.bodyEndOffset;
+
   const before = markdown.slice(0, node.bodyStartOffset);
-  const after = markdown.slice(node.bodyEndOffset);
+  const after = markdown.slice(endOffset);
 
   // For sections without a heading line (e.g. __preamble, YAML keys),
   // don't add a blank line separator — just replace the body directly.
@@ -131,6 +137,30 @@ export function replaceSection(
  */
 function stripHeadingMarkers(heading: string): string {
   return heading.replace(/^#+\s*/, '');
+}
+
+/**
+ * Check if content contains ATX headings deeper than the given level.
+ * Ignores headings inside fenced code blocks.
+ * Used to decide whether replacement content includes subsection headings
+ * that would duplicate existing children if only the body were replaced.
+ */
+function hasChildHeadings(content: string, parentLevel: number): boolean {
+  let inCodeBlock = false;
+  for (const line of content.split('\n')) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+    if (inCodeBlock) continue;
+
+    const match = trimmed.match(/^(#{1,6})\s/);
+    if (match && match[1].length > parentLevel) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

@@ -6,16 +6,16 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocFindReplaceSchema = z.object({
-  file: z.string(),
-  find: z.string(),
-  replace: z.string(),
-  regex: z.boolean().default(false),
-  flags: z.string().default('g'),
-  preview: z.boolean().default(false),
-  apply_matches: z.array(z.number().int()).optional(),
-  expected_count: z.number().int().optional(),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  find: z.string().describe('Text or regex pattern to search for.'),
+  replace: z.string().describe('Replacement text. In regex mode, supports backreferences ($1, $2, etc.).'),
+  regex: z.boolean().default(false).describe('When true, treat find as a regular expression. When false (default), find is matched literally.'),
+  flags: z.string().default('g').describe('Regex flags (default: "g" for global). Allowed: g, i, m, s, u, y.'),
+  preview: z.boolean().default(false).describe('When true, return matches without applying replacements. Use this to verify matches before committing changes.'),
+  apply_matches: z.array(z.number().int()).optional().describe('Apply only specific matches by ID (from preview results). Omit to apply all matches.'),
+  expected_count: z.number().int().optional().describe('Safety check: if the actual match count differs from this value, the operation fails. Use with preview to verify first.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocFindReplace(
@@ -23,6 +23,17 @@ export async function handleDocFindReplace(
   ctx: ToolContext,
 ) {
   requirePermission(ctx.caller, 'read', args.file);
+
+  // Early check: find and replace are identical — no change would be made
+  if (!args.regex && args.find === args.replace) {
+    return {
+      success: false,
+      file: args.file,
+      replacements: 0,
+      skipped: 0,
+      warning: `No changes made: find and replace strings are identical ("${args.find}"). Double-check the replacement value.`,
+    };
+  }
 
   const { content, encoding, tree } = loadDocument(ctx, args.file);
 
