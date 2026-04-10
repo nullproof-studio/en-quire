@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseMarkdown } from '../../../src/document/parser.js';
@@ -569,5 +569,200 @@ describe('replaceSection — auto-strip duplicate heading from content (#27)', (
     // No duplicate heading
     const matches = result.match(/Digital Transformation Initiatives \(2024-2026\)/g);
     expect(matches?.length).toBe(1);
+  });
+});
+
+describe('replaceSection — body-only replace duplicates child sections (#29)', () => {
+  const fixtureName = 'financial-performance.md';
+  let originalMd: string;
+
+  beforeEach(() => {
+    originalMd = loadFixture(fixtureName);
+  });
+
+  afterEach(() => {
+    // Verify the fixture file is unchanged (replaceSection is pure — returns a new string)
+    const current = loadFixture(fixtureName);
+    expect(current).toBe(originalMd);
+  });
+
+  it('body-only replace with subsection headings should not duplicate existing children', () => {
+    const tree = parse(originalMd);
+
+    // This is what an agent does: reads the section, rewrites it with updated subsections
+    const agentContent =
+      '### Financial Summary\n' +
+      '| Metric | 2023 | 2024 |\n' +
+      '|--------|------|------|\n' +
+      '| **Revenue** | ~$10M | $850M |\n\n' +
+      '### Funding History\n' +
+      '| Round | Date | Amount |\n' +
+      '|-------|------|--------|\n' +
+      '| Series A | Dec 2021 | $30M |\n\n' +
+      '### Key Financial Observations\n' +
+      '1. Unprecedented growth velocity.\n';
+
+    const result = replaceSection(
+      originalMd,
+      tree,
+      { type: 'text', text: 'Financial Performance' },
+      agentContent,
+    );
+
+    // The original children should NOT survive alongside the new content
+    const financialSummaryCount = (result.match(/### Financial Summary/g) || []).length;
+    expect(financialSummaryCount).toBe(1);
+
+    // Original child "Trend Analysis" should be gone — agent didn't include it
+    expect(result).not.toContain('### Trend Analysis');
+
+    // Original child "Peer Benchmarking" should be gone
+    expect(result).not.toContain('### Peer Benchmarking');
+
+    // Original child "So What" should be gone
+    expect(result).not.toContain('### So What');
+
+    // New content should be present
+    expect(result).toContain('### Funding History');
+    expect(result).toContain('### Key Financial Observations');
+
+    // Sibling sections should be unaffected
+    expect(result).toContain('## Executive Summary');
+    expect(result).toContain('## Strategic Outlook');
+  });
+
+  it('body-only replace with no subsection headings should leave children intact', () => {
+    const tree = parse(originalMd);
+
+    // Agent sends plain body text — no subsection headings
+    const result = replaceSection(
+      originalMd,
+      tree,
+      { type: 'text', text: 'Financial Performance' },
+      'Updated intro paragraph for the financial section.\n',
+    );
+
+    // Children should still be there since we only replaced the body
+    expect(result).toContain('### Financial Summary');
+    expect(result).toContain('### Trend Analysis');
+    expect(result).toContain('### Peer Benchmarking');
+    expect(result).toContain('### So What');
+    expect(result).toContain('Updated intro paragraph');
+  });
+
+  it('partial child replacement: a,b,c → b,c,d removes a and appends d', () => {
+    // Fixture has children: Financial Summary (a), Trend Analysis (b),
+    // Peer Benchmarking (c), So What (d) — agent drops first, keeps middle two, adds new
+    const tree = parse(originalMd);
+
+    const agentContent =
+      '### Trend Analysis\n' +
+      'Updated trend analysis content.\n\n' +
+      '### Peer Benchmarking\n' +
+      'Updated benchmarking content.\n\n' +
+      '### Risk Assessment\n' +
+      'New risk section added by agent.\n';
+
+    const result = replaceSection(
+      originalMd,
+      tree,
+      { type: 'text', text: 'Financial Performance' },
+      agentContent,
+    );
+
+    // Dropped child should be gone
+    expect(result).not.toContain('### Financial Summary');
+    // Kept children should appear exactly once with updated content
+    expect((result.match(/### Trend Analysis/g) || []).length).toBe(1);
+    expect(result).toContain('Updated trend analysis content.');
+    expect((result.match(/### Peer Benchmarking/g) || []).length).toBe(1);
+    expect(result).toContain('Updated benchmarking content.');
+    // Original "So What" should be gone (agent omitted it)
+    expect(result).not.toContain('### So What');
+    // New child should be present
+    expect(result).toContain('### Risk Assessment');
+    expect(result).toContain('New risk section added by agent.');
+
+    // Siblings unaffected
+    expect(result).toContain('## Executive Summary');
+    expect(result).toContain('## Strategic Outlook');
+  });
+
+  it('handles deeply nested children (3+ levels)', () => {
+    const md =
+      '# Report\n\n' +
+      '## Analysis\n\n' +
+      '### Overview\n\n' +
+      'Intro text.\n\n' +
+      '#### Subsection A\n\n' +
+      'Detail A.\n\n' +
+      '##### Deep Detail A1\n\n' +
+      'Very deep content.\n\n' +
+      '#### Subsection B\n\n' +
+      'Detail B.\n\n' +
+      '### Conclusion\n\n' +
+      'Wrapping up.\n\n' +
+      '## Appendix\n\n' +
+      'References.\n';
+
+    const tree = parse(md);
+
+    const agentContent =
+      '#### Subsection X\n\n' +
+      'Replaced detail X.\n\n' +
+      '##### Deep Detail X1\n\n' +
+      'New deep content.\n\n' +
+      '##### Deep Detail X2\n\n' +
+      'Another deep section.\n\n' +
+      '#### Subsection Y\n\n' +
+      'Replaced detail Y.\n';
+
+    const result = replaceSection(
+      md,
+      tree,
+      { type: 'text', text: 'Overview' },
+      agentContent,
+    );
+
+    // Original deep children should be gone
+    expect(result).not.toContain('#### Subsection A');
+    expect(result).not.toContain('##### Deep Detail A1');
+    expect(result).not.toContain('#### Subsection B');
+
+    // New deep children should be present
+    expect(result).toContain('#### Subsection X');
+    expect(result).toContain('##### Deep Detail X1');
+    expect(result).toContain('##### Deep Detail X2');
+    expect(result).toContain('#### Subsection Y');
+
+    // Sibling "Conclusion" and parent-sibling "Appendix" unaffected
+    expect(result).toContain('### Conclusion');
+    expect(result).toContain('Wrapping up.');
+    expect(result).toContain('## Appendix');
+    expect(result).toContain('References.');
+  });
+
+  it('ignores child-level headings inside fenced code blocks', () => {
+    const tree = parse(originalMd);
+
+    // Content has a ### heading only inside a code block — not a real child heading
+    const agentContent =
+      'Here is an example:\n\n' +
+      '```markdown\n' +
+      '### Example Heading\n' +
+      'This is just a code sample.\n' +
+      '```\n';
+
+    const result = replaceSection(
+      originalMd,
+      tree,
+      { type: 'text', text: 'Financial Performance' },
+      agentContent,
+    );
+
+    // Children should be preserved — the heading was inside a code block
+    expect(result).toContain('### Financial Summary');
+    expect(result).toContain('### Trend Analysis');
+    expect(result).toContain('Here is an example:');
   });
 });
