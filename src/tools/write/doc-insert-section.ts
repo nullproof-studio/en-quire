@@ -8,14 +8,14 @@ import { ValidationError } from '../../shared/errors.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocInsertSectionSchema = z.object({
-  file: z.string(),
-  anchor: z.string(),
-  position: z.enum(['before', 'after', 'child_start', 'child_end']),
-  heading: z.string().describe('Plain text heading without # markers (e.g. "My Section", not "## My Section"). The heading level is set by the level parameter.'),
-  content: z.string(),
-  level: z.number().int().min(1).max(6).optional(),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  anchor: z.string().describe('Section address of the reference point — heading text (e.g. "Introduction") or path (e.g. "Parent > Child").'),
+  position: z.enum(['before', 'after', 'child_start', 'child_end']).describe('"before"/"after" insert as a sibling of the anchor. "child_start"/"child_end" insert as a child of the anchor. Fails if a sibling with the same heading already exists — use doc_replace_section to update existing sections.'),
+  heading: z.string().describe('Plain text heading without # markers (e.g. "My Section", not "## My Section"). The heading level is set automatically from position context or the level parameter.'),
+  content: z.string().describe('Body content for the new section (no heading line needed).'),
+  level: z.number().int().min(1).max(6).optional().describe('Explicit heading level (1–6). If omitted, level is inferred: siblings match the anchor level, children are anchor level + 1.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocInsertSection(

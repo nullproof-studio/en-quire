@@ -102,3 +102,68 @@ describe('DocumentParser — validate', () => {
     expect(warnings[0]).toContain('Child');
   });
 });
+
+describe('DocumentParser — setext heading detection (#32)', () => {
+  it('warns when --- after text creates a setext heading', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('# Doc\n\n## Section\n\n*Pending*\n---\n');
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('---');
+    expect(warnings[0]).toContain('Pending');
+    expect(warnings[0]).toContain('horizontal rule');
+  });
+
+  it('warns when === after text creates a setext h1 heading', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('Title Text\n===\n\n## Section\n\nContent.\n');
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings[0]).toContain('===');
+    expect(warnings[0]).toContain('Title Text');
+  });
+
+  it('does not warn for --- with a blank line before it (true horizontal rule)', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('# Doc\n\n## Section\n\nSome text.\n\n---\n\n## Next\n\nMore.\n');
+    expect(warnings).toEqual([]);
+  });
+
+  it('does not warn for ATX headings', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const warnings = parser.validate('# Title\n\n## Section A\n\n### Subsection\n\nContent.\n');
+    expect(warnings).toEqual([]);
+  });
+
+  it('produces both setext warning and duplicate sibling error together', () => {
+    const parser = parserRegistry.getParser('test.md');
+    // Two identical setext headings from --- separators
+    const md = '# Doc\n\n## Hypothesis 1\n\n*Pending*\n---\n\n## Hypothesis 2\n\n*Pending*\n---\n';
+    const warnings = parser.validate(md);
+    const setextWarnings = warnings.filter(w => w.includes('---'));
+    const duplicateWarnings = warnings.filter(w => w.includes('Duplicate'));
+    expect(setextWarnings.length).toBe(2);
+    expect(duplicateWarnings.length).toBe(1);
+    expect(duplicateWarnings[0]).toContain('Pending');
+  });
+
+  it('handles the real-world agent pattern with multiple --- separators', () => {
+    const parser = parserRegistry.getParser('test.md');
+    const md =
+      '# Hypothesis Testing\n\n' +
+      '## Executive Summary\n\n' +
+      '*To be populated*\n---\n\n' +
+      '## Hypothesis 1\n\n' +
+      '### Findings\n\n' +
+      '*Pending test execution*\n---\n\n' +
+      '## Hypothesis 2\n\n' +
+      '### Findings\n\n' +
+      '*Pending test execution*\n---\n';
+    const warnings = parser.validate(md);
+    const setextWarnings = warnings.filter(w => w.includes('---'));
+    // Each *text*\n--- creates a setext heading
+    expect(setextWarnings.length).toBe(3);
+    // Each warning should name the text that became a heading
+    expect(setextWarnings[0]).toContain('To be populated');
+    expect(setextWarnings[1]).toContain('Pending test execution');
+    expect(setextWarnings[2]).toContain('Pending test execution');
+  });
+});

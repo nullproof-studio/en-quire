@@ -8,12 +8,12 @@ import { ValidationError } from '../../shared/errors.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocGenerateTocSchema = z.object({
-  file: z.string(),
-  max_depth: z.number().int().positive().default(3),
-  style: z.enum(['links', 'plain']).default('links'),
-  position: z.enum(['top', 'after_heading']).default('after_heading'),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md"). Markdown only — not supported for YAML.'),
+  max_depth: z.number().int().positive().default(3).describe('Maximum heading depth to include in the TOC (default: 3).'),
+  style: z.enum(['links', 'plain']).default('links').describe('"links" generates markdown anchor links (default). "plain" generates a plain text list.'),
+  position: z.enum(['top', 'after_heading']).default('after_heading').describe('Where to insert the TOC: "after_heading" places it after the first h1 (default), "top" places it at the start of the document. If a TOC already exists, it is replaced in place.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocGenerateToc(

@@ -10,10 +10,10 @@ import { NotFoundError, ValidationError, GitRequiredError } from '../../shared/e
 import { resolveFilePath } from '../../config/roots.js';
 
 export const DocRenameSchema = z.object({
-  source: z.string(),
-  destination: z.string(),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  source: z.string().describe('Current document path (e.g. "root/old-name.md"). Must exist.'),
+  destination: z.string().describe('New document path (e.g. "root/new-name.md"). Must not already exist. Must be in the same root — cross-root rename is not supported.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocRename(

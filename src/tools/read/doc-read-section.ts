@@ -8,9 +8,9 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
 
 export const DocReadSectionSchema = z.object({
-  file: z.string(),
-  section: z.string(),
-  include_children: z.boolean().default(true),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  section: z.string().describe('Section address — heading text (e.g. "Financial Performance") or path (e.g. "Parent > Child").'),
+  include_children: z.boolean().default(true).describe('When true (default), returns the section body AND all child sections. When false, returns only the section body text (content between the heading and the first child heading).'),
 });
 
 export async function handleDocReadSection(

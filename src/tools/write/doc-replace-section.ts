@@ -6,12 +6,12 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocReplaceSectionSchema = z.object({
-  file: z.string(),
-  section: z.string(),
-  content: z.string(),
-  replace_heading: z.boolean().default(false),
-  mode: z.enum(['write', 'propose']).optional(),
-  message: z.string().optional(),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  section: z.string().describe('Section address — heading text (e.g. "Financial Performance") or path (e.g. "Parent > Child").'),
+  content: z.string().describe('Replacement content. Do NOT include the section heading — it is preserved automatically. If content contains subsection headings (e.g. ### child), all existing children of the target section are replaced. If content is plain text, existing children are preserved.'),
+  replace_heading: z.boolean().default(false).describe('When true, content must include the full heading line (e.g. "## New Title\\nBody"). When false (default), the existing heading is preserved.'),
+  mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
+  message: z.string().optional().describe('Commit message describing the change.'),
 });
 
 export async function handleDocReplaceSection(

@@ -6,9 +6,9 @@ import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
 
 export const DocReadSchema = z.object({
-  file: z.string(),
-  page: z.number().int().positive().default(1),
-  page_size: z.number().int().positive().default(200),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
+  page: z.number().int().positive().default(1).describe('Page number to read (default: 1). Use with total_pages from the response to paginate through large documents.'),
+  page_size: z.number().int().positive().default(200).describe('Lines per page (default: 200).'),
 });
 
 export async function handleDocRead(
