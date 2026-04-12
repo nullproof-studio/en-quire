@@ -16,6 +16,7 @@ import { DocReplaceSectionSchema, handleDocReplaceSection } from './tools/write/
 import { DocInsertSectionSchema, handleDocInsertSection } from './tools/write/doc-insert-section.js';
 import { DocAppendSectionSchema, handleDocAppendSection } from './tools/write/doc-append-section.js';
 import { DocDeleteSectionSchema, handleDocDeleteSection } from './tools/write/doc-delete-section.js';
+import { DocMoveSectionSchema, handleDocMoveSection } from './tools/write/doc-move-section.js';
 import { DocCreateSchema, handleDocCreate } from './tools/write/doc-create.js';
 import { DocFindReplaceSchema, handleDocFindReplace } from './tools/write/doc-find-replace.js';
 import { DocRenameSchema, handleDocRename } from './tools/write/doc-rename.js';
