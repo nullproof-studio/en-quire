@@ -4,6 +4,7 @@ import type { ToolContext } from '../context.js';
 import { readDocument } from '../../shared/file-utils.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
+import { computeEtag } from '../../shared/etag.js';
 
 export const DocReadSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
@@ -32,5 +33,6 @@ export async function handleDocRead(
     page: args.page,
     total_pages: totalPages,
     total_lines: totalLines,
+    etag: computeEtag(content),
   };
 }

@@ -179,6 +179,7 @@ export interface ResolvedConfig {
     dir: string | null;
   };
   callers: Record<string, CallerConfig>;
+  require_read_before_write: boolean;
 }
 
 /** Caller configuration from config file */

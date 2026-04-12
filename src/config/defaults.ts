@@ -17,4 +17,5 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'document_roots' | 'database'>
     dir: null,
   },
   callers: {},
+  require_read_before_write: true,
 };

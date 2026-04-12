@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import type { ToolContext } from '../context.js';
 import { safePath, writeDocument } from '../../shared/file-utils.js';
+import { computeEtag } from '../../shared/etag.js';
 import { parserRegistry } from '../../document/parser-registry.js';
 import { indexDocument } from '../../search/indexer.js';
 import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
@@ -88,7 +89,7 @@ export async function handleDocCreate(
     }
 
     return {
-      success: true, file: args.file, mode, branch, commit,
+      success: true, file: args.file, mode, branch, commit, etag: computeEtag(args.content),
       ...(createWarnings.length > 0 && { warnings: createWarnings }),
     };
   } finally {

@@ -4,6 +4,7 @@ import type { ToolContext } from '../context.js';
 import { findReplace } from '../../document/section-ops.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { loadDocument, executeWrite } from './write-helpers.js';
+import { computeEtag } from '../../shared/etag.js';
 
 export const DocFindReplaceSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
@@ -14,6 +15,7 @@ export const DocFindReplaceSchema = z.object({
   preview: z.boolean().default(false).describe('When true, return matches without applying replacements. Use this to verify matches before committing changes.'),
   apply_matches: z.array(z.number().int()).optional().describe('Apply only specific matches by ID (from preview results). Omit to apply all matches.'),
   expected_count: z.number().int().optional().describe('Safety check: if the actual match count differs from this value, the operation fails. Use with preview to verify first.'),
+  if_match: z.string().optional().describe('ETag from a prior read. Required when require_read_before_write is enabled. Obtain from doc_read, doc_read_section, doc_outline, or doc_find_replace preview.'),
   mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
   message: z.string().optional().describe('Commit message describing the change.'),
 });
@@ -47,7 +49,7 @@ export async function handleDocFindReplace(
 
   // Preview mode: return matches only
   if (args.preview) {
-    return { matches: findResult.matches, total: findResult.matches.length };
+    return { matches: findResult.matches, total: findResult.matches.length, etag: computeEtag(content) };
   }
 
   // Apply mode: write the result
@@ -61,6 +63,7 @@ export async function handleDocFindReplace(
     target: args.find,
     mode: args.mode,
     message: args.message,
+    if_match: args.if_match,
   }, content, findResult.result, encoding);
 
   return {

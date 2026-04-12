@@ -71,7 +71,7 @@ Every interaction with a document follows this sequence:
    - `doc_find_replace` — change a term or phrase across the whole document
    - `doc_insert_section` — add a new section before or after an existing one
    - `doc_delete_section` — remove a section entirely
-   - `doc_move_section` — relocate a section (with children) to a new position, levels adjust automatically
+   - `doc_move_section` — atomically delete a section from its current location and insert it at a new position (cut-and-paste). Heading levels adjust automatically including all children. Use this instead of separate delete + insert calls.
    - `doc_generate_toc` — generate or update a table of contents from the heading structure
 
 Every write tool returns a diff. You do not need to re-read the file to verify your edit landed correctly.
@@ -134,7 +134,7 @@ For selective application, use `apply_matches` with specific match IDs from the 
 
 ## Structural Changes: Moving and Reordering Sections
 
-Use `doc_move_section` to relocate a section (heading + body + all children) to a new position within the same document. This is an atomic operation — the section is extracted and re-inserted in one step, so no content is lost.
+Use `doc_move_section` to atomically delete a section from its current location and insert it at a new position within the same document — equivalent to cut-and-paste. The section's heading, body, and all children are preserved. Never use separate delete + insert calls to move a section — if the content exceeds your context window, the insert will silently lose data.
 
 **Parameters:**
 - `section` — the section to move (heading text or path)
@@ -196,6 +196,7 @@ doc_append_section(file: "config.yaml", section: "callers", content: "  new_call
 en-quire validates all YAML writes before committing. If your edit would produce invalid YAML (duplicate keys, broken indentation, syntax errors), the write is blocked with a clear error showing the specific problem. Successful writes are guaranteed valid.
 
 ## Document Creation
+**Include house rules for document sections and style guides here**
 
 Use `doc_create` for new documents. Structure them with heading hierarchy so future edits can target specific sections via `doc_search` and `doc_append_section`.
 
@@ -258,6 +259,7 @@ The full-file read prevents tone drift between section edits.
 - **After any error, call `doc_outline` before retrying.** The document structure may have changed. Don't retry the same operation — understand the current state first.
 - **Never use numbered headings** (e.g. "2. Background", "Section 3: Design"). The system does not auto-renumber. Use descriptive names ("Background", "Design") to prevent numbering drift.
 - **Never forget to update the TOC after structural changes.** After moving, inserting, or deleting sections, check if the document has a table of contents and regenerate it with `doc_generate_toc`.
+- **Never use delete + insert to relocate a section.** Use `doc_move_section` — it is atomic and preserves all content including children. The delete + insert pattern risks permanent data loss when the section content exceeds your context window. You will lose content silently and cannot recover it.
 
 ## Tool Quick Reference
 

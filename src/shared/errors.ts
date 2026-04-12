@@ -86,6 +86,17 @@ export class ValidationError extends EnquireError {
   }
 }
 
+export class PreconditionFailedError extends EnquireError {
+  constructor(
+    public readonly file: string,
+    public readonly current_etag: string,
+    message: string,
+  ) {
+    super('precondition_failed', message);
+    this.name = 'PreconditionFailedError';
+  }
+}
+
 export class PathTraversalError extends EnquireError {
   constructor(public readonly path: string) {
     super(

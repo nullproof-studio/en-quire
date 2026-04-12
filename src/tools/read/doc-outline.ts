@@ -6,6 +6,7 @@ import { parserRegistry } from '../../document/parser-registry.js';
 import { buildOutline } from '../../document/section-ops.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
+import { computeEtag } from '../../shared/etag.js';
 
 export const DocOutlineSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
@@ -27,5 +28,5 @@ export async function handleDocOutline(
   const rootAddress = args.root_section ? parser.parseAddress(args.root_section) : undefined;
   const headings = buildOutline(content, tree, rootAddress, args.max_depth);
 
-  return { headings };
+  return { headings, etag: computeEtag(content) };
 }

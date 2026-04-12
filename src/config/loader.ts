@@ -86,5 +86,6 @@ export function loadConfig(configPath: string): ResolvedConfig {
       dir: validated.logging.dir ? resolve(configDir, validated.logging.dir) : null,
     },
     callers: validated.callers,
+    require_read_before_write: validated.require_read_before_write,
   };
 }

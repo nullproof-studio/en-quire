@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { listDocumentFiles, readDocument } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { indexDocument, removeFromIndex } from './indexer.js';
+import { getLogger } from '../shared/logger.js';
 
 /** Default number of files to index per transaction batch. */
 const BATCH_SIZE = 500;
@@ -37,7 +38,20 @@ export function syncIndex(
   const start = performance.now();
   const prefix = rootName + '/';
 
-  const files = listDocumentFiles(documentRoot);
+  let files: string[];
+  try {
+    files = listDocumentFiles(documentRoot);
+  } catch (err) {
+    const log = getLogger();
+    log.warn('Index sync skipped — cannot scan root', {
+      root: rootName,
+      path: documentRoot,
+      error: String(err),
+    });
+    const elapsed_ms = Math.round(performance.now() - start);
+    return { indexed: 0, skipped: 0, removed: 0, elapsed_ms };
+  }
+
   let indexed = 0;
   let skipped = 0;
   let removed = 0;
