@@ -10,6 +10,7 @@ import {
   insertSection,
   appendToSection,
   deleteSection,
+  moveSection,
   buildOutline,
   findReplace,
   generateToc,
@@ -764,5 +765,132 @@ describe('replaceSection — body-only replace duplicates child sections (#29)',
     expect(result).toContain('### Financial Summary');
     expect(result).toContain('### Trend Analysis');
     expect(result).toContain('Here is an example:');
+  });
+});
+
+describe('moveSection', () => {
+  it('moves a sibling after the last sibling (A,B,C -> B,C,A)', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n\n## C\n\nContent C.\n';
+    const tree = parse(md);
+    const result = moveSection(md, tree, { type: 'text', text: 'A' }, { type: 'text', text: 'C' }, 'after');
+    expect(result.indexOf('## B')).toBeLessThan(result.indexOf('## C'));
+    expect(result.indexOf('## C')).toBeLessThan(result.indexOf('## A'));
+    expect(result).toContain('Content A.');
+    expect(result).toContain('Content B.');
+    expect(result).toContain('Content C.');
+  });
+
+  it('moves a sibling before the first sibling (A,B,C -> C,A,B)', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n\n## C\n\nContent C.\n';
+    const tree = parse(md);
+    const result = moveSection(md, tree, { type: 'text', text: 'C' }, { type: 'text', text: 'A' }, 'before');
+    expect(result.indexOf('## C')).toBeLessThan(result.indexOf('## A'));
+    expect(result.indexOf('## A')).toBeLessThan(result.indexOf('## B'));
+    expect(result).toContain('Content A.');
+    expect(result).toContain('Content C.');
+  });
+
+  it('moves a section with children', () => {
+    const md = loadFixture('simple.md');
+    const tree = parse(md);
+    // Move Section Two (has Subsection 2.1 and 2.2) after Section Three
+    const result = moveSection(md, tree,
+      { type: 'text', text: 'Section Two' },
+      { type: 'text', text: 'Section Three' },
+      'after',
+    );
+    expect(result.indexOf('## Section One')).toBeLessThan(result.indexOf('## Section Three'));
+    expect(result.indexOf('## Section Three')).toBeLessThan(result.indexOf('## Section Two'));
+    // Children follow the moved section
+    expect(result.indexOf('## Section Two')).toBeLessThan(result.indexOf('### Subsection 2.1'));
+    expect(result.indexOf('### Subsection 2.1')).toBeLessThan(result.indexOf('### Subsection 2.2'));
+    // All content preserved
+    expect(result).toContain('Content of section one.');
+    expect(result).toContain('Content of section two.');
+    expect(result).toContain('Final section content.');
+  });
+
+  it('adjusts level when moving to child_end (h2 becomes h3)', () => {
+    const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n';
+    const tree = parse(md);
+    const result = moveSection(md, tree, { type: 'text', text: 'B' }, { type: 'text', text: 'A' }, 'child_end');
+    expect(result).toContain('### B');
+    expect(result).not.toMatch(/^## B/m);
+    expect(result).toContain('Content B.');
+  });
+
+  it('cascades level adjustment to nested children', () => {
+    const md = '# Doc\n\n## Parent\n\n### Child\n\n#### Grandchild\n\nDeep content.\n\n## Target\n\nTarget content.\n';
+    const tree = parse(md);
+    // Move Parent (h2, with h3 Child and h4 Grandchild) to child_end of Target (h2)
+    // Parent h2->h3, Child h3->h4, Grandchild h4->h5
+    const result = moveSection(md, tree,
+      { type: 'text', text: 'Parent' },
+      { type: 'text', text: 'Target' },
+      'child_end',
+    );
+    expect(result).toContain('### Parent');
+    expect(result).toContain('#### Child');
+    expect(result).toContain('##### Grandchild');
+    expect(result).not.toMatch(/^## Parent/m);
+    expect(result).not.toMatch(/^### Child/m);
+    expect(result).toContain('Deep content.');
+    expect(result).toContain('Target content.');
+  });
+
+  it('promotes child to top-level sibling (h3 -> h2)', () => {
+    const md = '# Doc\n\n## A\n\n### Sub\n\nSub content.\n\n## B\n\nContent B.\n';
+    const tree = parse(md);
+    const result = moveSection(md, tree,
+      { type: 'text', text: 'Sub' },
+      { type: 'text', text: 'B' },
+      'after',
+    );
+    expect(result).toContain('## Sub');
+    expect(result).not.toMatch(/### Sub/);
+    expect(result).toContain('Sub content.');
+    expect(result.indexOf('## B')).toBeLessThan(result.indexOf('## Sub'));
+  });
+
+  it('throws on duplicate sibling at destination', () => {
+    const md = '# Doc\n\n## A\n\n### X\n\nContent.\n\n## B\n\n### X\n\nOther content.\n';
+    const tree = parse(md);
+    expect(() => moveSection(md, tree,
+      { type: 'path', segments: ['A', 'X'] },
+      { type: 'text', text: 'B' },
+      'child_end',
+    )).toThrow(/already exists/);
+  });
+
+  it('throws on self-move', () => {
+    const md = '# Doc\n\n## A\n\nContent.\n\n## B\n\nContent.\n';
+    const tree = parse(md);
+    expect(() => moveSection(md, tree,
+      { type: 'text', text: 'A' },
+      { type: 'text', text: 'A' },
+      'after',
+    )).toThrow();
+  });
+
+  it('throws when moving into own descendant', () => {
+    const md = loadFixture('simple.md');
+    const tree = parse(md);
+    expect(() => moveSection(md, tree,
+      { type: 'text', text: 'Section Two' },
+      { type: 'text', text: 'Subsection 2.1' },
+      'child_end',
+    )).toThrow();
+  });
+
+  it('throws when level adjustment would exceed h6', () => {
+    const md = '# Doc\n\n## A\n\n### B\n\n#### C\n\n##### D\n\n###### E\n\nDeep.\n\n## Target\n\nContent.\n';
+    const tree = parse(md);
+    // Moving A (h2, with children down to h6) to child_end of Target (h2)
+    // would make A->h3, B->h4, C->h5, D->h6, E->h7 (invalid)
+    expect(() => moveSection(md, tree,
+      { type: 'text', text: 'A' },
+      { type: 'text', text: 'Target' },
+      'child_end',
+    )).toThrow();
   });
 });

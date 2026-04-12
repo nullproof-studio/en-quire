@@ -396,6 +396,134 @@ export function deleteSection(
 }
 
 /**
+ * Move a section (heading + body + children) to a new position in the document.
+ * Returns the new markdown string. Heading levels are adjusted automatically.
+ */
+export function moveSection(
+  markdown: string,
+  tree: SectionNode[],
+  source: SectionAddress,
+  anchor: SectionAddress,
+  position: 'before' | 'after' | 'child_start' | 'child_end',
+): string {
+  const sourceNode = resolveSingleSection(tree, source);
+  const anchorNode = resolveSingleSection(tree, anchor);
+
+  // Self-move guard
+  if (sourceNode === anchorNode) {
+    throw new ValidationError('Cannot move a section relative to itself.');
+  }
+
+  // Move-into-own-subtree guard
+  let walk: SectionNode | null = anchorNode;
+  while (walk) {
+    if (walk === sourceNode) {
+      throw new ValidationError('Cannot move a section into its own subtree.');
+    }
+    walk = walk.parent;
+  }
+
+  // Compute target level and delta
+  const targetLevel = (position === 'child_start' || position === 'child_end')
+    ? anchorNode.heading.level + 1
+    : anchorNode.heading.level;
+  const delta = targetLevel - sourceNode.heading.level;
+
+  // Duplicate sibling check at destination
+  const destSiblings = (position === 'child_start' || position === 'child_end')
+    ? anchorNode.children
+    : (anchorNode.parent ? anchorNode.parent.children : tree);
+  const sourceHeading = sourceNode.heading.text;
+  if (destSiblings.some((s) => s !== sourceNode && s.heading.text === sourceHeading)) {
+    const parentName = (position === 'child_start' || position === 'child_end')
+      ? anchorNode.heading.text
+      : (anchorNode.parent?.heading.text ?? 'top level');
+    throw new ValidationError(
+      `Section "${sourceHeading}" already exists under "${parentName}". Cannot move here.`,
+    );
+  }
+
+  // Extract source content
+  const removeStart = sourceNode.headingStartOffset;
+  const removeEnd = sourceNode.sectionEndOffset;
+  const sourceText = markdown.slice(removeStart, removeEnd);
+
+  // Adjust heading levels
+  const adjustedText = delta === 0 ? sourceText : adjustHeadingLevels(sourceText, delta);
+
+  // Compute insertion offset
+  let insertAt: number;
+  switch (position) {
+    case 'before':
+      insertAt = anchorNode.headingStartOffset;
+      break;
+    case 'after':
+      insertAt = anchorNode.sectionEndOffset;
+      break;
+    case 'child_start':
+      insertAt = anchorNode.bodyStartOffset;
+      break;
+    case 'child_end':
+      insertAt = anchorNode.sectionEndOffset;
+      break;
+  }
+
+  // Ensure adjusted text has proper trailing newlines
+  const paddedText = ensureTrailingNewlines(adjustedText);
+
+  // Build result in one pass, accounting for offset shift
+  if (removeStart < insertAt) {
+    // Source is before destination — removal shifts insertion point left
+    const adjustedInsertAt = insertAt - (removeEnd - removeStart);
+    const withRemoval = markdown.slice(0, removeStart) + markdown.slice(removeEnd);
+    return withRemoval.slice(0, adjustedInsertAt) + paddedText + withRemoval.slice(adjustedInsertAt);
+  } else {
+    // Source is after destination — insert first, then skip the source
+    return markdown.slice(0, insertAt) + paddedText + markdown.slice(insertAt, removeStart) + markdown.slice(removeEnd);
+  }
+}
+
+/**
+ * Adjust all ATX heading levels in a text block by a delta.
+ * Respects fenced code blocks. Throws if any heading would exceed h6 or go below h1.
+ */
+function adjustHeadingLevels(text: string, delta: number): string {
+  let inCodeBlock = false;
+  const lines = text.split('\n');
+  const result: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      result.push(line);
+      continue;
+    }
+    if (inCodeBlock) {
+      result.push(line);
+      continue;
+    }
+
+    const match = trimmed.match(/^(#{1,6})\s/);
+    if (match) {
+      const oldLevel = match[1].length;
+      const newLevel = oldLevel + delta;
+      if (newLevel < 1 || newLevel > 6) {
+        throw new ValidationError(
+          `Cannot adjust heading level from h${oldLevel} by ${delta > 0 ? '+' : ''}${delta}: ` +
+          `h${newLevel} is outside the valid range (h1–h6).`,
+        );
+      }
+      result.push('#'.repeat(newLevel) + line.slice(line.indexOf(match[1]) + match[1].length));
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
+}
+
+/**
  * Build an outline from the section tree.
  */
 export function buildOutline(
