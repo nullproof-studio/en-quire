@@ -14,6 +14,7 @@ export const DocInsertSectionSchema = z.object({
   heading: z.string().describe('Plain text heading without # markers (e.g. "My Section", not "## My Section"). The heading level is set automatically from position context or the level parameter.'),
   content: z.string().describe('Body content for the new section (no heading line needed).'),
   level: z.number().int().min(1).max(6).optional().describe('Explicit heading level (1–6). If omitted, level is inferred: siblings match the anchor level, children are anchor level + 1.'),
+  if_match: z.string().optional().describe('ETag from a prior read. Required when require_read_before_write is enabled. Obtain from doc_read, doc_read_section, doc_outline, or doc_find_replace preview.'),
   mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
   message: z.string().optional().describe('Commit message describing the change.'),
 });
@@ -44,6 +45,7 @@ export async function handleDocInsertSection(
     target: args.heading,
     mode: args.mode,
     message: args.message,
+    if_match: args.if_match,
   }, content, newContent, encoding);
 
   return { ...result, section: args.heading };

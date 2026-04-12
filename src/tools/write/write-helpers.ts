@@ -10,13 +10,14 @@ import { generateDiff } from '../../shared/diff.js';
 import { resolveWriteMode } from '../../rbac/permissions.js';
 import { GitRequiredError, ValidationError } from '../../shared/errors.js';
 import { resolveFilePath } from '../../config/roots.js';
-
+import { computeEtag, validateEtag } from '../../shared/etag.js';
 export interface WriteOperationParams {
   file: string;
   operation: string;
   target: string;
   mode?: 'write' | 'propose';
   message?: string;
+  if_match?: string;
 }
 
 export interface WriteOperationResult {
@@ -27,6 +28,7 @@ export interface WriteOperationResult {
   commit?: string;
   diff?: string;
   warnings?: string[];
+  etag?: string;
 }
 
 /**
@@ -47,6 +49,10 @@ export async function executeWrite(
   newContent: string,
   encoding: EncodingInfo,
 ): Promise<WriteOperationResult> {
+  // ETag validation — must happen before any side effects
+  const currentEtag = computeEtag(oldContent);
+  validateEtag(params.if_match, currentEtag, params.file, ctx.config.require_read_before_write);
+
   const resolved = resolveFilePath(ctx.config.document_roots, params.file);
   const rootCtx = ctx.roots[resolved.rootName];
   const git = rootCtx?.git;
@@ -106,8 +112,9 @@ export async function executeWrite(
     // Generate diff
     const diff = generateDiff(params.file, oldContent, newContent);
 
+    const newEtag = computeEtag(newContent);
     return {
-      success: true, file: params.file, mode, branch, commit, diff,
+      success: true, file: params.file, mode, branch, commit, diff, etag: newEtag,
       ...(warnings.length > 0 && { warnings }),
     };
   } finally {
@@ -126,5 +133,6 @@ export function loadDocument(ctx: ToolContext, file: string) {
   const { content, encoding } = readDocument(resolved.root.path, resolved.relativePath);
   const parser = parserRegistry.getParser(resolved.relativePath);
   const tree = parser.parse(content);
-  return { content, encoding, tree, parser };
+  const etag = computeEtag(content);
+  return { content, encoding, tree, parser, etag };
 }

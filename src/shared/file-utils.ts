@@ -107,7 +107,13 @@ export function listDocumentFiles(
 export const listMarkdownFiles = listDocumentFiles;
 
 function walkDir(dir: string, root: string, result: string[], extensions: Set<string>): void {
-  const entries = readdirSync(dir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    // Skip directories that can't be read (EPERM, EACCES — e.g. iCloud, protected dirs)
+    return;
+  }
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
     if (entry.isDirectory()) {

@@ -55,6 +55,7 @@ export const ConfigSchema = z.object({
   search: SearchSchema.default({}),
   logging: LoggingSchema.default({}),
   callers: z.record(z.string(), CallerConfigSchema).default({}),
+  require_read_before_write: z.boolean().default(true),
 });
 
 export type RawConfig = z.input<typeof ConfigSchema>;

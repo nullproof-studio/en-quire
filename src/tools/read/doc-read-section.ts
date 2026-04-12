@@ -6,6 +6,7 @@ import { parserRegistry } from '../../document/parser-registry.js';
 import { readSection } from '../../document/section-ops.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
+import { computeEtag } from '../../shared/etag.js';
 
 export const DocReadSectionSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
@@ -25,5 +26,5 @@ export async function handleDocReadSection(
   const tree = parser.parse(content);
   const address = parser.parseAddress(args.section);
 
-  return readSection(content, tree, address, args.include_children);
+  return { ...readSection(content, tree, address, args.include_children), etag: computeEtag(content) };
 }

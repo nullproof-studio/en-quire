@@ -34,6 +34,11 @@ document_roots:
 # Database path (defaults to .enquire.db next to this config file)
 # database: /data/enquire.db
 
+# Optimistic locking — require agents to pass an ETag (from a prior read) on writes.
+# Prevents stale writes and writes without reading. Agents receive the etag from
+# doc_outline, doc_read_section, doc_read, or doc_find_replace preview.
+require_read_before_write: true     # default: true. Set false to disable.
+
 # Server transport
 transport: stdio                    # stdio | streamable-http
 port: 3100                          # Port for streamable-http transport

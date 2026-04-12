@@ -9,6 +9,7 @@ export const DocSetValueSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.yaml").'),
   path: z.string().describe('Address of the value to set. For YAML: dot-separated key path (e.g. "services.api.port"). For markdown: section address (e.g. "Configuration"). Target must be a leaf/scalar node — use doc_replace_section for container nodes with children.'),
   value: z.string().describe('New scalar value. For YAML, the original quote style (\', ", or unquoted) is preserved automatically.'),
+  if_match: z.string().optional().describe('ETag from a prior read. Required when require_read_before_write is enabled. Obtain from doc_read, doc_read_section, doc_outline, or doc_find_replace preview.'),
   mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
   message: z.string().optional().describe('Commit message describing the change.'),
 });
@@ -29,6 +30,7 @@ export async function handleDocSetValue(
     target: args.path,
     mode: args.mode,
     message: args.message,
+    if_match: args.if_match,
   }, content, newContent, encoding);
 
   return { ...result, path: args.path };
