@@ -46,7 +46,7 @@ class MarkdownParser implements DocumentParser {
         for (const node of tree) { node.index += 1; }
         tree.unshift(preamble);
       }
-      return [...setextWarnings, ...findDuplicateSiblings(tree)];
+      return [...setextWarnings, ...findDuplicateSiblings(tree), ...findUnbalancedFences(content)];
     } catch (err) {
       return [`Markdown parse error: ${err instanceof Error ? err.message : String(err)}`];
     }
@@ -113,6 +113,62 @@ function findDuplicateSiblings(nodes: SectionNode[], parentPath?: string): strin
   }
 
   return warnings;
+}
+
+/**
+ * Detect unbalanced code fences (``` or ~~~).
+ *
+ * An odd count means a fence was opened but never closed (or vice versa).
+ * This is the signature of nested code fences, which CommonMark does not
+ * support — remark will misidentify section boundaries, causing phantom
+ * headings and hidden sections.
+ *
+ * Returns a blocking error (contains "syntax error") so executeWrite
+ * rejects the write.
+ */
+function findUnbalancedFences(content: string): string[] {
+  const lines = content.split('\n');
+  let inFence = false;
+  let fenceMarker = '';  // ``` or ~~~
+  let fenceLength = 0;   // number of backticks/tildes
+  let openLine = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trimStart();
+
+    // Check for fence markers (``` or ~~~, optionally with info string)
+    const backtickMatch = trimmed.match(/^(`{3,})(.*)/);
+    const tildeMatch = trimmed.match(/^(~{3,})(.*)/);
+    const match = backtickMatch || tildeMatch;
+
+    if (!match) continue;
+
+    const marker = match[1][0]; // ` or ~
+    const markerLen = match[1].length;
+    const trailing = match[2].trim();
+
+    if (!inFence) {
+      // Opening fence — info string allowed
+      inFence = true;
+      fenceMarker = marker;
+      fenceLength = markerLen;
+      openLine = i + 1;
+    } else if (marker === fenceMarker && markerLen >= fenceLength && trailing === '') {
+      // Closing fence — must match marker type, be at least as long, no trailing text
+      inFence = false;
+    }
+    // Otherwise: a fence marker inside a code block — just literal text
+  }
+
+  if (inFence) {
+    return [
+      `Unbalanced code fence — syntax error: fence opened at line ${openLine} is never closed. ` +
+      `This typically means the document contains nested code fences (e.g. \`\`\`markdown containing \`\`\`json), ` +
+      `which CommonMark does not support. Extract nested template examples to separate files.`,
+    ];
+  }
+
+  return [];
 }
 
 parserRegistry.register(new MarkdownParser());
