@@ -12,6 +12,8 @@ export const DocOutlineSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
   max_depth: z.number().int().positive().optional().describe('Maximum heading depth to return. Omit for full depth.'),
   root_section: z.string().optional().describe('Section address to use as the root of the outline. Omit to outline the entire document.'),
+  include_preview: z.boolean().optional().default(false).describe('When true, includes the first preview_chars characters of each section body in a "preview" field. Useful for summarisation without reading full sections.'),
+  preview_chars: z.number().int().positive().optional().default(200).describe('Maximum characters to include in preview (default: 200). Only used when include_preview is true.'),
 });
 
 export async function handleDocOutline(
@@ -26,7 +28,7 @@ export async function handleDocOutline(
   const tree = parser.parse(content);
 
   const rootAddress = args.root_section ? parser.parseAddress(args.root_section) : undefined;
-  const headings = buildOutline(content, tree, rootAddress, args.max_depth);
+  const headings = buildOutline(content, tree, rootAddress, args.max_depth, args.include_preview ? args.preview_chars : undefined);
 
   return { headings, etag: computeEtag(content) };
 }

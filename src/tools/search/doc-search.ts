@@ -6,7 +6,7 @@ import { requirePermission } from '../../rbac/permissions.js';
 
 export const DocSearchSchema = z.object({
   query: z.string().describe('Search query text.'),
-  scope: z.string().optional().describe('Limit search to a specific root or path prefix (e.g. "root-name" or "root-name/subfolder"). Omit to search all roots.'),
+  scope: z.string().optional().describe('Limit search to a specific root (e.g. "agents"), subfolder (e.g. "localllm/spec"), or single file (e.g. "localllm/spec/SPEC-AUTHOR-AGENT.md"). Omit to search all roots.'),
   section_filter: z.string().optional().describe('Filter results to sections matching this heading text or path pattern.'),
   search_type: z.enum(['fulltext', 'semantic', 'hybrid']).default('fulltext').describe('Search mode: "fulltext" (default) for keyword matching, "semantic" for meaning-based search, "hybrid" for both.'),
   max_results: z.number().int().positive().default(10).describe('Maximum number of results to return (default: 10).'),

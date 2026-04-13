@@ -57,7 +57,9 @@ export function searchDocuments(
       section_path,
       section_level,
       snippet(sections_fts, 4, '>>>', '<<<', '...', 40) as snippet,
-      rank
+      rank,
+      line_start,
+      line_end
     FROM sections_fts
     WHERE sections_fts MATCH ?
   `;
@@ -79,6 +81,8 @@ export function searchDocuments(
     section_level: number;
     snippet: string;
     rank: number;
+    line_start: number;
+    line_end: number;
   }>;
 
   // Apply section_filter (post-query, since FTS5 can't filter by heading pattern efficiently)
@@ -122,8 +126,8 @@ export function searchDocuments(
       section_level: row.section_level,
       snippet: include_context ? row.snippet : '',
       score,
-      line_start: 0, // FTS5 doesn't track line numbers; tools can resolve if needed
-      line_end: 0,
+      line_start: row.line_start ?? 0,
+      line_end: row.line_end ?? 0,
       breadcrumb,
     } satisfies SearchResult;
   });

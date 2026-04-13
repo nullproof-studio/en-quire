@@ -531,6 +531,7 @@ export function buildOutline(
   tree: SectionNode[],
   rootSection?: SectionAddress,
   maxDepth?: number,
+  previewChars?: number,
 ): OutlineEntry[] {
   let roots = tree;
   let baseDepth = 0;
@@ -553,7 +554,7 @@ export function buildOutline(
       const bodyText = markdown.slice(node.bodyStartOffset, node.bodyEndOffset);
       const hasContent = bodyText.trim().length > 0;
 
-      entries.push({
+      const entry: OutlineEntry = {
         level: node.heading.level,
         text: node.heading.text,
         path: getSectionPath(node),
@@ -562,7 +563,16 @@ export function buildOutline(
         char_count: countCodePoints(bodyContent),
         has_children: node.children.length > 0,
         has_content: hasContent,
-      });
+      };
+
+      if (previewChars !== undefined && hasContent) {
+        const trimmed = bodyText.trim();
+        entry.preview = trimmed.length > previewChars
+          ? trimmed.slice(0, previewChars) + '...'
+          : trimmed;
+      }
+
+      entries.push(entry);
 
       walk(node.children, depth + 1);
     }
