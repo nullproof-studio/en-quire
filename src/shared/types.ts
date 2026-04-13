@@ -73,6 +73,8 @@ export interface OutlineEntry {
   has_children: boolean;
   /** Whether the section has its own body text (vs being a structural container) */
   has_content: boolean;
+  /** First N characters of section body text (only when include_preview is true) */
+  preview?: string;
 }
 
 /** Search result entry */
