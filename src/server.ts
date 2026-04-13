@@ -108,7 +108,7 @@ export function createServer(deps: ServerDependencies): McpServer {
   server.tool('doc_status', 'Check document status across roots. Returns: active roots, modified files, pending proposals, indexed/unindexed document counts. Use to verify system health or check for uncommitted changes.', DocStatusSchema.shape, wrapHandler(handleDocStatus));
 
   // Search
-  server.tool('doc_search', 'Search document content across all roots. Returns matching sections with file path, section path, and optional surrounding context. Use scope to limit to a specific root or subfolder.', DocSearchSchema.shape, wrapHandler(handleDocSearch));
+  server.tool('doc_search', 'Search document content across all roots. Returns matching sections with file path, section path, line numbers, and optional surrounding context. Use scope to limit to a specific root, subfolder, or single file.', DocSearchSchema.shape, wrapHandler(handleDocSearch));
 
   // Governance
   server.tool('doc_proposals_list', 'List pending proposals across all git-enabled roots', DocProposalsListSchema.shape, wrapHandler(handleDocProposalsList));
