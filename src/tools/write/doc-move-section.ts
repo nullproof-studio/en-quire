@@ -17,6 +17,7 @@ export const DocMoveSectionSchema = z.object({
     'Heading levels are adjusted automatically (including all children). ' +
     'Fails if a sibling with the same heading already exists at the destination.',
   ),
+  if_match: z.string().optional().describe('ETag from a prior read. Required when require_read_before_write is enabled. Obtain from doc_read, doc_read_section, doc_outline, or doc_find_replace preview.'),
   mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
   message: z.string().optional().describe('Commit message describing the change.'),
 });
@@ -45,6 +46,7 @@ export async function handleDocMoveSection(
     target: args.section,
     mode: args.mode,
     message: args.message,
+    if_match: args.if_match,
   }, content, newContent, encoding);
 
   return { ...result, section: args.section, anchor: args.anchor, position: args.position };
