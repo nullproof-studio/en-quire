@@ -16,8 +16,8 @@ export function indexDocument(
 ): void {
   const deleteStmt = db.prepare('DELETE FROM sections_fts WHERE file_path = ?');
   const insertStmt = db.prepare(`
-    INSERT INTO sections_fts (file_path, section_heading, section_path, section_level, body_content)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO sections_fts (file_path, section_heading, section_path, section_level, body_content, line_start, line_end)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const metaStmt = db.prepare(`
     INSERT OR REPLACE INTO index_metadata (file_path, mtime_ms, indexed_at)
@@ -33,18 +33,26 @@ export function indexDocument(
       const bodyContent = markdown.slice(node.bodyStartOffset, node.bodyEndOffset).trim();
       const sectionPath = getSectionPath(node);
 
+      // Compute line numbers from character offsets
+      const lineStart = node.heading.position?.start?.line ?? 0;
+      const sectionEndStr = markdown.slice(0, node.sectionEndOffset);
+      const lineEnd = sectionEndStr.split('\n').length;
+
       insertStmt.run(
         filePath,
         node.heading.text,
         sectionPath,
         node.heading.level,
         bodyContent,
+        lineStart,
+        lineEnd,
       );
     }
 
     // If there are no headings, index the whole document as a single entry
     if (flat.length === 0 && markdown.trim().length > 0) {
-      insertStmt.run(filePath, '', filePath, 0, markdown.trim());
+      const totalLines = markdown.split('\n').length;
+      insertStmt.run(filePath, '', filePath, 0, markdown.trim(), 1, totalLines);
     }
 
     metaStmt.run(filePath, mtimeMs ?? Date.now(), new Date().toISOString());
