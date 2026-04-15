@@ -6,6 +6,7 @@ import { listDocumentFiles, readDocument } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { indexDocument, removeFromIndex } from './indexer.js';
 import { getLogger } from '../shared/logger.js';
+import type { SectionNode } from '../shared/types.js';
 
 /** Default number of files to index per transaction batch. */
 const BATCH_SIZE = 500;
@@ -88,25 +89,34 @@ export function syncIndex(
     toIndex.push({ file, prefixedPath, absolutePath, mtime });
   }
 
-  // Index in batched transactions
+  // Index in batched transactions.
+  // Critical: read + parse OUTSIDE the transaction so the WAL write lock is
+  // only held while the actual SQL inserts run. Holding the lock during disk
+  // I/O starves other writers (see #49).
   for (let i = 0; i < toIndex.length; i += batchSize) {
     const batch = toIndex.slice(i, i + batchSize);
 
+    // Phase 1 — read + parse (no lock held)
+    const prepared: Array<{ prefixedPath: string; tree: SectionNode[]; content: string; mtime: number }> = [];
+    for (const { file, prefixedPath, mtime } of batch) {
+      try {
+        const { content } = readDocument(documentRoot, file);
+        const parser = parserRegistry.getParser(file);
+        const tree = parser.parse(content);
+        prepared.push({ prefixedPath, tree, content, mtime });
+      } catch {
+        // Skip files that can't be parsed (encoding errors, etc.)
+        skipped++;
+      }
+    }
+
+    // Phase 2 — SQL inserts only (lock held briefly)
     const runBatch = db.transaction(() => {
-      for (const { file, prefixedPath, mtime } of batch) {
-        try {
-          const { content } = readDocument(documentRoot, file);
-          const parser = parserRegistry.getParser(file);
-          const tree = parser.parse(content);
-          indexDocument(db, prefixedPath, tree, content, mtime);
-          indexed++;
-        } catch {
-          // Skip files that can't be parsed (encoding errors, etc.)
-          skipped++;
-        }
+      for (const p of prepared) {
+        indexDocument(db, p.prefixedPath, p.tree, p.content, p.mtime);
+        indexed++;
       }
     });
-
     runBatch();
   }
 
