@@ -70,6 +70,8 @@ export interface OutlineEntry {
   line_start: number;
   line_end: number;
   char_count: number;
+  /** Word count for prose content. Omitted for non-prose formats (e.g. YAML). */
+  word_count?: number;
   has_children: boolean;
   /** Whether the section has its own body text (vs being a structural container) */
   has_content: boolean;

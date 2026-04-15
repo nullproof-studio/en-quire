@@ -7,6 +7,8 @@ import { buildOutline } from '../../document/section-ops.js';
 import { requirePermission } from '../../rbac/permissions.js';
 import { resolveFilePath } from '../../config/roots.js';
 import { computeEtag } from '../../shared/etag.js';
+import { countWords } from '../../shared/word-count.js';
+import { extname } from 'node:path';
 
 export const DocOutlineSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
@@ -28,7 +30,30 @@ export async function handleDocOutline(
   const tree = parser.parse(content);
 
   const rootAddress = args.root_section ? parser.parseAddress(args.root_section) : undefined;
-  const headings = buildOutline(content, tree, rootAddress, args.max_depth, args.include_preview ? args.preview_chars : undefined);
+  const isProse = isProseFormat(resolved.relativePath);
+  const headings = buildOutline(
+    content,
+    tree,
+    rootAddress,
+    args.max_depth,
+    args.include_preview ? args.preview_chars : undefined,
+    isProse,
+  );
 
-  return { headings, etag: computeEtag(content) };
+  const response: { headings: typeof headings; total_word_count?: number; etag: string } = {
+    headings,
+    etag: computeEtag(content),
+  };
+  if (isProse) {
+    response.total_word_count = countWords(content);
+  }
+  return response;
+}
+
+/** Formats where prose word counts are meaningful. YAML and similar structured
+ * formats are excluded because "words" in structured data don't correspond to
+ * a user-facing concept. */
+function isProseFormat(filePath: string): boolean {
+  const ext = extname(filePath).toLowerCase();
+  return ext === '.md' || ext === '.mdx' || ext === '.markdown';
 }
