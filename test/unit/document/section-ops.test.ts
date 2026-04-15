@@ -333,6 +333,45 @@ describe('buildOutline — has_content', () => {
   });
 });
 
+describe('buildOutline — word_count', () => {
+  it('omits word_count when includeWordCount is not set', () => {
+    const md = '# Doc\n\n## A\n\nBody text here.\n';
+    const tree = parse(md);
+    const outline = buildOutline(md, tree);
+    expect(outline[0].word_count).toBeUndefined();
+  });
+
+  it('populates word_count when includeWordCount is true', () => {
+    const md = '# Doc\n\n## A\n\nBody text here with five words.\n';
+    const tree = parse(md);
+    const outline = buildOutline(md, tree, undefined, undefined, undefined, true);
+    const sectionA = outline.find((e) => e.text === 'A');
+    // "A" heading + "Body text here with five words" = 7 words
+    expect(sectionA?.word_count).toBe(7);
+  });
+
+  it('excludes fenced code blocks from word_count', () => {
+    const md = [
+      '# Doc',
+      '',
+      '## A',
+      '',
+      'Prose one two three.',
+      '',
+      '```js',
+      'const lots = of.code().tokens();',
+      '```',
+      '',
+      'After prose.',
+    ].join('\n');
+    const tree = parse(md);
+    const outline = buildOutline(md, tree, undefined, undefined, undefined, true);
+    const sectionA = outline.find((e) => e.text === 'A');
+    // "A" + "Prose one two three" + "After prose" = 7 words
+    expect(sectionA?.word_count).toBe(7);
+  });
+});
+
 describe('findReplace', () => {
   it('finds matches in preview mode', () => {
     const md = '# Doc\n\n## A\n\nHello world. Hello again.\n';

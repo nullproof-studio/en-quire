@@ -10,6 +10,7 @@ import { parseMarkdown } from './parser.js';
 import { buildSectionTree, getSectionPath, getBreadcrumb, flattenTree } from './section-tree.js';
 import { resolveSingleSection, resolveAddress } from './section-address.js';
 import { countCodePoints, offsetToLine } from './ast-utils.js';
+import { countWords } from '../shared/word-count.js';
 import { ValidationError } from '../shared/errors.js';
 
 /**
@@ -532,6 +533,7 @@ export function buildOutline(
   rootSection?: SectionAddress,
   maxDepth?: number,
   previewChars?: number,
+  includeWordCount?: boolean,
 ): OutlineEntry[] {
   let roots = tree;
   let baseDepth = 0;
@@ -564,6 +566,10 @@ export function buildOutline(
         has_children: node.children.length > 0,
         has_content: hasContent,
       };
+
+      if (includeWordCount) {
+        entry.word_count = countWords(bodyContent);
+      }
 
       if (previewChars !== undefined && hasContent) {
         const trimmed = bodyText.trim();
