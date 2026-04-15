@@ -37,6 +37,7 @@ npm-debug.log*
 *.tsbuildinfo
 
 
+test-local/
 en-quire.config.yaml
 a2a-poc/
 docs/session-memory/

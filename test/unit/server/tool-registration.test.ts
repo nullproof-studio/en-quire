@@ -44,7 +44,7 @@ describe('tool registration', () => {
   }
 
   // Extract all registered handler names from server.ts
-  const registrations = [...serverContent.matchAll(/wrapHandler\((\w+)\)/g)]
+  const registrations = [...serverContent.matchAll(/wrapHandler\(?'[^']+',\s*(\w+)\)/g)]
     .map(m => m[1]);
 
   it('should have at least one handler to test', () => {
