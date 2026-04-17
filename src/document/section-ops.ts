@@ -759,3 +759,94 @@ export function generateToc(
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
+
+export interface InsertTextResult {
+  result: string;
+  line: number;
+  sectionPath: string;
+}
+
+/**
+ * Insert text at a position relative to a unique anchor string in the document.
+ *
+ * The anchor is matched literally (no regex). The anchor must appear exactly
+ * once in the document — zero matches and multiple matches both throw with a
+ * message that helps the caller pick a better anchor.
+ *
+ * Whitespace handling: `content` is trimmed, then spliced with `\n\n` on both
+ * sides of the insertion point. Any resulting run of 3+ consecutive newlines
+ * is normalised down to a single blank-line separator. This produces clean
+ * Markdown when the anchor sits at a paragraph boundary (the common case) and
+ * still produces valid Markdown for mid-paragraph anchors.
+ */
+export function insertText(
+  markdown: string,
+  tree: SectionNode[],
+  anchor: string,
+  position: 'before' | 'after',
+  content: string,
+): InsertTextResult {
+  if (!anchor) {
+    throw new ValidationError('Anchor text is empty. Provide a distinctive string that appears once in the document.');
+  }
+
+  // Find all literal occurrences of the anchor
+  const offsets: number[] = [];
+  let searchFrom = 0;
+  while (true) {
+    const idx = markdown.indexOf(anchor, searchFrom);
+    if (idx === -1) break;
+    offsets.push(idx);
+    searchFrom = idx + anchor.length;
+  }
+
+  if (offsets.length === 0) {
+    throw new ValidationError(`Anchor not found: "${truncate(anchor, 80)}". The anchor must match existing text in the document exactly (whitespace, punctuation, and case all matter).`);
+  }
+
+  if (offsets.length > 1) {
+    const flat = flattenTree(tree);
+    const candidates = offsets.map((offset) => {
+      const line = offsetToLine(markdown, offset);
+      const sectionPath = findDeepestSectionPath(flat, offset);
+      return `  - ${sectionPath || '(document root)'} (line ${line})`;
+    }).join('\n');
+    throw new ValidationError(
+      `Anchor is ambiguous — ${offsets.length} matches found:\n${candidates}\n\n` +
+      `Use a longer or more distinctive anchor so exactly one match remains. If you want to replace existing text rather than insert new text, use doc_find_replace instead.`,
+    );
+  }
+
+  // Exactly one match — splice the trimmed content at the insertion point.
+  const offset = offsets[0];
+  const trimmed = content.trim();
+  const splicePoint = position === 'after' ? offset + anchor.length : offset;
+  const before = markdown.slice(0, splicePoint);
+  const after = markdown.slice(splicePoint);
+
+  let result = before + '\n\n' + trimmed + '\n\n' + after;
+  // Normalise runs of 3+ newlines down to exactly two (one blank line)
+  result = result.replace(/\n{3,}/g, '\n\n');
+
+  const flat = flattenTree(tree);
+  return {
+    result,
+    line: offsetToLine(markdown, offset),
+    sectionPath: findDeepestSectionPath(flat, offset),
+  };
+}
+
+/** Find the section breadcrumb containing a given offset, or '' if not in any section. */
+function findDeepestSectionPath(flat: SectionNode[], offset: number): string {
+  let deepest = '';
+  for (const node of flat) {
+    if (offset >= node.headingStartOffset && offset < node.sectionEndOffset) {
+      deepest = getSectionPath(node);
+    }
+  }
+  return deepest;
+}
+
+function truncate(str: string, max: number): string {
+  return str.length <= max ? str : str.slice(0, max - 1) + '…';
+}
