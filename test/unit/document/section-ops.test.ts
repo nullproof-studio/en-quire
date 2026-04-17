@@ -14,6 +14,7 @@ import {
   buildOutline,
   findReplace,
   generateToc,
+  insertText,
 } from '../../../src/document/section-ops.js';
 
 const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
@@ -931,5 +932,111 @@ describe('moveSection', () => {
       { type: 'text', text: 'Target' },
       'child_end',
     )).toThrow();
+  });
+});
+
+describe('insertText', () => {
+  const md = [
+    '# Doc',
+    '',
+    '## Section A',
+    '',
+    'First paragraph of section A.',
+    '',
+    'Second paragraph of section A.',
+    '',
+    '## Section B',
+    '',
+    'First paragraph of section B.',
+    '',
+    'Taken together, these observations matter.',
+    '',
+  ].join('\n');
+
+  it('inserts after a unique anchor at the end of a paragraph', () => {
+    const tree = parse(md);
+    const result = insertText(md, tree, 'First paragraph of section A.', 'after', 'New paragraph inserted after.');
+    expect(result.result).toContain('First paragraph of section A.\n\nNew paragraph inserted after.');
+    // Original content after the insertion point is preserved
+    expect(result.result).toContain('Second paragraph of section A.');
+  });
+
+  it('inserts before a unique anchor at the start of a paragraph', () => {
+    const tree = parse(md);
+    const result = insertText(md, tree, 'Taken together, these observations matter.', 'before', 'New preceding paragraph.');
+    expect(result.result).toContain('New preceding paragraph.\n\nTaken together, these observations matter.');
+  });
+
+  it('reports the section path of the insertion point', () => {
+    const tree = parse(md);
+    const result = insertText(md, tree, 'First paragraph of section A.', 'after', 'Addendum.');
+    expect(result.sectionPath).toContain('Section A');
+  });
+
+  it('reports the line number of the anchor', () => {
+    const tree = parse(md);
+    const result = insertText(md, tree, 'First paragraph of section A.', 'after', 'Addendum.');
+    expect(result.line).toBeGreaterThan(0);
+  });
+
+  it('throws when the anchor is not found', () => {
+    const tree = parse(md);
+    expect(() => insertText(md, tree, 'does not exist in document', 'after', 'x')).toThrow(/not found/i);
+  });
+
+  it('throws when the anchor is ambiguous, listing each candidate', () => {
+    const ambiguousMd = [
+      '# Doc',
+      '',
+      '## Section A',
+      '',
+      'The quick brown fox.',
+      '',
+      '## Section B',
+      '',
+      'The quick brown fox.',
+      '',
+    ].join('\n');
+    const tree = parse(ambiguousMd);
+    let err: Error | undefined;
+    try {
+      insertText(ambiguousMd, tree, 'The quick brown fox.', 'after', 'x');
+    } catch (e) {
+      err = e as Error;
+    }
+    expect(err).toBeDefined();
+    expect(err!.message).toMatch(/ambiguous|multiple|2 matches/i);
+    // Error should include both section paths so the agent can disambiguate
+    expect(err!.message).toContain('Section A');
+    expect(err!.message).toContain('Section B');
+  });
+
+  it('normalises adjacent blank lines so insertion does not create triple newlines', () => {
+    const tree = parse(md);
+    const result = insertText(md, tree, 'First paragraph of section A.', 'after', 'Addendum.');
+    expect(result.result).not.toMatch(/\n\n\n/);
+  });
+
+  it('preserves content outside the insertion point', () => {
+    const tree = parse(md);
+    const result = insertText(md, tree, 'First paragraph of section A.', 'after', 'Addendum.');
+    expect(result.result).toContain('# Doc');
+    expect(result.result).toContain('## Section B');
+    expect(result.result).toContain('Taken together, these observations matter.');
+  });
+
+  it('handles an anchor that is a short phrase at a paragraph boundary', () => {
+    const tree = parse(md);
+    // "Taken together" is short but still unique in this doc
+    const result = insertText(md, tree, 'Taken together', 'before', 'Short-anchor inserted paragraph.');
+    expect(result.result).toContain('Short-anchor inserted paragraph.\n\nTaken together');
+  });
+
+  it('trims leading/trailing whitespace from content before splicing', () => {
+    const tree = parse(md);
+    const result = insertText(md, tree, 'First paragraph of section A.', 'after', '\n\n  Trimmed content.  \n\n');
+    // Should not produce quadruple newlines or leading spaces in the result
+    expect(result.result).toContain('First paragraph of section A.\n\nTrimmed content.\n\nSecond paragraph of section A.');
+    expect(result.result).not.toMatch(/\n\n\n/);
   });
 });
