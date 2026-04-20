@@ -23,16 +23,3 @@ export function toString(node: Node): string {
 export function countCodePoints(str: string): number {
   return [...str].length;
 }
-
-/**
- * Get the line number (1-indexed) for a byte offset in a string.
- */
-export function offsetToLine(markdown: string, offset: number): number {
-  let line = 1;
-  for (let i = 0; i < offset && i < markdown.length; i++) {
-    if (markdown[i] === '\n') {
-      line++;
-    }
-  }
-  return line;
-}

@@ -35,6 +35,7 @@ export * from './search/sync.js';
 
 // Document — format-agnostic pieces
 export * from './document/ast-utils.js';
+export * from './document/line-utils.js';
 export * from './document/ops-strategy.js';
 export * from './document/parser-registry.js';
 export * from './document/section-address.js';

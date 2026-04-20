@@ -1,0 +1,47 @@
+{
+  "name": "@nullproof-studio/en-scribe",
+  "version": "0.1.0",
+  "description": "Reliable plain-text editing for agent systems. A sibling MCP to en-quire: literal range + anchor ops, no structural interpretation.",
+  "type": "module",
+  "main": "dist/bin.js",
+  "bin": {
+    "enscribe": "dist/bin.js"
+  },
+  "license": "MIT",
+  "author": "Nullproof Studio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nullproof-studio/en-quire.git",
+    "directory": "packages/en-scribe"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "plain-text",
+    "document-management",
+    "agent",
+    "rbac",
+    "git",
+    "governance",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/bin.js",
+    "dev": "tsx src/bin.ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@nullproof-studio/en-core": "0.1.5",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

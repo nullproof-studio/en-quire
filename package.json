@@ -15,11 +15,11 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w @nullproof-studio/en-core && npm run build -w @nullproof-studio/en-quire",
+    "build": "npm run build -w @nullproof-studio/en-core && npm run build -w @nullproof-studio/en-quire && npm run build -w @nullproof-studio/en-scribe",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit -p packages/en-core && tsc --noEmit -p packages/en-quire",
-    "clean": "npm run clean -w @nullproof-studio/en-core --if-present && npm run clean -w @nullproof-studio/en-quire --if-present"
+    "lint": "tsc --noEmit -p packages/en-core && tsc --noEmit -p packages/en-quire && tsc --noEmit -p packages/en-scribe",
+    "clean": "npm run clean -w @nullproof-studio/en-core --if-present && npm run clean -w @nullproof-studio/en-quire --if-present && npm run clean -w @nullproof-studio/en-scribe --if-present"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",

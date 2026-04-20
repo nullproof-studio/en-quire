@@ -8,7 +8,8 @@ import type {
 } from '../shared/types.js';
 import { getSectionPath, getBreadcrumb, flattenTree } from './section-tree.js';
 import { resolveSingleSection, resolveAddress } from './section-address.js';
-import { countCodePoints, offsetToLine } from './ast-utils.js';
+import { countCodePoints } from './ast-utils.js';
+import { offsetToLine } from './line-utils.js';
 import { countWords } from '../shared/word-count.js';
 import { ValidationError } from '../shared/errors.js';
 import type { OpsStrategy } from './ops-strategy.js';
