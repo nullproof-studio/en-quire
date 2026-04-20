@@ -2,10 +2,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { ToolRegistry } from '../../../src/tools/registry.js';
+import { registerEnQuireTools } from '../../../src/server.js';
 
 /**
- * Ensures every exported tool handler in src/tools/ has a corresponding
- * server.tool() registration in src/server.ts.
+ * Ensures every exported tool handler in src/tools/ is registered via
+ * registerEnQuireTools().
  *
  * Prevents the class of bug where a tool is fully implemented (source,
  * schema, handler, tests) but never wired into the MCP server.
@@ -27,12 +29,12 @@ function collectFiles(dir: string, ext: string): string[] {
 
 describe('tool registration', () => {
   const toolsDir = join(__dirname, '../../../src/tools');
-  const serverPath = join(__dirname, '../../../src/server.ts');
-  const serverContent = readFileSync(serverPath, 'utf8');
 
-  // Extract all handler names from src/tools/**/*.ts
+  // Infrastructure files that contain no tool handlers
+  const infrastructure = new Set(['context.ts', 'registry.ts', 'runtime.ts', 'write-helpers.ts']);
+
   const toolFiles = collectFiles(toolsDir, '.ts')
-    .filter(f => !f.endsWith('context.ts') && !f.endsWith('write-helpers.ts'));
+    .filter(f => !infrastructure.has(f.split('/').pop()!));
 
   const handlers: { name: string; file: string }[] = [];
   for (const file of toolFiles) {
@@ -43,42 +45,43 @@ describe('tool registration', () => {
     }
   }
 
-  // Extract all registered handler names from server.ts
-  const registrations = [...serverContent.matchAll(/wrapHandler\(?'[^']+',\s*(\w+)\)/g)]
-    .map(m => m[1]);
+  const registry = new ToolRegistry();
+  registerEnQuireTools(registry);
+  const registeredHandlers = new Set(
+    registry.all().map(t => t.handler.name).filter(Boolean),
+  );
 
   it('should have at least one handler to test', () => {
     expect(handlers.length).toBeGreaterThan(0);
   });
 
-  it('should register every exported tool handler in server.ts', () => {
-    const unregistered = handlers.filter(h => !registrations.includes(h.name));
+  it('should register every exported tool handler', () => {
+    const unregistered = handlers.filter(h => !registeredHandlers.has(h.name));
     if (unregistered.length > 0) {
       const details = unregistered
         .map(h => `  ${h.name} (${h.file})`)
         .join('\n');
       throw new Error(
-        `${unregistered.length} tool handler(s) exported but not registered in server.ts:\n${details}\n\n` +
-        'Add a server.tool() call for each handler in src/server.ts.',
+        `${unregistered.length} tool handler(s) exported but not registered:\n${details}\n\n` +
+        'Add a registry.register() call for each handler in registerEnQuireTools().',
       );
     }
   });
 
   it('should not register handlers that do not exist', () => {
-    const handlerNames = handlers.map(h => h.name);
-    const stale = registrations.filter(r => !handlerNames.includes(r));
+    const handlerNames = new Set(handlers.map(h => h.name));
+    const stale = [...registeredHandlers].filter(r => !handlerNames.has(r));
     if (stale.length > 0) {
       throw new Error(
-        `${stale.length} registration(s) in server.ts reference non-existent handlers:\n` +
+        `${stale.length} registration(s) reference non-existent handlers:\n` +
         stale.map(s => `  ${s}`).join('\n'),
       );
     }
   });
 
-  it('should import every registered handler', () => {
-    for (const reg of registrations) {
-      expect(serverContent).toContain(`import { `);
-      expect(serverContent).toContain(reg);
-    }
+  it('should have no duplicate tool names', () => {
+    const names = registry.all().map(t => t.name);
+    const duplicates = names.filter((n, i) => names.indexOf(n) !== i);
+    expect(duplicates).toEqual([]);
   });
 });
