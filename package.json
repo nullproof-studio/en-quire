@@ -37,6 +37,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
     "better-sqlite3": "^11.9.1",
