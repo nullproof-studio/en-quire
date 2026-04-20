@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import '../../../src/document/markdown-parser.js';
-import '../../../src/document/yaml-parser.js';
+import '../../../src/parsers/markdown-parser.js';
+import '../../../src/parsers/yaml-parser.js';
 import { parserRegistry } from '@nullproof-studio/en-core';
 import { setValue } from '@nullproof-studio/en-core';
 

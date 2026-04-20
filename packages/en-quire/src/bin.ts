@@ -3,19 +3,58 @@
 import { parseArgs } from 'node:util';
 import { createServer as createHttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { loadConfig } from '@nullproof-studio/en-core';
-import { openDatabase } from '@nullproof-studio/en-core';
-import { syncIndex } from '@nullproof-studio/en-core';
+import type Database from 'better-sqlite3';
+import {
+  loadConfig,
+  openDatabase,
+  syncIndex,
+  GitOperations,
+  resolveCaller,
+  initLogger,
+  getLogger,
+  ToolRegistry,
+  attachRegistry,
+} from '@nullproof-studio/en-core';
+import type {
+  ResolvedConfig,
+  CallerIdentity,
+  ToolContext,
+  RootContext,
+} from '@nullproof-studio/en-core';
 // Register format parsers (side-effect imports)
-import './document/markdown-parser.js';
-import './document/yaml-parser.js';
-import { GitOperations } from '@nullproof-studio/en-core';
-import { resolveCaller } from '@nullproof-studio/en-core';
-import { createServer } from './server.js';
-import { initLogger, getLogger } from '@nullproof-studio/en-core';
-import type { RootContext } from '@nullproof-studio/en-core';
+import './parsers/markdown-parser.js';
+import './parsers/yaml-parser.js';
+import { registerEnQuireTools } from './plugin.js';
+
+interface ServerDependencies {
+  config: ResolvedConfig;
+  db: Database.Database;
+  roots: Record<string, RootContext>;
+  caller: CallerIdentity;
+}
+
+function createServer(deps: ServerDependencies): McpServer {
+  const server = new McpServer({
+    name: 'en-quire',
+    version: '0.2.0',
+  });
+
+  const ctx: ToolContext = {
+    config: deps.config,
+    roots: deps.roots,
+    caller: deps.caller,
+    db: deps.db,
+  };
+
+  const registry = new ToolRegistry();
+  registerEnQuireTools(registry);
+  attachRegistry(server, registry, ctx);
+
+  return server;
+}
 
 async function main() {
   const { values } = parseArgs({

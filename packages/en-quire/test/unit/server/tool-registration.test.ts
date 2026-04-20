@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ToolRegistry } from '@nullproof-studio/en-core';
-import { registerEnQuireTools } from '../../../src/server.js';
+import { registerEnQuireTools } from '../../../src/plugin.js';
 
 /**
  * Ensures every exported tool handler in src/tools/ is registered via
@@ -31,7 +31,7 @@ describe('tool registration', () => {
   const toolsDir = join(__dirname, '../../../src/tools');
 
   // Infrastructure files that contain no tool handlers
-  const infrastructure = new Set(['context.ts', 'registry.ts', 'runtime.ts', 'write-helpers.ts']);
+  const infrastructure = new Set(['write-helpers.ts']);
 
   const toolFiles = collectFiles(toolsDir, '.ts')
     .filter(f => !infrastructure.has(f.split('/').pop()!));

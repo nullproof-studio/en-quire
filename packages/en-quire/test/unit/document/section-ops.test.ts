@@ -2,8 +2,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseMarkdown } from '../../../src/document/parser.js';
-import { buildSectionTree } from '../../../src/document/markdown-parser.js';
+import { parseMarkdown } from '../../../src/parsers/parser.js';
+import { buildSectionTree } from '../../../src/parsers/markdown-parser.js';
 import {
   readSection,
   deleteSection,
@@ -17,12 +17,12 @@ import {
   appendToSection,
   moveSection,
 } from '../../helpers/md-ops.js';
-import { markdownStrategy } from '../../../src/document/markdown-strategy.js';
+import { markdownStrategy } from '../../../src/parsers/markdown-strategy.js';
 
 const generateToc = (tree: import('@nullproof-studio/en-core').SectionNode[], maxDepth?: number, style?: 'links' | 'plain') =>
   markdownStrategy.generateToc!(tree, maxDepth ?? 3, style ?? 'links');
 
-const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
+const fixturesDir = resolve(import.meta.dirname, '../../../../../test/fixtures/docs');
 
 function loadFixture(name: string): string {
   return readFileSync(resolve(fixturesDir, name), 'utf-8');

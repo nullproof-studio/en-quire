@@ -6,10 +6,10 @@ import { resolve } from 'node:path';
 import { initSearchSchema } from '@nullproof-studio/en-core';
 import { indexDocument, getIndexedCount, removeFromIndex } from '@nullproof-studio/en-core';
 import { searchDocuments, sanitiseFts5Query } from '@nullproof-studio/en-core';
-import { parseMarkdown } from '../../../src/document/parser.js';
-import { buildSectionTree } from '../../../src/document/markdown-parser.js';
+import { parseMarkdown } from '../../../src/parsers/parser.js';
+import { buildSectionTree } from '../../../src/parsers/markdown-parser.js';
 
-const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
+const fixturesDir = resolve(import.meta.dirname, '../../../../../test/fixtures/docs');
 
 let db: Database.Database;
 

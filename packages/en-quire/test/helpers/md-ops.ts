@@ -14,7 +14,7 @@ import {
   moveSection as _moveSection,
   setValue as _setValue,
 } from '@nullproof-studio/en-core';
-import { markdownStrategy } from '../../src/document/markdown-strategy.js';
+import { markdownStrategy } from '../../src/parsers/markdown-strategy.js';
 
 export function replaceSection(
   markdown: string,

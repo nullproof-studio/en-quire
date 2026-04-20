@@ -3,8 +3,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
-import { parseMarkdown } from '../../../src/document/parser.js';
-import { buildSectionTree } from '../../../src/document/markdown-parser.js';
+import { parseMarkdown } from '../../../src/parsers/parser.js';
+import { buildSectionTree } from '../../../src/parsers/markdown-parser.js';
 import { getSectionPath, flattenTree } from '@nullproof-studio/en-core';
 import { resolveAddress } from '@nullproof-studio/en-core';
 import { readSection, buildOutline, findReplace } from '@nullproof-studio/en-core';
@@ -12,7 +12,7 @@ import { initSearchSchema } from '@nullproof-studio/en-core';
 import { indexDocument } from '@nullproof-studio/en-core';
 import { searchDocuments } from '@nullproof-studio/en-core';
 
-const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
+const fixturesDir = resolve(import.meta.dirname, '../../../../../test/fixtures/docs');
 
 function loadFixture(name: string): string {
   return readFileSync(resolve(fixturesDir, name), 'utf-8');

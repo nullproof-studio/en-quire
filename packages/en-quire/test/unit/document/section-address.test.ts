@@ -2,15 +2,15 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { parseMarkdown } from '../../../src/document/parser.js';
-import { buildSectionTree, parseAddress } from '../../../src/document/markdown-parser.js';
+import { parseMarkdown } from '../../../src/parsers/parser.js';
+import { buildSectionTree, parseAddress } from '../../../src/parsers/markdown-parser.js';
 import {
   resolveAddress,
   resolveSingleSection,
 } from '@nullproof-studio/en-core';
 import { AddressResolutionError } from '@nullproof-studio/en-core';
 
-const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
+const fixturesDir = resolve(import.meta.dirname, '../../../../../test/fixtures/docs');
 
 function loadTree(name: string) {
   const md = readFileSync(resolve(fixturesDir, name), 'utf-8');

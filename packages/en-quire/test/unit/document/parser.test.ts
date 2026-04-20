@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { parseMarkdown } from '../../../src/document/parser.js';
+import { parseMarkdown } from '../../../src/parsers/parser.js';
 
 describe('parseMarkdown', () => {
   it('parses a simple markdown document', () => {

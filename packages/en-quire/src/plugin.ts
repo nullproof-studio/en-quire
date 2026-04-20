@@ -1,10 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type Database from 'better-sqlite3';
-import type { ResolvedConfig, CallerIdentity } from '@nullproof-studio/en-core';
-import type { ToolContext, RootContext } from '@nullproof-studio/en-core';
-import { ToolRegistry } from '@nullproof-studio/en-core';
-import { attachRegistry } from '@nullproof-studio/en-core';
+import type { ToolRegistry } from '@nullproof-studio/en-core';
 
 // Read tools
 import { DocOutlineSchema, handleDocOutline } from './tools/read/doc-outline.js';
@@ -42,19 +37,12 @@ import {
 // Admin
 import { DocExecSchema, handleDocExec } from './tools/admin/doc-exec.js';
 
-export interface ServerDependencies {
-  config: ResolvedConfig;
-  db: Database.Database;
-  roots: Record<string, RootContext>;
-  caller: CallerIdentity;
-}
-
 /**
  * Register all en-quire tools into a registry.
  *
- * Exported so tool-registration tests can introspect the registered set
- * without spinning up a real MCP server, and so step 7 of the monorepo split
- * can move this verbatim into packages/en-quire/src/plugin.ts.
+ * Held separate from bin.ts so tool-registration tests can introspect the
+ * registered set without spinning up a real MCP server, and so a future
+ * third-party plugin pack can compose more tools onto the same registry.
  */
 export function registerEnQuireTools(registry: ToolRegistry): void {
   // Read tools
@@ -90,24 +78,4 @@ export function registerEnQuireTools(registry: ToolRegistry): void {
 
   // Admin
   registry.register({ name: 'doc_exec', description: 'Execute a command in a document root (admin)', schema: DocExecSchema.shape, handler: handleDocExec });
-}
-
-export function createServer(deps: ServerDependencies): McpServer {
-  const server = new McpServer({
-    name: 'en-quire',
-    version: '0.2.0',
-  });
-
-  const ctx: ToolContext = {
-    config: deps.config,
-    roots: deps.roots,
-    caller: deps.caller,
-    db: deps.db,
-  };
-
-  const registry = new ToolRegistry();
-  registerEnQuireTools(registry);
-  attachRegistry(server, registry, ctx);
-
-  return server;
 }

@@ -9,7 +9,7 @@ import { initSearchSchema } from '@nullproof-studio/en-core';
 import { syncIndex } from '@nullproof-studio/en-core';
 import { getIndexedCount, getIndexedFiles } from '@nullproof-studio/en-core';
 // Register parsers
-import '../../../src/document/markdown-parser.js';
+import '../../../src/parsers/markdown-parser.js';
 
 const ROOT_NAME = 'test';
 
