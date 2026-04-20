@@ -38,7 +38,7 @@ export async function handleDocMoveSection(
   const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
   const sourceAddress = parser.parseAddress(args.section);
   const anchorAddress = parser.parseAddress(args.anchor);
-  const newContent = moveSection(content, tree, sourceAddress, anchorAddress, args.position);
+  const newContent = moveSection(content, tree, sourceAddress, anchorAddress, args.position, parser.ops);
 
   const result = await executeWrite(ctx, {
     file: args.file,

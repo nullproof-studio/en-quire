@@ -13,9 +13,12 @@ import {
   moveSection,
   buildOutline,
   findReplace,
-  generateToc,
   insertText,
 } from '../../../src/document/section-ops.js';
+import { markdownStrategy } from '../../../src/document/markdown-strategy.js';
+
+const generateToc = (tree: import('../../../src/shared/types.js').SectionNode[], maxDepth?: number, style?: 'links' | 'plain') =>
+  markdownStrategy.generateToc!(tree, maxDepth ?? 3, style ?? 'links');
 
 const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
 

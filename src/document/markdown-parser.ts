@@ -6,9 +6,12 @@ import { parseMarkdown } from './parser.js';
 import { buildSectionTree, buildPreambleNode } from './section-tree.js';
 import { parseAddress } from './section-address.js';
 import { parserRegistry } from './parser-registry.js';
+import { markdownStrategy, markdownCapabilities } from './markdown-strategy.js';
 
 class MarkdownParser implements DocumentParser {
   readonly extensions = ['.md', '.mdx'];
+  readonly ops = markdownStrategy;
+  readonly capabilities = markdownCapabilities;
 
   parse(content: string): SectionNode[] {
     const ast = parseMarkdown(content);

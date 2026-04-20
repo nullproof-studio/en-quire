@@ -4,6 +4,7 @@ import '../../../src/document/yaml-parser.js';
 import { parserRegistry } from '../../../src/document/parser-registry.js';
 import { resolveAddress, resolveSingleSection } from '../../../src/document/section-address.js';
 import { readSection, replaceSection, deleteSection, buildOutline, appendToSection } from '../../../src/document/section-ops.js';
+import { yamlStrategy } from '../../../src/document/yaml-strategy.js';
 
 const parser = parserRegistry.getParser('test.yaml');
 
@@ -197,7 +198,7 @@ describe('YAML parser — section operations', () => {
     const tree = parser.parse(yaml);
     const address = parser.parseAddress('services.api.environment');
     const result = replaceSection(yaml, tree, address,
-      '\n      NODE_ENV: staging\n      PORT: 4000\n      DEBUG: true\n');
+      '\n      NODE_ENV: staging\n      PORT: 4000\n      DEBUG: true\n', false, yamlStrategy);
     // Old values must be gone
     expect(result).not.toContain('production');
     expect(result).not.toContain('3100');
@@ -220,7 +221,7 @@ describe('YAML parser — section operations', () => {
     const tree = parser.parse(yaml);
     const address = parser.parseAddress('config.database');
     const result = replaceSection(yaml, tree, address,
-      '\n    host: remote.db\n    port: 3306\n');
+      '\n    host: remote.db\n    port: 3306\n', false, yamlStrategy);
     // No blank lines between key and first value
     expect(result).toMatch(/database:\n    host: remote\.db/);
     expect(result).not.toMatch(/database:\n\n/);
@@ -233,7 +234,7 @@ describe('YAML parser — section operations', () => {
     const yaml = 'name: old-value\nversion: 1.0\n';
     const tree = parser.parse(yaml);
     const address = parser.parseAddress('name');
-    const result = replaceSection(yaml, tree, address, ' new-value');
+    const result = replaceSection(yaml, tree, address, ' new-value', false, yamlStrategy);
     expect(result).toContain('new-value');
     expect(result).not.toContain('old-value');
     expect(result).toContain('version: 1.0');
@@ -270,7 +271,7 @@ describe('YAML parser — whitespace consistency', () => {
 `;
     const tree = parser.parse(yaml);
     const address = parser.parseAddress('services.api.environment');
-    const result = appendToSection(yaml, tree, address, '      DEBUG: true\n');
+    const result = appendToSection(yaml, tree, address, '      DEBUG: true\n', yamlStrategy);
     // Appended key should be contiguous with existing keys — no blank line
     expect(result).toMatch(/NODE_ENV: production\n      DEBUG: true/);
     expect(result).not.toMatch(/production\n\n/);
@@ -287,7 +288,7 @@ version: '3.8'
     const tree = parser.parse(yaml);
     const address = parser.parseAddress('services.api');
     const result = replaceSection(yaml, tree, address,
-      '    image: node:24-slim\n    command: node server.js\n');
+      '    image: node:24-slim\n    command: node server.js\n', false, yamlStrategy);
     // Should have at most one blank line before the next sibling/key
     expect(result).not.toMatch(/\n\n\n/);
     expect(result).toContain('worker:');
@@ -301,7 +302,7 @@ describe('YAML parser — append does not check for markdown headings', () => {
     const tree = parser.parse(yaml);
     const address = parser.parseAddress('config');
     // # in YAML is a comment, not a heading — should not be rejected
-    const result = appendToSection(yaml, tree, address, '  # new comment\n  other: data\n');
+    const result = appendToSection(yaml, tree, address, '  # new comment\n  other: data\n', yamlStrategy);
     expect(result).toContain('# new comment');
   });
 });

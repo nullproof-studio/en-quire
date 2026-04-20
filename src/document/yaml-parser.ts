@@ -12,9 +12,12 @@ import type { SectionNode, SectionAddress } from '../shared/types.js';
 import { parseAddress as parseMarkdownAddress } from './section-address.js';
 import { ValidationError } from '../shared/errors.js';
 import { parserRegistry } from './parser-registry.js';
+import { yamlStrategy, yamlCapabilities } from './yaml-strategy.js';
 
 class YamlParser implements DocumentParser {
   readonly extensions = ['.yaml', '.yml'];
+  readonly ops = yamlStrategy;
+  readonly capabilities = yamlCapabilities;
 
   parse(content: string): SectionNode[] {
     if (content.trim().length === 0) return [];

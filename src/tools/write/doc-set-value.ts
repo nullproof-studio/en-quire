@@ -22,7 +22,7 @@ export async function handleDocSetValue(
 
   const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
   const address = parser.parseAddress(args.path);
-  const newContent = setValue(content, tree, address, args.value);
+  const newContent = setValue(content, tree, address, args.value, parser.ops);
 
   const result = await executeWrite(ctx, {
     file: args.file,

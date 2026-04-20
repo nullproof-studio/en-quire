@@ -22,7 +22,7 @@ export async function handleDocAppendSection(
 
   const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
   const address = parser.parseAddress(args.section);
-  const newContent = appendToSection(content, tree, address, args.content);
+  const newContent = appendToSection(content, tree, address, args.content, parser.ops);
 
   const result = await executeWrite(ctx, {
     file: args.file,

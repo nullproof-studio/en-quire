@@ -36,7 +36,7 @@ export async function handleDocInsertSection(
   const address = parser.parseAddress(args.anchor);
   const newContent = insertSection(
     content, tree, address, args.position,
-    args.heading, args.content, args.level,
+    args.heading, args.content, args.level, parser.ops,
   );
 
   const result = await executeWrite(ctx, {

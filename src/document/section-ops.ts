@@ -12,6 +12,19 @@ import { resolveSingleSection, resolveAddress } from './section-address.js';
 import { countCodePoints, offsetToLine } from './ast-utils.js';
 import { countWords } from '../shared/word-count.js';
 import { ValidationError } from '../shared/errors.js';
+import type { OpsStrategy } from './ops-strategy.js';
+import { markdownStrategy } from './markdown-strategy.js';
+
+/**
+ * Default ops strategy.
+ *
+ * This default exists for convenience during the monorepo-split transition —
+ * callers within en-quire that already know they're dealing with markdown
+ * don't have to thread `parser.ops` through. When section-ops moves into
+ * @nullproof-studio/en-core (step 6 of the split), this default is removed
+ * and all callers must pass the strategy explicitly.
+ */
+const DEFAULT_OPS: OpsStrategy = markdownStrategy;
 
 /**
  * Read a section's content from the markdown string.
@@ -69,14 +82,14 @@ export function replaceSection(
   address: SectionAddress,
   newContent: string,
   replaceHeading: boolean | string = false,
+  ops: OpsStrategy = DEFAULT_OPS,
 ): string {
   const node = resolveSingleSection(tree, address);
 
   if (typeof replaceHeading === 'string') {
     // Replace heading text only, then replace body
-    const cleanHeading = stripHeadingMarkers(replaceHeading);
-    const headingPrefix = '#'.repeat(node.heading.level);
-    const newHeadingLine = `${headingPrefix} ${cleanHeading}`;
+    const cleanHeading = ops.stripHeadingMarkers(replaceHeading);
+    const newHeadingLine = ops.renderHeading(node.heading.level, cleanHeading);
     const before = markdown.slice(0, node.headingStartOffset);
     const after = markdown.slice(node.bodyEndOffset);
     const normalized = newContent.replace(/^\n*/, '');
@@ -102,12 +115,12 @@ export function replaceSection(
   // Auto-strip a leading heading from content if it matches the target section.
   // Agents frequently include "### Heading\n\n" at the start of replacement content,
   // which would create a duplicate heading since replaceSection preserves the original.
-  const strippedContent = stripLeadingDuplicateHeading(newContent, node.heading.text);
+  const strippedContent = ops.stripLeadingDuplicateHeading(newContent, node.heading.text);
 
   // If replacement content contains child-level headings, replace the entire section
   // body including children (sectionEndOffset) to avoid duplicating existing children.
   // Otherwise replace only the body text (bodyEndOffset), preserving children.
-  const contentHasChildHeadings = hasChildHeadings(strippedContent, node.heading.level);
+  const contentHasChildHeadings = ops.hasChildHeadings(strippedContent, node.heading.level);
   const endOffset = contentHasChildHeadings ? node.sectionEndOffset : node.bodyEndOffset;
 
   const before = markdown.slice(0, node.bodyStartOffset);
@@ -131,61 +144,6 @@ export function replaceSection(
 }
 
 /**
- * Strip leading '#' markers from a heading string.
- * Agents sometimes pass "## My Heading" instead of "My Heading";
- * since the level is controlled separately, these markers are redundant
- * and cause double-heading bugs like "## ## My Heading".
- */
-function stripHeadingMarkers(heading: string): string {
-  return heading.replace(/^#+\s*/, '');
-}
-
-/**
- * Check if content contains ATX headings deeper than the given level.
- * Ignores headings inside fenced code blocks.
- * Used to decide whether replacement content includes subsection headings
- * that would duplicate existing children if only the body were replaced.
- */
-function hasChildHeadings(content: string, parentLevel: number): boolean {
-  let inCodeBlock = false;
-  for (const line of content.split('\n')) {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('```')) {
-      inCodeBlock = !inCodeBlock;
-      continue;
-    }
-    if (inCodeBlock) continue;
-
-    const match = trimmed.match(/^(#{1,6})\s/);
-    if (match && match[1].length > parentLevel) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Strip a leading heading line from content if its text matches the
- * target section heading.  Agents often include the heading in
- * replacement content even though replaceSection preserves it.
- */
-function stripLeadingDuplicateHeading(content: string, headingText: string): string {
-  // Strip leading whitespace/newlines before checking for a heading line
-  const trimmed = content.replace(/^\n*/, '');
-  // Match ATX heading: #{1,6}, space(s), text, optional trailing ##+ markers
-  const match = trimmed.match(/^#{1,6}\s+(.+?)(?:\s+#+\s*)?$/m);
-  if (!match) return content;
-  const contentHeadingText = match[1].trim();
-  if (contentHeadingText === headingText) {
-    // Remove the heading line and any blank lines after it
-    const headingEnd = trimmed.indexOf('\n', match.index!);
-    if (headingEnd === -1) return '';
-    return trimmed.slice(headingEnd).replace(/^\n*/, '');
-  }
-  return content;
-}
-
-/**
  * Ensure content ends with a double newline so the next section's
  * heading isn't concatenated to the replaced content.
  */
@@ -193,33 +151,6 @@ function ensureTrailingNewlines(content: string): string {
   if (content.endsWith('\n\n')) return content;
   if (content.endsWith('\n')) return content + '\n';
   return content + '\n\n';
-}
-
-/**
- * Check if content contains ATX headings at or above the given level.
- * Ignores headings inside fenced code blocks.
- */
-function checkForBreakingHeadings(content: string, sectionLevel: number): void {
-  let inCodeBlock = false;
-  for (const line of content.split('\n')) {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('```')) {
-      inCodeBlock = !inCodeBlock;
-      continue;
-    }
-    if (inCodeBlock) continue;
-
-    const match = trimmed.match(/^(#{1,6})\s/);
-    if (match) {
-      const headingLevel = match[1].length;
-      if (headingLevel <= sectionLevel) {
-        throw new ValidationError(
-          `Cannot append content containing a level-${headingLevel} heading to a level-${sectionLevel} section. ` +
-          `Use doc_insert_section to add sibling or higher-level sections.`,
-        );
-      }
-    }
-  }
 }
 
 /**
@@ -234,9 +165,10 @@ export function insertSection(
   heading: string,
   content: string,
   level?: number,
+  ops: OpsStrategy = DEFAULT_OPS,
 ): string {
   const anchorNode = resolveSingleSection(tree, anchor);
-  const cleanHeading = stripHeadingMarkers(heading);
+  const cleanHeading = ops.stripHeadingMarkers(heading);
 
   // Check for duplicate sibling
   const siblings = (position === 'child_start' || position === 'child_end')
@@ -259,8 +191,7 @@ export function insertSection(
       : anchorNode.heading.level
   );
 
-  const headingPrefix = '#'.repeat(headingLevel);
-  const newSection = `\n${headingPrefix} ${cleanHeading}\n\n${content}\n`;
+  const newSection = `\n${ops.renderHeading(headingLevel, cleanHeading)}\n\n${content}\n`;
 
   let insertOffset: number;
 
@@ -295,17 +226,14 @@ export function appendToSection(
   tree: SectionNode[],
   address: SectionAddress,
   content: string,
+  ops: OpsStrategy = DEFAULT_OPS,
 ): string {
   const node = resolveSingleSection(tree, address);
 
-  // Guard: reject content containing markdown headings at the same or higher level.
-  // Only applies to markdown sections (heading level > 0 with # markers).
+  // Guard: reject content containing headings at the same or higher level.
+  // Format-specific detection is delegated to the strategy (no-op for yaml).
   if (node.heading.level > 0) {
-    const headingLine = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
-    const isMarkdown = headingLine.trimStart().startsWith('#');
-    if (isMarkdown) {
-      checkForBreakingHeadings(content, node.heading.level);
-    }
+    ops.checkForBreakingHeadings(content, node.heading.level);
   }
 
   const insertOffset = node.bodyEndOffset;
@@ -342,6 +270,7 @@ export function setValue(
   tree: SectionNode[],
   address: SectionAddress,
   value: string,
+  ops: OpsStrategy = DEFAULT_OPS,
 ): string {
   const node = resolveSingleSection(tree, address);
 
@@ -376,7 +305,7 @@ export function setValue(
   }
 
   // Markdown fallback — delegate to body-only replaceSection
-  return replaceSection(markdown, tree, address, value);
+  return replaceSection(markdown, tree, address, value, false, ops);
 }
 
 /**
@@ -406,6 +335,7 @@ export function moveSection(
   source: SectionAddress,
   anchor: SectionAddress,
   position: 'before' | 'after' | 'child_start' | 'child_end',
+  ops: OpsStrategy = DEFAULT_OPS,
 ): string {
   const sourceNode = resolveSingleSection(tree, source);
   const anchorNode = resolveSingleSection(tree, anchor);
@@ -450,7 +380,7 @@ export function moveSection(
   const sourceText = markdown.slice(removeStart, removeEnd);
 
   // Adjust heading levels
-  const adjustedText = delta === 0 ? sourceText : adjustHeadingLevels(sourceText, delta);
+  const adjustedText = delta === 0 ? sourceText : ops.adjustHeadingLevels(sourceText, delta);
 
   // Compute insertion offset
   let insertAt: number;
@@ -482,46 +412,6 @@ export function moveSection(
     // Source is after destination — insert first, then skip the source
     return markdown.slice(0, insertAt) + paddedText + markdown.slice(insertAt, removeStart) + markdown.slice(removeEnd);
   }
-}
-
-/**
- * Adjust all ATX heading levels in a text block by a delta.
- * Respects fenced code blocks. Throws if any heading would exceed h6 or go below h1.
- */
-function adjustHeadingLevels(text: string, delta: number): string {
-  let inCodeBlock = false;
-  const lines = text.split('\n');
-  const result: string[] = [];
-
-  for (const line of lines) {
-    const trimmed = line.trimStart();
-    if (trimmed.startsWith('```')) {
-      inCodeBlock = !inCodeBlock;
-      result.push(line);
-      continue;
-    }
-    if (inCodeBlock) {
-      result.push(line);
-      continue;
-    }
-
-    const match = trimmed.match(/^(#{1,6})\s/);
-    if (match) {
-      const oldLevel = match[1].length;
-      const newLevel = oldLevel + delta;
-      if (newLevel < 1 || newLevel > 6) {
-        throw new ValidationError(
-          `Cannot adjust heading level from h${oldLevel} by ${delta > 0 ? '+' : ''}${delta}: ` +
-          `h${newLevel} is outside the valid range (h1–h6).`,
-        );
-      }
-      result.push('#'.repeat(newLevel) + line.slice(line.indexOf(match[1]) + match[1].length));
-    } else {
-      result.push(line);
-    }
-  }
-
-  return result.join('\n');
 }
 
 /**
@@ -711,49 +601,6 @@ export function findReplace(
   result += markdown.slice(lastEnd);
 
   return { matches, result, replacementCount, skippedCount };
-}
-
-/**
- * Generate a Table of Contents from the section tree.
- */
-export function generateToc(
-  tree: SectionNode[],
-  maxDepth = 3,
-  style: 'links' | 'plain' = 'links',
-): string {
-  const lines: string[] = [];
-
-  function walk(nodes: SectionNode[], depth: number) {
-    for (const node of nodes) {
-      if (depth >= maxDepth) continue;
-
-      const indent = '  '.repeat(depth);
-      const text = node.heading.text;
-
-      if (style === 'links') {
-        const anchor = text
-          .toLowerCase()
-          .replace(/[^\w\s-]/g, '')
-          .replace(/\s+/g, '-');
-        lines.push(`${indent}- [${text}](#${anchor})`);
-      } else {
-        lines.push(`${indent}- ${text}`);
-      }
-
-      walk(node.children, depth + 1);
-    }
-  }
-
-  // Skip the root h1 and start with its children
-  for (const root of tree) {
-    if (root.heading.level === 1) {
-      walk(root.children, 0);
-    } else {
-      walk([root], 0);
-    }
-  }
-
-  return lines.join('\n');
 }
 
 function escapeRegex(str: string): string {

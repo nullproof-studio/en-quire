@@ -23,7 +23,7 @@ export async function handleDocReplaceSection(
 
   const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
   const address = parser.parseAddress(args.section);
-  const newContent = replaceSection(content, tree, address, args.content, args.replace_heading);
+  const newContent = replaceSection(content, tree, address, args.content, args.replace_heading, parser.ops);
 
   const result = await executeWrite(ctx, {
     file: args.file,
