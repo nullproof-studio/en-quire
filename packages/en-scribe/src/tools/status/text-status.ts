@@ -3,9 +3,9 @@ import type { ToolContext } from '@nullproof-studio/en-core';
 import { StatusSchema, handleStatus } from '@nullproof-studio/en-core';
 import type { z } from 'zod';
 
-export const DocStatusSchema = StatusSchema;
+export const TextStatusSchema = StatusSchema;
 
-export async function handleDocStatus(
+export async function handleTextStatus(
   args: z.infer<typeof StatusSchema>,
   ctx: ToolContext,
 ) {

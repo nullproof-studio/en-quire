@@ -10,6 +10,13 @@ import { TextEditSchema, handleTextEdit } from './tools/write/text-edit.js';
 import { TextInsertAtAnchorSchema, handleTextInsertAtAnchor } from './tools/write/text-insert-at-anchor.js';
 import { TextRenameSchema, handleTextRename } from './tools/write/text-rename.js';
 import { TextDeleteSchema, handleTextDelete } from './tools/write/text-delete.js';
+import { TextStatusSchema, handleTextStatus } from './tools/status/text-status.js';
+import {
+  TextProposalsListSchema, handleTextProposalsList,
+  TextProposalDiffSchema, handleTextProposalDiff,
+  TextProposalApproveSchema, handleTextProposalApprove,
+  TextProposalRejectSchema, handleTextProposalReject,
+} from './tools/governance/text-proposals.js';
 
 /**
  * Register all en-scribe tools into a registry.
@@ -90,5 +97,39 @@ export function registerEnScribeTools(registry: ToolRegistry): void {
     description: 'Delete a plain-text file. Pass if_match (from a prior read) to prevent stale deletes. Proposal mode recommended when operating in a git-enabled root.',
     schema: TextDeleteSchema.shape,
     handler: handleTextDelete,
+  });
+
+  // Status
+  registry.register({
+    name: 'text_status',
+    description: 'Check plain-text file status across roots. Returns active roots, modified files, pending proposals, indexed/unindexed document counts. Use to verify system health or check for uncommitted changes.',
+    schema: TextStatusSchema.shape,
+    handler: handleTextStatus,
+  });
+
+  // Governance
+  registry.register({
+    name: 'text_proposals_list',
+    description: 'List pending proposals across all git-enabled roots.',
+    schema: TextProposalsListSchema.shape,
+    handler: handleTextProposalsList,
+  });
+  registry.register({
+    name: 'text_proposal_diff',
+    description: 'View the diff of a proposal.',
+    schema: TextProposalDiffSchema.shape,
+    handler: handleTextProposalDiff,
+  });
+  registry.register({
+    name: 'text_proposal_approve',
+    description: 'Approve and merge a proposal.',
+    schema: TextProposalApproveSchema.shape,
+    handler: handleTextProposalApprove,
+  });
+  registry.register({
+    name: 'text_proposal_reject',
+    description: 'Reject and delete a proposal.',
+    schema: TextProposalRejectSchema.shape,
+    handler: handleTextProposalReject,
   });
 }

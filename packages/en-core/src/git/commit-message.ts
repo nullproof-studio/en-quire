@@ -32,16 +32,19 @@ export function buildCommitMessage(params: CommitMessageParams): string {
 
 /**
  * Build a branch name for a proposal.
- * Format: propose/{caller}/{document-path}/{timestamp}
+ * Format: propose/{caller}/{document-path-with-extension}/{timestamp}
+ *
+ * The file extension is preserved in the branch name so that extension-
+ * agnostic consumers (en-quire for md/yaml, en-scribe for plain text)
+ * can reconstruct the exact file path without having to guess which
+ * suffix the proposal operates on.
  */
 export function buildProposalBranch(caller: string, filePath: string): string {
   const timestamp = new Date().toISOString()
     .replace(/[-:]/g, '')
     .replace(/\.\d+Z$/, 'Z');
 
-  const sanitisedPath = filePath
-    .replace(/\.mdx?$/, '')
-    .replace(/\//g, '-');
+  const sanitisedPath = filePath.replace(/\//g, '-');
 
   return `propose/${caller}/${sanitisedPath}/${timestamp}`;
 }

@@ -45,6 +45,8 @@ export * from './document/text-find.js';
 
 // Tool runtime
 export * from './tools/context.js';
+export * from './tools/proposals.js';
 export * from './tools/registry.js';
 export * from './tools/runtime.js';
+export * from './tools/status.js';
 export * from './tools/write-helpers.js';

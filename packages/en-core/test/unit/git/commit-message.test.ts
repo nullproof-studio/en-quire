@@ -34,8 +34,13 @@ describe('buildCommitMessage', () => {
 });
 
 describe('buildProposalBranch', () => {
-  it('builds a branch name with expected format', () => {
+  it('preserves the file extension so branch → file reconstruction is lossless', () => {
     const branch = buildProposalBranch('michelle', 'skills/triage-agent.md');
-    expect(branch).toMatch(/^propose\/michelle\/skills-triage-agent\/\d{8}T\d{4}\d{2}Z$/);
+    expect(branch).toMatch(/^propose\/michelle\/skills-triage-agent\.md\/\d{8}T\d{4}\d{2}Z$/);
+  });
+
+  it('works for plain-text extensions too', () => {
+    const branch = buildProposalBranch('bot', 'notes/todo.txt');
+    expect(branch).toMatch(/^propose\/bot\/notes-todo\.txt\/\d{8}T\d{4}\d{2}Z$/);
   });
 });
