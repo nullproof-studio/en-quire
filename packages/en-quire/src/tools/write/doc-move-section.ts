@@ -5,7 +5,7 @@ import type { ToolContext } from '@nullproof-studio/en-core';
 import { moveSection } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { ValidationError } from '@nullproof-studio/en-core';
-import { loadDocument, executeWrite } from './write-helpers.js';
+import { loadDocument, executeWrite } from '@nullproof-studio/en-core';
 
 export const DocMoveSectionSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),

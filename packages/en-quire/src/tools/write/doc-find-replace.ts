@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ToolContext } from '@nullproof-studio/en-core';
 import { findReplace } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
-import { loadDocument, executeWrite } from './write-helpers.js';
+import { loadDocument, executeWrite } from '@nullproof-studio/en-core';
 import { computeEtag } from '@nullproof-studio/en-core';
 
 export const DocFindReplaceSchema = z.object({

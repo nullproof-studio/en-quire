@@ -41,8 +41,10 @@ export * from './document/parser-registry.js';
 export * from './document/section-address.js';
 export * from './document/section-ops-core.js';
 export * from './document/section-tree.js';
+export * from './document/text-find.js';
 
 // Tool runtime
 export * from './tools/context.js';
 export * from './tools/registry.js';
 export * from './tools/runtime.js';
+export * from './tools/write-helpers.js';
