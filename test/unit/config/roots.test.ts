@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { resolveFilePath, resolveScope } from '../../../src/config/roots.js';
-import type { ResolvedRoot } from '../../../src/shared/types.js';
+import { resolveFilePath, resolveScope } from '@nullproof-studio/en-core';
+import type { ResolvedRoot } from '@nullproof-studio/en-core';
 
 const singleRoot: Record<string, ResolvedRoot> = {
   docs: {

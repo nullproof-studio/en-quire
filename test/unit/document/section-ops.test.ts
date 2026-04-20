@@ -6,18 +6,20 @@ import { parseMarkdown } from '../../../src/document/parser.js';
 import { buildSectionTree } from '../../../src/document/markdown-parser.js';
 import {
   readSection,
-  replaceSection,
-  insertSection,
-  appendToSection,
   deleteSection,
-  moveSection,
   buildOutline,
   findReplace,
   insertText,
-} from '../../../src/document/section-ops.js';
+} from '@nullproof-studio/en-core';
+import {
+  replaceSection,
+  insertSection,
+  appendToSection,
+  moveSection,
+} from '../../helpers/md-ops.js';
 import { markdownStrategy } from '../../../src/document/markdown-strategy.js';
 
-const generateToc = (tree: import('../../../src/shared/types.js').SectionNode[], maxDepth?: number, style?: 'links' | 'plain') =>
+const generateToc = (tree: import('@nullproof-studio/en-core').SectionNode[], maxDepth?: number, style?: 'links' | 'plain') =>
   markdownStrategy.generateToc!(tree, maxDepth ?? 3, style ?? 'links');
 
 const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');

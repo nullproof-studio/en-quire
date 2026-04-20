@@ -6,8 +6,8 @@ import {
   normaliseInbound,
   normaliseOutbound,
   decodeAndNormalise,
-} from '../../../src/shared/encoding.js';
-import { EncodingError } from '../../../src/shared/errors.js';
+} from '@nullproof-studio/en-core';
+import { EncodingError } from '@nullproof-studio/en-core';
 
 describe('encoding', () => {
   describe('validateUtf8', () => {

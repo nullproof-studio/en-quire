@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { initSearchSchema } from '../../../src/search/schema.js';
+import { initSearchSchema } from '@nullproof-studio/en-core';
 import '../../../src/document/markdown-parser.js';
 
 // Track whether readDocument is called while the db is in a transaction.
@@ -17,9 +17,14 @@ import '../../../src/document/markdown-parser.js';
 const readCallsInTransaction: boolean[] = [];
 let currentDb: Database.Database | null = null;
 
-vi.mock('../../../src/shared/file-utils.js', async () => {
-  const actual = await vi.importActual<typeof import('../../../src/shared/file-utils.js')>(
-    '../../../src/shared/file-utils.js',
+// Mock the internal file-utils module that en-core's search/sync.ts imports
+// via relative path. Mocking the package barrel (@nullproof-studio/en-core)
+// only intercepts external consumers — not sync.ts's own `../shared/file-utils.js`
+// import. This test moves into packages/en-core/ in step 7 where the mock path
+// becomes package-relative again.
+vi.mock('../../../packages/en-core/src/shared/file-utils.js', async () => {
+  const actual = await vi.importActual<typeof import('../../../packages/en-core/src/shared/file-utils.js')>(
+    '../../../packages/en-core/src/shared/file-utils.js',
   );
   return {
     ...actual,
@@ -31,7 +36,7 @@ vi.mock('../../../src/shared/file-utils.js', async () => {
 });
 
 // Import AFTER vi.mock so sync.ts picks up the mocked readDocument
-const { syncIndex } = await import('../../../src/search/sync.js');
+const { syncIndex } = await import('@nullproof-studio/en-core');
 
 let db: Database.Database;
 let rootDir: string;

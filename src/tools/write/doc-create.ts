@@ -3,15 +3,15 @@ import { z } from 'zod';
 import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import type { ToolContext } from '../context.js';
-import { safePath, writeDocument } from '../../shared/file-utils.js';
-import { computeEtag } from '../../shared/etag.js';
-import { parserRegistry } from '../../document/parser-registry.js';
-import { indexDocument } from '../../search/indexer.js';
-import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
-import { requirePermission, resolveWriteMode } from '../../rbac/permissions.js';
-import { GitRequiredError, ValidationError } from '../../shared/errors.js';
-import { resolveFilePath } from '../../config/roots.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { safePath, writeDocument } from '@nullproof-studio/en-core';
+import { computeEtag } from '@nullproof-studio/en-core';
+import { parserRegistry } from '@nullproof-studio/en-core';
+import { indexDocument } from '@nullproof-studio/en-core';
+import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
+import { requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
+import { GitRequiredError, ValidationError } from '@nullproof-studio/en-core';
+import { resolveFilePath } from '@nullproof-studio/en-core';
 
 export const DocCreateSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md"). Must not already exist — use doc_replace_section or doc_find_replace to modify existing files.'),

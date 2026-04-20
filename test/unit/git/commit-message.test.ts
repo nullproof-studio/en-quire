@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { buildCommitMessage, buildProposalBranch } from '../../../src/git/commit-message.js';
+import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
 
 describe('buildCommitMessage', () => {
   it('builds a structured commit message', () => {

@@ -1,14 +1,14 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import { renameSync, existsSync } from 'node:fs';
-import type { ToolContext } from '../context.js';
-import { safePath, readDocument } from '../../shared/file-utils.js';
-import { computeEtag, validateEtag } from '../../shared/etag.js';
-import { removeFromIndex } from '../../search/indexer.js';
-import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
-import { requirePermission, resolveWriteMode } from '../../rbac/permissions.js';
-import { NotFoundError, ValidationError, GitRequiredError } from '../../shared/errors.js';
-import { resolveFilePath } from '../../config/roots.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { safePath, readDocument } from '@nullproof-studio/en-core';
+import { computeEtag, validateEtag } from '@nullproof-studio/en-core';
+import { removeFromIndex } from '@nullproof-studio/en-core';
+import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
+import { requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
+import { NotFoundError, ValidationError, GitRequiredError } from '@nullproof-studio/en-core';
+import { resolveFilePath } from '@nullproof-studio/en-core';
 
 export const DocRenameSchema = z.object({
   source: z.string().describe('Current document path (e.g. "root/old-name.md"). Must exist.'),

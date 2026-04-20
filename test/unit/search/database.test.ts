@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { openDatabase } from '../../../src/search/database.js';
+import { openDatabase } from '@nullproof-studio/en-core';
 
 let cleanup: string[] = [];
 

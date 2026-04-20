@@ -7,10 +7,10 @@ import {
   isAlias,
 } from 'yaml';
 import type { YAMLMap, YAMLSeq, Pair, Scalar, Node as YAMLNode } from 'yaml';
-import type { DocumentParser } from './parser-registry.js';
-import type { SectionNode, SectionAddress } from '../shared/types.js';
-import { ValidationError } from '../shared/errors.js';
-import { parserRegistry } from './parser-registry.js';
+import type { DocumentParser } from '@nullproof-studio/en-core';
+import type { SectionNode, SectionAddress } from '@nullproof-studio/en-core';
+import { ValidationError } from '@nullproof-studio/en-core';
+import { parserRegistry } from '@nullproof-studio/en-core';
 import { yamlStrategy, yamlCapabilities } from './yaml-strategy.js';
 
 class YamlParser implements DocumentParser {

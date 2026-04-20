@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { ToolRegistry } from '../../../src/tools/registry.js';
+import { ToolRegistry } from '@nullproof-studio/en-core';
 import { registerEnQuireTools } from '../../../src/server.js';
 
 /**

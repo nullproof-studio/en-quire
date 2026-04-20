@@ -2,11 +2,11 @@
 import { z } from 'zod';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ToolContext } from '../context.js';
-import { listDocumentFiles, readDocument } from '../../shared/file-utils.js';
-import { parserRegistry } from '../../document/parser-registry.js';
-import { requirePermission } from '../../rbac/permissions.js';
-import { resolveScope } from '../../config/roots.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { listDocumentFiles, readDocument } from '@nullproof-studio/en-core';
+import { parserRegistry } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
+import { resolveScope } from '@nullproof-studio/en-core';
 
 export const DocListSchema = z.object({
   scope: z.string().optional().describe('Limit results to a root or path prefix (e.g. "root-name" or "root-name/subfolder"). Omit to list all documents across all roots.'),

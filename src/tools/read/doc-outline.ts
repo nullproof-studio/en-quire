@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
-import type { ToolContext } from '../context.js';
-import { readDocument } from '../../shared/file-utils.js';
-import { parserRegistry } from '../../document/parser-registry.js';
-import { buildOutline } from '../../document/section-ops.js';
-import { requirePermission } from '../../rbac/permissions.js';
-import { resolveFilePath } from '../../config/roots.js';
-import { computeEtag } from '../../shared/etag.js';
-import { countWords } from '../../shared/word-count.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { readDocument } from '@nullproof-studio/en-core';
+import { parserRegistry } from '@nullproof-studio/en-core';
+import { buildOutline } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
+import { resolveFilePath } from '@nullproof-studio/en-core';
+import { computeEtag } from '@nullproof-studio/en-core';
+import { countWords } from '@nullproof-studio/en-core';
 import { extname } from 'node:path';
 
 export const DocOutlineSchema = z.object({

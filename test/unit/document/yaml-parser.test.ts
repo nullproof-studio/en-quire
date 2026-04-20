@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
 import '../../../src/document/yaml-parser.js';
-import { parserRegistry } from '../../../src/document/parser-registry.js';
-import { resolveAddress, resolveSingleSection } from '../../../src/document/section-address.js';
-import { readSection, replaceSection, deleteSection, buildOutline, appendToSection } from '../../../src/document/section-ops.js';
+import { parserRegistry } from '@nullproof-studio/en-core';
+import { resolveAddress, resolveSingleSection } from '@nullproof-studio/en-core';
+import { readSection, replaceSection, deleteSection, buildOutline, appendToSection } from '@nullproof-studio/en-core';
 import { yamlStrategy } from '../../../src/document/yaml-strategy.js';
 
 const parser = parserRegistry.getParser('test.yaml');

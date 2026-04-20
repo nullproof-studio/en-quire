@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
-import type { ResolvedConfig, CallerIdentity } from './shared/types.js';
-import type { ToolContext, RootContext } from './tools/context.js';
-import { ToolRegistry } from './tools/registry.js';
-import { attachRegistry } from './tools/runtime.js';
+import type { ResolvedConfig, CallerIdentity } from '@nullproof-studio/en-core';
+import type { ToolContext, RootContext } from '@nullproof-studio/en-core';
+import { ToolRegistry } from '@nullproof-studio/en-core';
+import { attachRegistry } from '@nullproof-studio/en-core';
 
 // Read tools
 import { DocOutlineSchema, handleDocOutline } from './tools/read/doc-outline.js';

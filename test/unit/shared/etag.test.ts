@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { computeEtag, validateEtag } from '../../../src/shared/etag.js';
-import { PreconditionFailedError } from '../../../src/shared/errors.js';
+import { computeEtag, validateEtag } from '@nullproof-studio/en-core';
+import { PreconditionFailedError } from '@nullproof-studio/en-core';
 
 describe('computeEtag', () => {
   it('returns two hyphen-separated lowercase words', () => {

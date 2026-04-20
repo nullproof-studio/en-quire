@@ -4,8 +4,8 @@ import { mkdirSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { safePath } from '../../../src/shared/file-utils.js';
-import { PathTraversalError } from '../../../src/shared/errors.js';
+import { safePath } from '@nullproof-studio/en-core';
+import { PathTraversalError } from '@nullproof-studio/en-core';
 
 let docRoot: string;
 let outsideDir: string;

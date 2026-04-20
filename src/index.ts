@@ -5,17 +5,17 @@ import { createServer as createHttpServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { loadConfig } from './config/loader.js';
-import { openDatabase } from './search/database.js';
-import { syncIndex } from './search/sync.js';
+import { loadConfig } from '@nullproof-studio/en-core';
+import { openDatabase } from '@nullproof-studio/en-core';
+import { syncIndex } from '@nullproof-studio/en-core';
 // Register format parsers (side-effect imports)
 import './document/markdown-parser.js';
 import './document/yaml-parser.js';
-import { GitOperations } from './git/operations.js';
-import { resolveCaller } from './rbac/resolver.js';
+import { GitOperations } from '@nullproof-studio/en-core';
+import { resolveCaller } from '@nullproof-studio/en-core';
 import { createServer } from './server.js';
-import { initLogger, getLogger } from './shared/logger.js';
-import type { RootContext } from './tools/context.js';
+import { initLogger, getLogger } from '@nullproof-studio/en-core';
+import type { RootContext } from '@nullproof-studio/en-core';
 
 async function main() {
   const { values } = parseArgs({

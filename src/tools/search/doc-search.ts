@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
-import type { ToolContext } from '../context.js';
-import { searchDocuments } from '../../search/query.js';
-import { requirePermission } from '../../rbac/permissions.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { searchDocuments } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
 
 export const DocSearchSchema = z.object({
   query: z.string().describe('Search query text.'),

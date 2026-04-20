@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
-import type { ToolContext } from '../context.js';
-import { listMarkdownFiles } from '../../shared/file-utils.js';
-import { getIndexedCount, getIndexedFiles } from '../../search/indexer.js';
-import { requirePermission } from '../../rbac/permissions.js';
-import { resolveScope } from '../../config/roots.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { listMarkdownFiles } from '@nullproof-studio/en-core';
+import { getIndexedCount, getIndexedFiles } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
+import { resolveScope } from '@nullproof-studio/en-core';
 
 export const DocStatusSchema = z.object({
   scope: z.string().optional().describe('Limit to a specific root or path prefix. Omit to check status across all roots.'),

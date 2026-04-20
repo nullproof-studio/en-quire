@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
-import type { ToolContext } from '../context.js';
-import { appendToSection } from '../../document/section-ops.js';
-import { requirePermission } from '../../rbac/permissions.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { appendToSection } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocAppendSectionSchema = z.object({

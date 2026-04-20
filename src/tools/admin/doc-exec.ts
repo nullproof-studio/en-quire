@@ -2,10 +2,10 @@
 import { z } from 'zod';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { ToolContext } from '../context.js';
-import { safePath } from '../../shared/file-utils.js';
-import { requirePermission } from '../../rbac/permissions.js';
-import { logExecAudit } from '../../shared/logger.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { safePath } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
+import { logExecAudit } from '@nullproof-studio/en-core';
 
 const execFileAsync = promisify(execFile);
 

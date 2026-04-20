@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import { extname } from 'node:path';
-import type { ToolContext } from '../context.js';
-import { insertSection } from '../../document/section-ops.js';
-import { requirePermission } from '../../rbac/permissions.js';
-import { ValidationError } from '../../shared/errors.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { insertSection } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
+import { ValidationError } from '@nullproof-studio/en-core';
 import { loadDocument, executeWrite } from './write-helpers.js';
 
 export const DocInsertSectionSchema = z.object({
@@ -36,7 +36,7 @@ export async function handleDocInsertSection(
   const address = parser.parseAddress(args.anchor);
   const newContent = insertSection(
     content, tree, address, args.position,
-    args.heading, args.content, args.level, parser.ops,
+    args.heading, args.content, parser.ops, args.level,
   );
 
   const result = await executeWrite(ctx, {

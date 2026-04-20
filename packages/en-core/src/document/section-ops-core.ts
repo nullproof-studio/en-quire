@@ -6,25 +6,12 @@ import type {
   FindReplaceMatch,
   FindReplaceOptions,
 } from '../shared/types.js';
-import { parseMarkdown } from './parser.js';
 import { getSectionPath, getBreadcrumb, flattenTree } from './section-tree.js';
 import { resolveSingleSection, resolveAddress } from './section-address.js';
 import { countCodePoints, offsetToLine } from './ast-utils.js';
 import { countWords } from '../shared/word-count.js';
 import { ValidationError } from '../shared/errors.js';
 import type { OpsStrategy } from './ops-strategy.js';
-import { markdownStrategy } from './markdown-strategy.js';
-
-/**
- * Default ops strategy.
- *
- * This default exists for convenience during the monorepo-split transition —
- * callers within en-quire that already know they're dealing with markdown
- * don't have to thread `parser.ops` through. When section-ops moves into
- * @nullproof-studio/en-core (step 6 of the split), this default is removed
- * and all callers must pass the strategy explicitly.
- */
-const DEFAULT_OPS: OpsStrategy = markdownStrategy;
 
 /**
  * Read a section's content from the markdown string.
@@ -82,7 +69,7 @@ export function replaceSection(
   address: SectionAddress,
   newContent: string,
   replaceHeading: boolean | string = false,
-  ops: OpsStrategy = DEFAULT_OPS,
+  ops: OpsStrategy,
 ): string {
   const node = resolveSingleSection(tree, address);
 
@@ -164,8 +151,8 @@ export function insertSection(
   position: 'before' | 'after' | 'child_start' | 'child_end',
   heading: string,
   content: string,
+  ops: OpsStrategy,
   level?: number,
-  ops: OpsStrategy = DEFAULT_OPS,
 ): string {
   const anchorNode = resolveSingleSection(tree, anchor);
   const cleanHeading = ops.stripHeadingMarkers(heading);
@@ -226,7 +213,7 @@ export function appendToSection(
   tree: SectionNode[],
   address: SectionAddress,
   content: string,
-  ops: OpsStrategy = DEFAULT_OPS,
+  ops: OpsStrategy,
 ): string {
   const node = resolveSingleSection(tree, address);
 
@@ -270,7 +257,7 @@ export function setValue(
   tree: SectionNode[],
   address: SectionAddress,
   value: string,
-  ops: OpsStrategy = DEFAULT_OPS,
+  ops: OpsStrategy,
 ): string {
   const node = resolveSingleSection(tree, address);
 
@@ -335,7 +322,7 @@ export function moveSection(
   source: SectionAddress,
   anchor: SectionAddress,
   position: 'before' | 'after' | 'child_start' | 'child_end',
-  ops: OpsStrategy = DEFAULT_OPS,
+  ops: OpsStrategy,
 ): string {
   const sourceNode = resolveSingleSection(tree, source);
   const anchorNode = resolveSingleSection(tree, anchor);

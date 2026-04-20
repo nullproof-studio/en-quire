@@ -5,9 +5,9 @@ import { mkdirSync, writeFileSync, rmSync, unlinkSync, utimesSync } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
-import { initSearchSchema } from '../../../src/search/schema.js';
-import { syncIndex } from '../../../src/search/sync.js';
-import { getIndexedCount, getIndexedFiles } from '../../../src/search/indexer.js';
+import { initSearchSchema } from '@nullproof-studio/en-core';
+import { syncIndex } from '@nullproof-studio/en-core';
+import { getIndexedCount, getIndexedFiles } from '@nullproof-studio/en-core';
 // Register parsers
 import '../../../src/document/markdown-parser.js';
 

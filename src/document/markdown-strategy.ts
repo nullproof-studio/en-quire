@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import type { SectionNode } from '../shared/types.js';
-import type { OpsStrategy, ParserCapabilities } from './ops-strategy.js';
-import { ValidationError } from '../shared/errors.js';
+import type { SectionNode } from '@nullproof-studio/en-core';
+import type { OpsStrategy, ParserCapabilities } from '@nullproof-studio/en-core';
+import { ValidationError } from '@nullproof-studio/en-core';
 
 /**
  * Markdown-specific rendering and heading logic.

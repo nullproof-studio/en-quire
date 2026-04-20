@@ -5,12 +5,12 @@ import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { parseMarkdown } from '../../../src/document/parser.js';
 import { buildSectionTree } from '../../../src/document/markdown-parser.js';
-import { getSectionPath, flattenTree } from '../../../src/document/section-tree.js';
-import { resolveAddress } from '../../../src/document/section-address.js';
-import { readSection, buildOutline, findReplace } from '../../../src/document/section-ops.js';
-import { initSearchSchema } from '../../../src/search/schema.js';
-import { indexDocument } from '../../../src/search/indexer.js';
-import { searchDocuments } from '../../../src/search/query.js';
+import { getSectionPath, flattenTree } from '@nullproof-studio/en-core';
+import { resolveAddress } from '@nullproof-studio/en-core';
+import { readSection, buildOutline, findReplace } from '@nullproof-studio/en-core';
+import { initSearchSchema } from '@nullproof-studio/en-core';
+import { indexDocument } from '@nullproof-studio/en-core';
+import { searchDocuments } from '@nullproof-studio/en-core';
 
 const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
 

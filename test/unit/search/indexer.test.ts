@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { initSearchSchema } from '../../../src/search/schema.js';
-import { indexDocument, getIndexedCount, removeFromIndex } from '../../../src/search/indexer.js';
-import { searchDocuments, sanitiseFts5Query } from '../../../src/search/query.js';
+import { initSearchSchema } from '@nullproof-studio/en-core';
+import { indexDocument, getIndexedCount, removeFromIndex } from '@nullproof-studio/en-core';
+import { searchDocuments, sanitiseFts5Query } from '@nullproof-studio/en-core';
 import { parseMarkdown } from '../../../src/document/parser.js';
 import { buildSectionTree } from '../../../src/document/markdown-parser.js';
 

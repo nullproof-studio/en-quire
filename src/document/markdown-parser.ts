@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type { Root, Heading } from 'mdast';
-import type { DocumentParser } from './parser-registry.js';
-import type { SectionNode, SectionAddress } from '../shared/types.js';
+import type { DocumentParser } from '@nullproof-studio/en-core';
+import type { SectionNode, SectionAddress } from '@nullproof-studio/en-core';
 import { parseMarkdown } from './parser.js';
-import { buildPreambleNode, fixSectionEndOffsets } from './section-tree.js';
-import { toString } from './ast-utils.js';
-import { parserRegistry } from './parser-registry.js';
+import { buildPreambleNode, fixSectionEndOffsets } from '@nullproof-studio/en-core';
+import { toString } from '@nullproof-studio/en-core';
+import { parserRegistry } from '@nullproof-studio/en-core';
 import { markdownStrategy, markdownCapabilities } from './markdown-strategy.js';
 
 /**

@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import '../../../src/document/markdown-parser.js';
 import '../../../src/document/yaml-parser.js';
-import { parserRegistry } from '../../../src/document/parser-registry.js';
+import { parserRegistry } from '@nullproof-studio/en-core';
 
 describe('ParserRegistry', () => {
   it('returns markdown parser for .md files', () => {

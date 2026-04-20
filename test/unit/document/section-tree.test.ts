@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseMarkdown } from '../../../src/document/parser.js';
 import { buildSectionTree } from '../../../src/document/markdown-parser.js';
-import { getBreadcrumb, getSectionPath, flattenTree } from '../../../src/document/section-tree.js';
+import { getBreadcrumb, getSectionPath, flattenTree } from '@nullproof-studio/en-core';
 
 const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
 

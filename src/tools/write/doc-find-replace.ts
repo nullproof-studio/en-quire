@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
-import type { ToolContext } from '../context.js';
-import { findReplace } from '../../document/section-ops.js';
-import { requirePermission } from '../../rbac/permissions.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { findReplace } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
 import { loadDocument, executeWrite } from './write-helpers.js';
-import { computeEtag } from '../../shared/etag.js';
+import { computeEtag } from '@nullproof-studio/en-core';
 
 export const DocFindReplaceSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),

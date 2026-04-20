@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import type { OpsStrategy, ParserCapabilities } from './ops-strategy.js';
+import type { OpsStrategy, ParserCapabilities } from '@nullproof-studio/en-core';
 
 /**
  * YAML ops strategy.

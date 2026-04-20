@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { checkPermission, requirePermission, resolveWriteMode } from '../../../src/rbac/permissions.js';
-import { PermissionDeniedError } from '../../../src/shared/errors.js';
-import type { CallerIdentity } from '../../../src/shared/types.js';
+import { checkPermission, requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
+import { PermissionDeniedError } from '@nullproof-studio/en-core';
+import type { CallerIdentity } from '@nullproof-studio/en-core';
 
 const adminCaller: CallerIdentity = {
   id: 'admin',

@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
-import type { ToolContext } from '../context.js';
-import { requirePermission } from '../../rbac/permissions.js';
-import { GitRequiredError } from '../../shared/errors.js';
-import type { GitOperations } from '../../git/operations.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
+import { GitRequiredError } from '@nullproof-studio/en-core';
+import type { GitOperations } from '@nullproof-studio/en-core';
 
 /**
  * Find a git-enabled root. If rootName is provided, use that specific root.

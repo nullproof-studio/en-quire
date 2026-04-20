@@ -1,17 +1,17 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import type { ToolContext } from '../context.js';
-import type { EncodingInfo } from '../../shared/types.js';
-import { writeDocument, readDocument } from '../../shared/file-utils.js';
-import { parserRegistry } from '../../document/parser-registry.js';
-import type { DocumentParser } from '../../document/parser-registry.js';
-import { indexDocument } from '../../search/indexer.js';
-import { buildCommitMessage, buildProposalBranch } from '../../git/commit-message.js';
-import { generateDiff } from '../../shared/diff.js';
-import { resolveWriteMode } from '../../rbac/permissions.js';
-import { GitRequiredError, ValidationError } from '../../shared/errors.js';
-import { resolveFilePath } from '../../config/roots.js';
-import { computeEtag, validateEtag } from '../../shared/etag.js';
-import { getLogger } from '../../shared/logger.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import type { EncodingInfo } from '@nullproof-studio/en-core';
+import { writeDocument, readDocument } from '@nullproof-studio/en-core';
+import { parserRegistry } from '@nullproof-studio/en-core';
+import type { DocumentParser } from '@nullproof-studio/en-core';
+import { indexDocument } from '@nullproof-studio/en-core';
+import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
+import { generateDiff } from '@nullproof-studio/en-core';
+import { resolveWriteMode } from '@nullproof-studio/en-core';
+import { GitRequiredError, ValidationError } from '@nullproof-studio/en-core';
+import { resolveFilePath } from '@nullproof-studio/en-core';
+import { computeEtag, validateEtag } from '@nullproof-studio/en-core';
+import { getLogger } from '@nullproof-studio/en-core';
 export interface WriteOperationParams {
   file: string;
   operation: string;

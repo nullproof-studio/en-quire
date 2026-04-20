@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { parserRegistry } from '../../../src/document/parser-registry.js';
+import { parserRegistry } from '@nullproof-studio/en-core';
 import '../../../src/document/markdown-parser.js';
 
 const parser = parserRegistry.getParser('test.md');

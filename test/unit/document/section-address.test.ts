@@ -7,8 +7,8 @@ import { buildSectionTree, parseAddress } from '../../../src/document/markdown-p
 import {
   resolveAddress,
   resolveSingleSection,
-} from '../../../src/document/section-address.js';
-import { AddressResolutionError } from '../../../src/shared/errors.js';
+} from '@nullproof-studio/en-core';
+import { AddressResolutionError } from '@nullproof-studio/en-core';
 
 const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
 

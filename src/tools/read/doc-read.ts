@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
-import type { ToolContext } from '../context.js';
-import { readDocument } from '../../shared/file-utils.js';
-import { requirePermission } from '../../rbac/permissions.js';
-import { resolveFilePath } from '../../config/roots.js';
-import { computeEtag } from '../../shared/etag.js';
+import type { ToolContext } from '@nullproof-studio/en-core';
+import { readDocument } from '@nullproof-studio/en-core';
+import { requirePermission } from '@nullproof-studio/en-core';
+import { resolveFilePath } from '@nullproof-studio/en-core';
+import { computeEtag } from '@nullproof-studio/en-core';
 
 export const DocReadSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),

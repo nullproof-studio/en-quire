@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { countWords } from '../../../src/shared/word-count.js';
+import { countWords } from '@nullproof-studio/en-core';
 
 describe('countWords', () => {
   it('returns 0 for empty string', () => {
