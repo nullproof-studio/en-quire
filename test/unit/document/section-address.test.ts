@@ -3,9 +3,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseMarkdown } from '../../../src/document/parser.js';
-import { buildSectionTree } from '../../../src/document/section-tree.js';
+import { buildSectionTree, parseAddress } from '../../../src/document/markdown-parser.js';
 import {
-  parseAddress,
   resolveAddress,
   resolveSingleSection,
 } from '../../../src/document/section-address.js';

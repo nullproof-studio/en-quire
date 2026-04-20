@@ -7,7 +7,7 @@ import { initSearchSchema } from '../../../src/search/schema.js';
 import { indexDocument, getIndexedCount, removeFromIndex } from '../../../src/search/indexer.js';
 import { searchDocuments, sanitiseFts5Query } from '../../../src/search/query.js';
 import { parseMarkdown } from '../../../src/document/parser.js';
-import { buildSectionTree } from '../../../src/document/section-tree.js';
+import { buildSectionTree } from '../../../src/document/markdown-parser.js';
 
 const fixturesDir = resolve(import.meta.dirname, '../../fixtures/docs');
 

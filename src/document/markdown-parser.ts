@@ -1,12 +1,153 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import type { Root } from 'mdast';
+import type { Root, Heading } from 'mdast';
 import type { DocumentParser } from './parser-registry.js';
 import type { SectionNode, SectionAddress } from '../shared/types.js';
 import { parseMarkdown } from './parser.js';
-import { buildSectionTree, buildPreambleNode } from './section-tree.js';
-import { parseAddress } from './section-address.js';
+import { buildPreambleNode, fixSectionEndOffsets } from './section-tree.js';
+import { toString } from './ast-utils.js';
 import { parserRegistry } from './parser-registry.js';
 import { markdownStrategy, markdownCapabilities } from './markdown-strategy.js';
+
+/**
+ * Build a section tree from an mdast AST.
+ * Sections are delimited by headings: a heading owns all content
+ * up to the next heading of equal or higher level.
+ *
+ * The tree reflects heading hierarchy: an h2 is a child of the preceding h1,
+ * an h3 is a child of the preceding h2, etc.
+ */
+export function buildSectionTree(ast: Root, markdown: string): SectionNode[] {
+  const headings = extractHeadings(ast);
+
+  if (headings.length === 0) {
+    return [];
+  }
+
+  const roots: SectionNode[] = [];
+  const stack: SectionNode[] = [];
+
+  for (let i = 0; i < headings.length; i++) {
+    const heading = headings[i];
+    const nextHeading = headings[i + 1];
+
+    const headingStartOffset = heading.position!.start.offset!;
+    const bodyStartOffset = heading.position!.end.offset!;
+
+    const sectionEndOffset = nextHeading
+      ? nextHeading.position!.start.offset!
+      : markdown.length;
+
+    const bodyEndOffset = findBodyEnd(headings, i, sectionEndOffset);
+
+    const node: SectionNode = {
+      heading: {
+        text: toString(heading),
+        level: heading.depth,
+        position: heading.position!,
+      },
+      headingStartOffset: headingStartOffset,
+      bodyStartOffset,
+      bodyEndOffset,
+      sectionEndOffset,
+      children: [],
+      parent: null,
+      index: 0,
+      depth: 0,
+    };
+
+    while (stack.length > 0 && stack[stack.length - 1].heading.level >= heading.depth) {
+      stack.pop();
+    }
+
+    if (stack.length > 0) {
+      const parent = stack[stack.length - 1];
+      node.parent = parent;
+      node.index = parent.children.length;
+      node.depth = parent.depth + 1;
+      parent.children.push(node);
+    } else {
+      node.index = roots.length;
+      roots.push(node);
+    }
+
+    stack.push(node);
+  }
+
+  fixSectionEndOffsets(roots, markdown.length);
+
+  return roots;
+}
+
+function extractHeadings(ast: Root): Heading[] {
+  const headings: Heading[] = [];
+  for (const child of ast.children) {
+    if (child.type === 'heading' && child.position) {
+      headings.push(child);
+    }
+  }
+  return headings;
+}
+
+function findBodyEnd(headings: Heading[], currentIndex: number, sectionEnd: number): number {
+  const current = headings[currentIndex];
+  for (let i = currentIndex + 1; i < headings.length; i++) {
+    const next = headings[i];
+    if (next.depth <= current.depth) {
+      break;
+    }
+    return next.position!.start.offset!;
+  }
+  return sectionEnd;
+}
+
+/**
+ * Strip leading markdown heading markers (e.g. "## Foo" → "Foo").
+ * Agents frequently include these when addressing sections; since the
+ * level is structural, the markers are always redundant in addresses.
+ */
+function stripAddressMarkers(text: string): string {
+  return text.replace(/^#+\s+/, '');
+}
+
+/**
+ * Parse a raw address string into a typed SectionAddress.
+ *
+ * Rules:
+ * - If it's a JSON array of numbers → IndexAddress
+ * - If it contains " > " → PathAddress
+ * - If it contains glob characters (*, ?) → PatternAddress
+ * - Otherwise → TextAddress
+ *
+ * Leading heading markers (e.g. "## ") are silently stripped from text
+ * and path segments so that agents don't get stuck in retry loops.
+ */
+export function parseAddress(raw: string): SectionAddress {
+  const trimmed = raw.trim();
+
+  if (trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed) && parsed.every((n) => typeof n === 'number')) {
+        return { type: 'index', indices: parsed };
+      }
+    } catch {
+      // Not valid JSON, fall through
+    }
+  }
+
+  if (trimmed.includes(' > ')) {
+    return {
+      type: 'path',
+      segments: trimmed.split(' > ').map((s) => stripAddressMarkers(s.trim())),
+    };
+  }
+
+  if (/[*?]/.test(trimmed)) {
+    return { type: 'pattern', pattern: trimmed };
+  }
+
+  return { type: 'text', text: stripAddressMarkers(trimmed) };
+}
 
 class MarkdownParser implements DocumentParser {
   readonly extensions = ['.md', '.mdx'];

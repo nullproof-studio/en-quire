@@ -5,59 +5,6 @@ import { AddressResolutionError } from '../shared/errors.js';
 import { flattenTree } from './section-tree.js';
 
 /**
- * Strip leading markdown heading markers (e.g. "## Foo" → "Foo").
- * Agents frequently include these when addressing sections; since the
- * level is structural, the markers are always redundant in addresses.
- */
-function stripAddressMarkers(text: string): string {
-  return text.replace(/^#+\s+/, '');
-}
-
-/**
- * Parse a raw address string into a typed SectionAddress.
- *
- * Rules:
- * - If it's a JSON array of numbers → IndexAddress
- * - If it contains " > " → PathAddress
- * - If it contains glob characters (*, ?) → PatternAddress
- * - Otherwise → TextAddress
- *
- * Leading heading markers (e.g. "## ") are silently stripped from text
- * and path segments so that agents don't get stuck in retry loops.
- */
-export function parseAddress(raw: string): SectionAddress {
-  const trimmed = raw.trim();
-
-  // Try JSON array index first
-  if (trimmed.startsWith('[')) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (Array.isArray(parsed) && parsed.every((n) => typeof n === 'number')) {
-        return { type: 'index', indices: parsed };
-      }
-    } catch {
-      // Not valid JSON, fall through
-    }
-  }
-
-  // Path address (contains " > " separator)
-  if (trimmed.includes(' > ')) {
-    return {
-      type: 'path',
-      segments: trimmed.split(' > ').map((s) => stripAddressMarkers(s.trim())),
-    };
-  }
-
-  // Pattern address (contains glob characters)
-  if (/[*?]/.test(trimmed)) {
-    return { type: 'pattern', pattern: trimmed };
-  }
-
-  // Default: text address (strip heading markers)
-  return { type: 'text', text: stripAddressMarkers(trimmed) };
-}
-
-/**
  * Resolve a section address to one or more matching SectionNodes.
  *
  * - TextAddress: returns the first exact match (throws if none)

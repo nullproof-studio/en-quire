@@ -9,7 +9,6 @@ import {
 import type { YAMLMap, YAMLSeq, Pair, Scalar, Node as YAMLNode } from 'yaml';
 import type { DocumentParser } from './parser-registry.js';
 import type { SectionNode, SectionAddress } from '../shared/types.js';
-import { parseAddress as parseMarkdownAddress } from './section-address.js';
 import { ValidationError } from '../shared/errors.js';
 import { parserRegistry } from './parser-registry.js';
 import { yamlStrategy, yamlCapabilities } from './yaml-strategy.js';
