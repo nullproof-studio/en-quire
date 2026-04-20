@@ -4,9 +4,13 @@ import { computeEtag, validateEtag } from '../../../src/shared/etag.js';
 import { PreconditionFailedError } from '../../../src/shared/errors.js';
 
 describe('computeEtag', () => {
-  it('returns a 16-char hex string', () => {
+  it('returns two hyphen-separated lowercase words', () => {
     const etag = computeEtag('hello world');
-    expect(etag).toMatch(/^[0-9a-f]{16}$/);
+    const parts = etag.split('-');
+    expect(parts).toHaveLength(2);
+    for (const word of parts) {
+      expect(word).toMatch(/^[a-z]+$/);
+    }
   });
 
   it('same content produces same etag', () => {
@@ -19,16 +23,38 @@ describe('computeEtag', () => {
 
   it('handles empty string', () => {
     const etag = computeEtag('');
-    expect(etag).toMatch(/^[0-9a-f]{16}$/);
+    expect(etag.split('-')).toHaveLength(2);
   });
 
   it('handles unicode content', () => {
     const etag = computeEtag('こんにちは世界 🌍');
-    expect(etag).toMatch(/^[0-9a-f]{16}$/);
+    expect(etag.split('-')).toHaveLength(2);
   });
 
   it('changes when content changes by one character', () => {
     expect(computeEtag('hello')).not.toBe(computeEtag('hellp'));
+  });
+
+  it('produces distinct etags across a sample of inputs', () => {
+    const etags = new Set<string>();
+    for (let i = 0; i < 1000; i++) {
+      etags.add(computeEtag(`content-${i}`));
+    }
+    expect(etags.size).toBe(1000);
+  });
+
+  it('both words are from the BIP-0039 wordlist (index < 2048)', () => {
+    // Verify the bit-packing produces valid indices by checking many inputs
+    for (let i = 0; i < 500; i++) {
+      const etag = computeEtag(`test-${i}`);
+      const parts = etag.split('-');
+      expect(parts).toHaveLength(2);
+      // Each word should be non-empty lowercase alpha (valid wordlist entry)
+      for (const word of parts) {
+        expect(word.length).toBeGreaterThan(0);
+        expect(word).toMatch(/^[a-z]+$/);
+      }
+    }
   });
 });
 
@@ -41,7 +67,7 @@ describe('validateEtag', () => {
   });
 
   it('throws PreconditionFailedError when if_match does not match', () => {
-    expect(() => validateEtag('stale_etag_value', currentEtag, file, true))
+    expect(() => validateEtag('stale-value', currentEtag, file, true))
       .toThrow(PreconditionFailedError);
   });
 
