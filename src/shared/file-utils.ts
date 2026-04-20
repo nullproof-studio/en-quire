@@ -2,7 +2,7 @@
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, realpathSync, lstatSync } from 'node:fs';
 import { resolve, relative, join } from 'node:path';
 import { PathTraversalError, NotFoundError } from './errors.js';
-import { decodeAndNormalise, normaliseOutbound } from '../document/encoding.js';
+import { decodeAndNormalise, normaliseOutbound } from './encoding.js';
 import type { EncodingInfo, LineEnding } from './types.js';
 
 /**

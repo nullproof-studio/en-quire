@@ -20,6 +20,7 @@ This document contains findings from exploring the en-quire codebase structure.
 - [`errors.ts`](src/shared/errors.ts): Custom error classes (EnquireError, NotFoundError, AddressResolutionError, PermissionDeniedError, etc.)
 - [`logger.ts`](src/shared/logger.ts): Winston logger with console and optional file output
 - [`types.ts`](src/shared/types.ts): Core type definitions (SectionNode, SectionAddress variants, OutlineEntry, SearchResult, etc.)
+- [`encoding.ts`](src/shared/encoding.ts): Character encoding detection and normalization
 
 ## Git Integration ([`src/git/`](src/git/))
 
@@ -93,7 +94,6 @@ This document contains findings from exploring the en-quire codebase structure.
 - [`ast-utils.ts`](src/document/ast-utils.ts): AST utilities (toString, countCodePoints, offsetToLine)
 - [`serializer.ts`](src/document/serializer.ts): AST to markdown serialization (for validation)
 - [`parser-registry.ts`](src/document/parser-registry.ts): Registry for format-specific parsers
-- [`encoding.ts`](src/document/encoding.ts): Character encoding detection and normalization
 
 ### Search ([`src/search/`](src/search/))
 

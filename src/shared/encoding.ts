@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import type { EncodingInfo, LineEnding } from '../shared/types.js';
-import { EncodingError } from '../shared/errors.js';
+import type { EncodingInfo, LineEnding } from './types.js';
+import { EncodingError } from './errors.js';
 
 const BOM = '\uFEFF';
 

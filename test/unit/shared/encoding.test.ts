@@ -6,7 +6,7 @@ import {
   normaliseInbound,
   normaliseOutbound,
   decodeAndNormalise,
-} from '../../../src/document/encoding.js';
+} from '../../../src/shared/encoding.js';
 import { EncodingError } from '../../../src/shared/errors.js';
 
 describe('encoding', () => {
