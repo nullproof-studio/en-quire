@@ -19,11 +19,20 @@ import { jsonlStrategy, jsonlCapabilities } from './jsonl-strategy.js';
  * back to "<first-key>: <first 15 chars of value>" so the outline is
  * never empty.
  *
- * Append-new-record: no dedicated tool. Use doc_insert_section with
- * anchor = "[N-1]" and position = "after", where N is the record count
- * from doc_outline. If that composite becomes noisy in practice we can
- * add a doc_append_record convenience tool later.
+ * Append-new-record is idiomatic DOM: doc_insert_section with
+ * anchor = "__records" (the synthetic document-root section) and
+ * position = "child_end". The root always exists — even for an empty
+ * file — so a single call appends regardless of whether the file has
+ * zero or N existing records. Middle-insertion uses the same tool with
+ * anchor = "[N]" and position = "before" or "after".
  */
+
+/**
+ * Heading text for the synthetic document-root section. Exposed so agents
+ * can address it directly (e.g. doc_read_section reads the whole file;
+ * doc_insert_section with position="child_end" appends a new record).
+ */
+export const JSONL_ROOT_HEADING = '__records';
 
 /** Fields tried in order when building a section heading from a JSON record. */
 const IDENTIFIER_KEYS = ['name', 'id', 'description', 'title', 'role', 'type', 'kind'];
@@ -113,82 +122,60 @@ class JsonlParser implements DocumentParser {
   readonly capabilities = jsonlCapabilities;
 
   parse(content: string): SectionNode[] {
-    if (content.length === 0) return [];
+    const records = parseRecords(content);
 
-    const nodes: SectionNode[] = [];
-    let offset = 0;
-    let index = 0;
-    let lineNumber = 1;
-
-    while (offset < content.length) {
-      const nextNewline = content.indexOf('\n', offset);
-      const lineEnd = nextNewline === -1 ? content.length : nextNewline;
-      const lineContent = content.slice(offset, lineEnd);
-
-      // Skip blank lines silently — they're common in hand-edited jsonl
-      // files and shouldn't become phantom sections. validate() warns.
-      if (lineContent.trim().length === 0) {
-        offset = nextNewline === -1 ? content.length : nextNewline + 1;
-        lineNumber += 1;
-        continue;
-      }
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(lineContent);
-      } catch {
-        // Surface via validate(); here, render the raw line as the heading
-        // so doc_outline still shows something and the agent can locate it.
-        parsed = { __parseError: true, raw: lineContent };
-      }
-
-      const headingText = buildJsonlHeading(parsed, index);
-      const bodyStart = offset;
-      const bodyEnd = lineEnd;
-      const sectionEnd = nextNewline === -1 ? content.length : nextNewline + 1;
-
-      nodes.push({
-        heading: {
-          text: headingText,
-          level: 1,
-          position: {
-            start: { line: lineNumber, column: 1, offset: bodyStart },
-            end: { line: lineNumber, column: lineContent.length + 1, offset: bodyEnd },
-          },
+    // Always wrap records in a synthetic document-root section at level 0,
+    // even when the file is empty. This gives agents a stable parent to
+    // anchor doc_insert_section({position: "child_end"}) against for
+    // appending a new record — the same idiom as DOM's append-as-child,
+    // and the most common jsonl edit pattern.
+    const root: SectionNode = {
+      heading: {
+        text: JSONL_ROOT_HEADING,
+        level: 0,
+        position: {
+          start: { line: 1, column: 1, offset: 0 },
+          end: { line: 1, column: 1, offset: 0 },
         },
-        headingStartOffset: bodyStart,
-        bodyStartOffset: bodyStart,
-        bodyEndOffset: bodyEnd,
-        sectionEndOffset: sectionEnd,
-        children: [],
-        parent: null,
-        index,
-        depth: 0,
-      });
+      },
+      headingStartOffset: 0,
+      bodyStartOffset: 0,
+      bodyEndOffset: content.length,
+      sectionEndOffset: content.length,
+      children: records,
+      parent: null,
+      index: 0,
+      depth: 0,
+    };
 
-      offset = sectionEnd;
-      index += 1;
-      lineNumber += 1;
+    for (let i = 0; i < records.length; i++) {
+      records[i].parent = root;
+      records[i].index = i;
+      records[i].depth = 1;
     }
 
-    return nodes;
+    return [root];
   }
 
   parseAddress(raw: string): SectionAddress {
     const trimmed = raw.trim();
 
-    // Index: [5]
+    // Index: [5] — translate through the synthetic root so tree walking
+    // finds records as root.children[N] while agents keep the flat
+    // [N] mental model.
     if (/^\[\d+\]$/.test(trimmed)) {
       const idx = parseInt(trimmed.slice(1, -1), 10);
-      return { type: 'index', indices: [idx] };
+      return { type: 'index', indices: [0, idx] };
     }
 
-    // JSON-array index (e.g. "[0]" in yaml's style, or richer index paths)
+    // JSON-array index. If the first element is 0 (targeting the synthetic
+    // root or a path through it), leave as-is; otherwise prepend 0.
     if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
       try {
         const parsed = JSON.parse(trimmed);
         if (Array.isArray(parsed) && parsed.every((n) => typeof n === 'number')) {
-          return { type: 'index', indices: parsed };
+          const indices = parsed[0] === 0 ? parsed : [0, ...parsed];
+          return { type: 'index', indices };
         }
       } catch {
         // Fall through
@@ -203,8 +190,8 @@ class JsonlParser implements DocumentParser {
     }
 
     // Default: text address — matches the full heading text literally.
-    // Most jsonl callers will prefer [N] index addressing; this is the
-    // fall-through for agents that paste a heading line from doc_outline.
+    // Resolves __records (synthetic root) or a full heading line pasted
+    // from doc_outline.
     return { type: 'text', text: trimmed };
   }
 
@@ -224,6 +211,70 @@ class JsonlParser implements DocumentParser {
     });
     return warnings;
   }
+}
+
+/**
+ * Scan the content line-by-line and produce one SectionNode per valid record.
+ * Blank lines are silently skipped (validate() flags them separately).
+ * Malformed lines still produce a section with a best-effort heading so
+ * doc_outline isn't left incomplete; parse errors surface through validate().
+ */
+function parseRecords(content: string): SectionNode[] {
+  if (content.length === 0) return [];
+
+  const nodes: SectionNode[] = [];
+  let offset = 0;
+  let index = 0;
+  let lineNumber = 1;
+
+  while (offset < content.length) {
+    const nextNewline = content.indexOf('\n', offset);
+    const lineEnd = nextNewline === -1 ? content.length : nextNewline;
+    const lineContent = content.slice(offset, lineEnd);
+
+    if (lineContent.trim().length === 0) {
+      offset = nextNewline === -1 ? content.length : nextNewline + 1;
+      lineNumber += 1;
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(lineContent);
+    } catch {
+      parsed = { __parseError: true, raw: lineContent };
+    }
+
+    const headingText = buildJsonlHeading(parsed, index);
+    const bodyStart = offset;
+    const bodyEnd = lineEnd;
+    const sectionEnd = nextNewline === -1 ? content.length : nextNewline + 1;
+
+    nodes.push({
+      heading: {
+        text: headingText,
+        level: 1,
+        position: {
+          start: { line: lineNumber, column: 1, offset: bodyStart },
+          end: { line: lineNumber, column: lineContent.length + 1, offset: bodyEnd },
+        },
+      },
+      headingStartOffset: bodyStart,
+      bodyStartOffset: bodyStart,
+      bodyEndOffset: bodyEnd,
+      sectionEndOffset: sectionEnd,
+      children: [],
+      parent: null,
+      index,
+      depth: 0,
+    });
+
+    offset = sectionEnd;
+    index += 1;
+    lineNumber += 1;
+  }
+
+  return nodes;
 }
 
 parserRegistry.register(new JsonlParser());

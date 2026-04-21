@@ -66,49 +66,78 @@ describe('buildJsonlHeading heuristic', () => {
 });
 
 describe('parse()', () => {
-  it('returns one section per line for the ChatML fixture', () => {
+  it('wraps records in a synthetic __records root at level 0', () => {
     const content = loadFixture('chat.jsonl');
     const tree = parser.parse(content);
-    expect(tree.length).toBe(4);
-    expect(tree.map((n) => n.heading.level)).toEqual([1, 1, 1, 1]);
-    expect(tree[0].heading.text).toBe('[0] system: You are a helpf…');
-    expect(tree[1].heading.text).toBe('[1] user: Hello how are y…');
-    expect(tree[2].heading.text).toBe('[2] assistant: I am doing well…');
-    expect(tree[3].heading.text).toBe('[3] user: Great, can you …');
+    expect(tree.length).toBe(1);
+    expect(tree[0].heading.text).toBe('__records');
+    expect(tree[0].heading.level).toBe(0);
+    expect(tree[0].children.length).toBe(4);
   });
 
-  it('returns empty tree for empty content', () => {
-    expect(parser.parse('')).toEqual([]);
+  it('builds one child section per record with auto-coalesced headings', () => {
+    const content = loadFixture('chat.jsonl');
+    const root = parser.parse(content)[0];
+    const records = root.children;
+    expect(records.map((r) => r.heading.level)).toEqual([1, 1, 1, 1]);
+    expect(records[0].heading.text).toBe('[0] system: You are a helpf…');
+    expect(records[1].heading.text).toBe('[1] user: Hello how are y…');
+    expect(records[2].heading.text).toBe('[2] assistant: I am doing well…');
+    expect(records[3].heading.text).toBe('[3] user: Great, can you …');
+  });
+
+  it('records point at the synthetic root as their parent', () => {
+    const content = loadFixture('chat.jsonl');
+    const root = parser.parse(content)[0];
+    for (const rec of root.children) {
+      expect(rec.parent).toBe(root);
+      expect(rec.depth).toBe(1);
+    }
+  });
+
+  it('returns a synthetic root with zero children for empty content', () => {
+    const tree = parser.parse('');
+    expect(tree.length).toBe(1);
+    expect(tree[0].heading.text).toBe('__records');
+    expect(tree[0].children).toEqual([]);
+    expect(tree[0].sectionEndOffset).toBe(0);
   });
 
   it('skips blank lines without creating phantom sections', () => {
     const content = '{"a":1}\n\n{"b":2}\n\n\n';
     const tree = parser.parse(content);
-    expect(tree.length).toBe(2);
+    expect(tree[0].children.length).toBe(2);
   });
 
-  it('still produces a section for a malformed JSON line (heading flags the error)', () => {
+  it('still produces a record section for a malformed JSON line (heading flags the error)', () => {
     const content = '{"a":1}\n{broken\n{"b":2}\n';
     const tree = parser.parse(content);
-    expect(tree.length).toBe(3);
-    // The malformed line's heading contains the raw content fallback
-    expect(tree[1].heading.text).toContain('[1]');
+    expect(tree[0].children.length).toBe(3);
+    expect(tree[0].children[1].heading.text).toContain('[1]');
   });
 
-  it('computes byte offsets that cover exactly the record line including its trailing newline', () => {
+  it('record offsets cover each line including its trailing newline', () => {
     const content = '{"a":1}\n{"b":2}\n';
-    const tree = parser.parse(content);
-    expect(tree[0].headingStartOffset).toBe(0);
-    expect(tree[0].bodyEndOffset).toBe(7);        // up to, not including, \n
-    expect(tree[0].sectionEndOffset).toBe(8);     // past \n
-    expect(tree[1].headingStartOffset).toBe(8);
-    expect(tree[1].sectionEndOffset).toBe(16);
+    const records = parser.parse(content)[0].children;
+    expect(records[0].headingStartOffset).toBe(0);
+    expect(records[0].bodyEndOffset).toBe(7);        // up to, not including, \n
+    expect(records[0].sectionEndOffset).toBe(8);     // past \n
+    expect(records[1].headingStartOffset).toBe(8);
+    expect(records[1].sectionEndOffset).toBe(16);
+  });
+
+  it('root sectionEndOffset equals content length (so child_end appends at EOF)', () => {
+    const content = '{"a":1}\n{"b":2}\n';
+    const root = parser.parse(content)[0];
+    expect(root.sectionEndOffset).toBe(content.length);
   });
 });
 
 describe('parseAddress()', () => {
-  it('parses [N] as an index address', () => {
-    expect(parser.parseAddress('[2]')).toEqual({ type: 'index', indices: [2] });
+  it('parses [N] as an index address through the synthetic root', () => {
+    // Translated from the user-facing [N] to [0, N] internally so tree
+    // walking finds records as children of the synthetic __records root.
+    expect(parser.parseAddress('[2]')).toEqual({ type: 'index', indices: [0, 2] });
   });
 
   it('parses [*] glob-style addresses as patterns', () => {
@@ -149,33 +178,88 @@ describe('round-trip via section-ops core (replaceSection)', () => {
 
     const original = '{"role":"system","content":"old"}\n{"role":"user","content":"hi"}\n';
     const tree = parser.parse(original);
+    // parseAddress('[0]') resolves through the synthetic root to the first record
     const updated = replaceSection(
       original,
       tree,
-      { type: 'index', indices: [0] },
+      parser.parseAddress('[0]'),
       '{"role":"system","content":"new"}',
       false,
       jsonlStrategy,
     );
 
-    // Re-parse the updated file and verify both records round-trip cleanly.
-    const retree = parser.parse(updated);
-    expect(retree.length).toBe(2);
-    expect(retree[0].heading.text).toContain('system');
-    expect(retree[1].heading.text).toContain('user');
+    const reRoot = parser.parse(updated)[0];
+    expect(reRoot.children.length).toBe(2);
+    expect(reRoot.children[0].heading.text).toContain('system');
+    expect(reRoot.children[1].heading.text).toContain('user');
 
-    // The underlying JSON for record 0 is the new content.
-    const newFirstLine = updated.slice(retree[0].bodyStartOffset, retree[0].bodyEndOffset);
+    const newFirstLine = updated.slice(reRoot.children[0].bodyStartOffset, reRoot.children[0].bodyEndOffset);
     expect(JSON.parse(newFirstLine)).toEqual({ role: 'system', content: 'new' });
   });
 });
 
+describe('append via insertSection child_end against __records (the append idiom)', () => {
+  it('appends a new record at EOF on a populated file', async () => {
+    const { insertSection } = await import('@nullproof-studio/en-core');
+    const { jsonlStrategy } = await import('../../../src/parsers/jsonl-strategy.js');
+
+    const original = '{"role":"user","content":"hi"}\n{"role":"assistant","content":"hello"}\n';
+    const tree = parser.parse(original);
+    const updated = insertSection(
+      original,
+      tree,
+      parser.parseAddress('__records'),
+      'child_end',
+      '',                                           // heading: ignored by jsonl-strategy
+      '{"role":"user","content":"thanks"}',         // content: the new JSON record
+      jsonlStrategy,
+    );
+
+    const reRoot = parser.parse(updated)[0];
+    expect(reRoot.children.length).toBe(3);
+    const last = reRoot.children[2];
+    const lastLine = updated.slice(last.bodyStartOffset, last.bodyEndOffset);
+    expect(JSON.parse(lastLine)).toEqual({ role: 'user', content: 'thanks' });
+  });
+
+  it('appends the first record to a previously empty file', async () => {
+    const { insertSection } = await import('@nullproof-studio/en-core');
+    const { jsonlStrategy } = await import('../../../src/parsers/jsonl-strategy.js');
+
+    const original = '';
+    const tree = parser.parse(original);
+    const updated = insertSection(
+      original,
+      tree,
+      parser.parseAddress('__records'),
+      'child_end',
+      '',
+      '{"role":"user","content":"first"}',
+      jsonlStrategy,
+    );
+
+    const reRoot = parser.parse(updated)[0];
+    expect(reRoot.children.length).toBe(1);
+    const only = reRoot.children[0];
+    const onlyLine = updated.slice(only.bodyStartOffset, only.bodyEndOffset);
+    expect(JSON.parse(onlyLine)).toEqual({ role: 'user', content: 'first' });
+  });
+});
+
 describe('address resolution via resolveAddress() / resolveSingleSection()', () => {
-  it('resolves [N] index to the correct record', () => {
+  it('resolves [N] index to the correct record through the synthetic root', () => {
     const content = loadFixture('chat.jsonl');
     const tree = parser.parse(content);
-    const node = resolveSingleSection(tree, { type: 'index', indices: [1] });
+    const node = resolveSingleSection(tree, parser.parseAddress('[1]'));
     expect(node.heading.text).toBe('[1] user: Hello how are y…');
+  });
+
+  it('resolves "__records" text address to the synthetic root', () => {
+    const content = loadFixture('chat.jsonl');
+    const tree = parser.parse(content);
+    const node = resolveSingleSection(tree, parser.parseAddress('__records'));
+    expect(node.heading.text).toBe('__records');
+    expect(node.children.length).toBe(4);
   });
 
   it('resolves a pattern to multiple records', () => {

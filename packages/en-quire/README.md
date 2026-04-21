@@ -18,7 +18,7 @@ Provides the `enquire` binary.
 |---|---|---|
 | `.md`, `.mdx` | markdown | Section tree from ATX headings. Full TOC, frontmatter, GFM. |
 | `.yaml`, `.yml` | yaml | Keys are sections. Dot-path + bracket addressing for `doc_set_value`. |
-| `.jsonl`, `.ndjson` | jsonl | One section per record. Heading auto-coalesced from identifier fields (`name`, `id`, `description`, `title`, `role`, `type`, `kind`); falls back to `<firstKey>: <snippet>`. Each write re-validates every line. |
+| `.jsonl`, `.ndjson` | jsonl | Records wrapped in a synthetic `__records` root so `doc_insert_section({ anchor: "__records", position: "child_end" })` appends a new record (works on empty files too). Heading auto-coalesced from identifier fields (`name`, `id`, `description`, `title`, `role`, `type`, `kind`); falls back to `<firstKey>: <snippet>`. Each write re-validates every line. |
 
 All parsers implement the same `DocumentParser` interface, so every `doc_*` tool works across formats — `doc_outline`, `doc_read_section`, `doc_replace_section`, `doc_insert_section`, `doc_delete_section`, `doc_search`, `doc_proposals_*`, etc.
 

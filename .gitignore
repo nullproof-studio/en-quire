@@ -41,6 +41,10 @@ npm-debug.log*
 test-local/
 en-quire.config.yaml
 en-scribe.config.yaml
+
+# Ad-hoc test data dropped into fixtures/ during manual testing.
+# Committed fixtures are explicitly listed; add new ones as you need them.
+test/fixtures/docs/harmonic_reasoning_v1.jsonl
 a2a-poc/
 docs/session-memory/
 en-quire-repo-setup.md
