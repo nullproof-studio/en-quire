@@ -7,6 +7,14 @@
   "bin": {
     "enscribe": "dist/bin.js"
   },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "MIT",
   "author": "Nullproof Studio",
   "repository": {
