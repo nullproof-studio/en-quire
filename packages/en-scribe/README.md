@@ -18,7 +18,7 @@ Two primitives — `text_find`, `text_replace_range` — can express any edit. T
 
 | Layer | Tool |
 |---|---|
-| Read | `text_read`, `text_find`, `text_list` |
+| Read | `text_read`, `text_find`, `text_head`, `text_tail`, `text_list` |
 | Write primitives | `text_replace_range`, `text_create`, `text_append` |
 | Sugar | `text_edit`, `text_insert_at_anchor` |
 | Lifecycle | `text_rename`, `text_delete` |

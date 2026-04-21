@@ -3,6 +3,10 @@ import type { ToolRegistry } from '@nullproof-studio/en-core';
 import { TextReadSchema, handleTextRead } from './tools/read/text-read.js';
 import { TextFindSchema, handleTextFind } from './tools/read/text-find.js';
 import { TextListSchema, handleTextList } from './tools/read/text-list.js';
+import {
+  TextHeadSchema, handleTextHead,
+  TextTailSchema, handleTextTail,
+} from './tools/read/text-head-tail.js';
 import { TextReplaceRangeSchema, handleTextReplaceRange } from './tools/write/text-replace-range.js';
 import { TextCreateSchema, handleTextCreate } from './tools/write/text-create.js';
 import { TextAppendSchema, handleTextAppend } from './tools/write/text-append.js';
@@ -41,6 +45,18 @@ export function registerEnScribeTools(registry: ToolRegistry): void {
     description: 'Find all literal occurrences of a substring. Not a regex — matches are literal. Supports case_sensitive (default true) and whole_word (default false). Returns every match with line, column, byte offset, the actual matched text, and surrounding context. Use before text_replace_range to pick a specific match by line, or to debug a text_edit multi-match error.',
     schema: TextFindSchema.shape,
     handler: handleTextFind,
+  });
+  registry.register({
+    name: 'text_head',
+    description: 'Read the first N lines of a file (default 10). Equivalent to `head -n N`. Returns the content along with the line range covered and the file\'s total line count.',
+    schema: TextHeadSchema.shape,
+    handler: handleTextHead,
+  });
+  registry.register({
+    name: 'text_tail',
+    description: 'Read the last N lines of a file (default 10). Equivalent to `tail -n N`. Returns the content along with the line range covered and the file\'s total line count. Useful for inspecting the end of log files.',
+    schema: TextTailSchema.shape,
+    handler: handleTextTail,
   });
 
   // Lifecycle
