@@ -27,6 +27,7 @@ import type {
 // Register format parsers (side-effect imports)
 import './parsers/markdown-parser.js';
 import './parsers/yaml-parser.js';
+import './parsers/jsonl-parser.js';
 import { registerEnQuireTools } from './plugin.js';
 
 interface ServerDependencies {

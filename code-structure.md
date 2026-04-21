@@ -103,7 +103,7 @@ Public re-export surface. Both en-quire and en-scribe import exclusively via `@n
 
 Location: [`packages/en-quire/`](packages/en-quire/). Publishes the `enquire` bin.
 
-- [`src/parsers/`](packages/en-quire/src/parsers/) — `parser.ts` (unified/remark wrapper), `markdown-parser.ts`, `markdown-strategy.ts`, `yaml-parser.ts`, `yaml-strategy.ts`. Each parser self-registers with the core `parserRegistry` on side-effect import.
+- [`src/parsers/`](packages/en-quire/src/parsers/) — `parser.ts` (unified/remark wrapper), `markdown-parser.ts`, `markdown-strategy.ts`, `yaml-parser.ts`, `yaml-strategy.ts`, `jsonl-parser.ts` (record-per-line with auto-coalesced headings), `jsonl-strategy.ts`. Each parser self-registers with the core `parserRegistry` on side-effect import.
 - [`src/tools/`](packages/en-quire/src/tools/) — `read/`, `write/`, `search/`, `status/`, `governance/`, `admin/`. Section-aware handlers; the section-op tools thread `parser.ops` through to `section-ops-core`. `status/` and `governance/` are thin wrappers over `@nullproof-studio/en-core` so that tests and the tool-registration guard still see an en-quire-named handler.
 - [`src/plugin.ts`](packages/en-quire/src/plugin.ts) — `registerEnQuireTools(registry)`
 - [`src/bin.ts`](packages/en-quire/src/bin.ts) — entry point; parses args, loads config, opens db, registers parsers, attaches registry, starts stdio or streamable-http transport.
