@@ -14,13 +14,31 @@ const DEFAULT_LOGGING: LoggingConfig = {
 };
 
 let _logger: Logger | undefined;
+let _productName = 'en-quire';
+
+/**
+ * Name of the binary currently running (e.g. "en-quire", "en-scribe"). Used
+ * as the stderr log prefix and the leading tag on commit messages and
+ * proposal-approval merge messages so git history records which product
+ * produced each commit.
+ *
+ * Each bin sets this via initLogger(config, name) at startup.
+ */
+export function getProductName(): string {
+  return _productName;
+}
 
 /**
  * Initialise the global logger.
  * Call once at startup. If `config.dir` is set, logs are also written to files
  * in that directory (combined.log + error.log).
+ *
+ * `name` is the tag that prefixes each stderr line (e.g. "[en-quire]",
+ * "[en-scribe]"). Each bin should pass its own so operators can tell which
+ * process produced a line when the two MCPs run side by side.
  */
-export function initLogger(config: LoggingConfig = DEFAULT_LOGGING): Logger {
+export function initLogger(config: LoggingConfig = DEFAULT_LOGGING, name = 'en-quire'): Logger {
+  _productName = name;
   const logTransports: transports.StreamTransportInstance[] = [];
 
   // Always log to stderr (keeps stdout clean for stdio MCP transport)
@@ -31,7 +49,7 @@ export function initLogger(config: LoggingConfig = DEFAULT_LOGGING): Logger {
         format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         format.printf(({ timestamp, level, message, ...meta }) => {
           const metaStr = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : '';
-          return `[en-quire] ${timestamp} ${level}: ${message}${metaStr}`;
+          return `[${name}] ${timestamp} ${level}: ${message}${metaStr}`;
         }),
       ),
     }),

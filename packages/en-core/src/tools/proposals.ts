@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { ToolContext } from './context.js';
 import { requirePermission } from '../rbac/permissions.js';
 import { GitRequiredError } from '../shared/errors.js';
+import { getProductName } from '../shared/logger.js';
 import type { GitOperations } from '../git/operations.js';
 
 /**
@@ -140,7 +141,7 @@ export async function handleProposalApprove(
   const { name: root, git } = findGitRoot(ctx, args.root);
   const { file } = parseProposalBranch(args.branch, root);
 
-  const mergeMessage = args.message ?? `[en-quire] Approve proposal: ${args.branch}`;
+  const mergeMessage = args.message ?? `[${getProductName()}] Approve proposal: ${args.branch}`;
   await git.mergeBranch(args.branch, mergeMessage);
   await git.deleteBranch(args.branch);
 

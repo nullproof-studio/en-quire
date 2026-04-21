@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
+import { getProductName } from '../shared/logger.js';
 
 export interface CommitMessageParams {
   operation: string;
@@ -10,12 +11,14 @@ export interface CommitMessageParams {
 }
 
 /**
- * Build a structured commit message per the en-quire spec format.
+ * Build a structured commit message per the spec format. The leading tag
+ * is the active product name (en-quire or en-scribe), set by whichever
+ * bin is running, so git history records which binary produced each commit.
  */
 export function buildCommitMessage(params: CommitMessageParams): string {
   const { operation, target, file, caller, mode, userMessage } = params;
 
-  const summary = `[en-quire] ${operation} "${target}" in ${file}`;
+  const summary = `[${getProductName()}] ${operation} "${target}" in ${file}`;
   const metadata = [
     `Caller: ${caller}`,
     `Operation: ${operation}`,

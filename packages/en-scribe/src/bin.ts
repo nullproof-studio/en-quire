@@ -67,7 +67,7 @@ async function main() {
 
   const config = loadConfig(configPath);
 
-  initLogger(config.logging);
+  initLogger(config.logging, 'en-scribe');
   const log = getLogger();
 
   const db = openDatabase(config.database);

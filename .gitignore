@@ -40,6 +40,7 @@ npm-debug.log*
 
 test-local/
 en-quire.config.yaml
+en-scribe.config.yaml
 a2a-poc/
 docs/session-memory/
 en-quire-repo-setup.md

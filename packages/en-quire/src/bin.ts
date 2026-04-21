@@ -70,7 +70,7 @@ async function main() {
   const config = loadConfig(configPath);
 
   // Initialise logging
-  initLogger(config.logging);
+  initLogger(config.logging, 'en-quire');
   const log = getLogger();
 
   // Open search database (shared across all roots)
