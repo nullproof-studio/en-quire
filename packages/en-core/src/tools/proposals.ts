@@ -4,16 +4,16 @@ import type { ToolContext } from './context.js';
 import { requirePermission } from '../rbac/permissions.js';
 import { GitRequiredError, ValidationError } from '../shared/errors.js';
 import { getProductName } from '../shared/logger.js';
+import { parseProposalBranch } from '../git/commit-message.js';
 import type { GitOperations } from '../git/operations.js';
 
 /**
  * Format-agnostic proposal governance handlers.
  *
  * Shared by en-quire (registered as doc_proposals_*) and en-scribe
- * (registered as text_proposals_*). Branch reconstruction no longer
- * assumes a markdown extension — buildProposalBranch preserves the
- * original file extension, so parsing a branch back gives the exact
- * path regardless of the binary that created it.
+ * (registered as text_proposals_*). Branch names encode paths with
+ * literal `/` separators so the branch → file round-trip is lossless
+ * regardless of the binary that created the proposal.
  */
 
 function findGitRoot(ctx: ToolContext, rootName?: string): { name: string; git: GitOperations } {
@@ -32,16 +32,6 @@ function findGitRoot(ctx: ToolContext, rootName?: string): { name: string; git: 
   }
 
   throw new GitRequiredError('Proposals (no git-enabled roots)');
-}
-
-/** Reconstruct a file path from a propose/ branch name. Format: propose/{caller}/{path-with-dashes}/{timestamp}. */
-function parseProposalBranch(branch: string, root: string): { caller: string; file: string; timestamp: string } {
-  const parts = branch.replace('propose/', '').split('/');
-  const caller = parts[0];
-  const timestamp = parts[parts.length - 1];
-  const fileParts = parts.slice(1, -1);
-  const file = `${root}/${fileParts.join('/')}`;
-  return { caller, file, timestamp };
 }
 
 async function collectProposals(ctx: ToolContext) {

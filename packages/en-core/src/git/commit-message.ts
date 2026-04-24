@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { getProductName } from '../shared/logger.js';
+import { ValidationError } from '../shared/errors.js';
 
 export interface CommitMessageParams {
   operation: string;
@@ -35,19 +36,41 @@ export function buildCommitMessage(params: CommitMessageParams): string {
 
 /**
  * Build a branch name for a proposal.
- * Format: propose/{caller}/{document-path-with-extension}/{timestamp}
+ * Format: propose/{caller}/{document-path}/{timestamp}
  *
- * The file extension is preserved in the branch name so that extension-
- * agnostic consumers (en-quire for md/yaml, en-scribe for plain text)
- * can reconstruct the exact file path without having to guess which
- * suffix the proposal operates on.
+ * Path separators are kept as literal `/` — git allows arbitrary slashes
+ * in branch names, and a lossless encoding means the branch → path
+ * round-trip works for any file name, including paths that already
+ * contain hyphens (e.g. `skills/triage-agent.md`). The timestamp segment
+ * is a fixed-length ISO-compact form (YYYYMMDDTHHMMSSZ) that serves as
+ * the parse anchor — everything between the caller and the timestamp
+ * is the file path.
  */
 export function buildProposalBranch(caller: string, filePath: string): string {
   const timestamp = new Date().toISOString()
     .replace(/[-:]/g, '')
     .replace(/\.\d+Z$/, 'Z');
 
-  const sanitisedPath = filePath.replace(/\//g, '-');
+  return `propose/${caller}/${filePath}/${timestamp}`;
+}
 
-  return `propose/${caller}/${sanitisedPath}/${timestamp}`;
+const PROPOSAL_BRANCH_RE = /^propose\/([^/]+)\/(.+)\/(\d{8}T\d{6}Z)$/;
+
+/**
+ * Parse a proposal branch name back into its parts.
+ * The timestamp's fixed format anchors the parse: caller is the first
+ * segment, timestamp is the last, and the file path is whatever sits
+ * between. Passing a branch name not produced by `buildProposalBranch`
+ * throws `ValidationError`.
+ */
+export function parseProposalBranch(
+  branch: string,
+  root: string,
+): { caller: string; file: string; timestamp: string } {
+  const match = branch.match(PROPOSAL_BRANCH_RE);
+  if (!match) {
+    throw new ValidationError(`Malformed proposal branch name: ${branch}`);
+  }
+  const [, caller, filePath, timestamp] = match;
+  return { caller, file: `${root}/${filePath}`, timestamp };
 }
