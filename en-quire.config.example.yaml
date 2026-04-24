@@ -43,6 +43,12 @@ require_read_before_write: true     # default: true. Set false to disable.
 transport: stdio                    # stdio | streamable-http
 port: 3100                          # Port for streamable-http transport
 
+# HTTP bind interface. Defaults to loopback so flipping to streamable-http
+# doesn't accidentally expose the server on every interface. Override to
+# "0.0.0.0" only if you intend network exposure — in that case every
+# caller MUST have a strong `key` (enforced at startup, min 32 chars).
+listen_host: "127.0.0.1"
+
 # Search configuration
 search:
   fulltext: true                    # Full-text search via SQLite FTS5 (always on)

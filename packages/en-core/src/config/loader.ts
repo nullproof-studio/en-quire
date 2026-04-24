@@ -58,6 +58,42 @@ export function loadConfig(configPath: string): ResolvedConfig {
         `Missing keys for caller(s): ${missing.join(', ')}.`,
       );
     }
+
+    // Minimum key strength — reject obvious test/placeholder values that
+    // would otherwise pass the "non-empty string" check. 32 chars isn't a
+    // cryptographic guarantee, but it rules out "x", "secret", "changeme"
+    // and the like, which is the class of misconfiguration this catches.
+    const MIN_KEY_LENGTH = 32;
+    const tooShort = Object.entries(validated.callers)
+      .filter(([, caller]) => caller.key && caller.key.length < MIN_KEY_LENGTH)
+      .map(([id, caller]) => `${id} (${caller.key?.length ?? 0} chars)`);
+    if (tooShort.length > 0) {
+      throw new ValidationError(
+        `HTTP transport requires caller keys to be at least ${MIN_KEY_LENGTH} characters. ` +
+        `Weak keys: ${tooShort.join(', ')}. Use crypto.randomBytes(24).toString('base64') ` +
+        `or similar to generate tokens.`,
+      );
+    }
+
+    // Reject obvious placeholder values even if they meet the length bar —
+    // padding "changeme" to 32 chars is a user error, not a legitimate key.
+    const placeholderPatterns = [
+      /^change[_-]?me/i,
+      /^placeholder/i,
+      /^test[_-]?token/i,
+      /^secret$/i,
+      /^token$/i,
+      /^(.)\1+$/, // all the same character
+    ];
+    const placeholder = Object.entries(validated.callers)
+      .filter(([, caller]) => caller.key && placeholderPatterns.some((p) => p.test(caller.key!)))
+      .map(([id]) => id);
+    if (placeholder.length > 0) {
+      throw new ValidationError(
+        `HTTP transport: caller key(s) look like placeholder values: ${placeholder.join(', ')}. ` +
+        `Generate real tokens before enabling HTTP transport.`,
+      );
+    }
   }
 
   // Resolve document roots
@@ -86,6 +122,7 @@ export function loadConfig(configPath: string): ResolvedConfig {
     database,
     transport: validated.transport,
     port: validated.port,
+    listen_host: validated.listen_host,
     search: {
       fulltext: validated.search.fulltext,
       sync_on_start: validated.search.sync_on_start,
