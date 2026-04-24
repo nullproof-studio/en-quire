@@ -63,15 +63,27 @@ logging:
 # Caller permissions (RBAC)
 # Each caller has a unique ID, optional API key, and scoped permissions.
 # Paths use root-prefixed notation: "docs/**", "skills/triage.md"
+#
+# Default posture is least privilege: read + search only. Grant write,
+# propose, or approve explicitly per caller and per scope. Broad `**`
+# grants plus a shared `default` caller are convenient for stdio /
+# single-user setups but dangerous under HTTP transport — any
+# unauthenticated request would inherit those rights. Under HTTP, every
+# caller MUST also set `key: "sk-..."` (enforced at server startup).
 callers:
   default:
     scopes:
       - path: "**"
         permissions:
           - read
-          - write
-          - propose
           - search
+
+  # Example: broad-access editor (stdio only — do not copy verbatim into
+  # an HTTP deployment without also setting `key`)
+  # editor:
+  #   scopes:
+  #     - path: "**"
+  #       permissions: [read, write, propose, search]
 
   # Example: read-only analyst
   # analyst:

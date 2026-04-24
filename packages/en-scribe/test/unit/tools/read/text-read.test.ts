@@ -38,7 +38,7 @@ beforeEach(() => {
 
   const caller: CallerIdentity = {
     id: 'test',
-    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'admin', 'exec'] }],
+    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'exec'] }],
   };
 
   ctx = { config, roots: {}, caller, db: null as never };
