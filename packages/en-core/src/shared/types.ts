@@ -152,6 +152,7 @@ export interface RootGitConfig {
   remote: string | null;
   pr_hook: string | null;
   default_branch: string | null; // null = detect from origin HEAD / local branches
+  push_proposals: boolean; // push proposal branches to `remote` after commit
 }
 
 /** A resolved document root */

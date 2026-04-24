@@ -44,6 +44,7 @@ const RootGitSchema = z.object({
   remote: z.string().nullable().default(null),
   pr_hook: z.string().nullable().default(null),
   default_branch: z.string().nullable().default(null), // null = detect from origin HEAD / local branches
+  push_proposals: z.boolean().default(false), // push proposal branches to `remote` after commit
 });
 
 const DocumentRootSchema = z.object({

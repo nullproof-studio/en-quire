@@ -71,6 +71,7 @@ export async function handleTextRename(
 
   let branch: string | undefined;
   const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
+  const pushWarnings: string[] = [];
 
   try {
     if (mode === 'propose' && git?.available) {
@@ -94,6 +95,11 @@ export async function handleTextRename(
         [srcResolved.relativePath, destResolved.relativePath],
         commitMsg,
       );
+
+      if (mode === 'propose' && branch) {
+        const pushResult = await git.pushProposalBranch(branch);
+        if (pushResult.warning) pushWarnings.push(pushResult.warning);
+      }
     }
 
     removeFromIndex(ctx.db, srcResolved.prefixedPath);
@@ -106,6 +112,7 @@ export async function handleTextRename(
       branch,
       commit,
       etag: sourceEtag,
+      ...(pushWarnings.length > 0 && { warnings: pushWarnings }),
     };
   } finally {
     if (mode === 'propose' && originalBranch && git?.available) {

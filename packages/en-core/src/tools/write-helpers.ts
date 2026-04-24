@@ -108,6 +108,19 @@ export async function executeWrite(
       });
       commit = await git.commitFile(resolved.relativePath, commitMsg);
       logger.debug('write:git-committed', { file: params.file, commit });
+
+      // Push proposal branches to the configured remote (no-op unless
+      // git.remote + git.push_proposals are both set on the root).
+      if (mode === 'propose' && branch) {
+        const pushResult = await git.pushProposalBranch(branch);
+        if (pushResult.pushed) {
+          logger.info('write:pushed', { file: params.file, branch });
+        }
+        if (pushResult.warning) {
+          logger.warn('write:push-failed', { file: params.file, branch, warning: pushResult.warning });
+          warnings.push(pushResult.warning);
+        }
+      }
     }
 
     // Update search index (use prefixed path for index key)

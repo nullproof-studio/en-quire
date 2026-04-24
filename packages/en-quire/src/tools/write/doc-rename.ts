@@ -65,6 +65,7 @@ export async function handleDocRename(
 
   let branch: string | undefined;
   const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
+  const renameWarnings: string[] = [];
 
   try {
     if (mode === 'propose' && git?.available) {
@@ -88,12 +89,28 @@ export async function handleDocRename(
         [srcResolved.relativePath, destResolved.relativePath],
         commitMsg,
       );
+
+      if (mode === 'propose' && branch) {
+        const pushResult = await git.pushProposalBranch(branch);
+        if (pushResult.warning) {
+          renameWarnings.push(pushResult.warning);
+        }
+      }
     }
 
     // Update search index (remove old prefixed path)
     removeFromIndex(ctx.db, srcResolved.prefixedPath);
 
-    return { success: true, source: args.source, destination: args.destination, mode, branch, commit, etag: sourceEtag };
+    return {
+      success: true,
+      source: args.source,
+      destination: args.destination,
+      mode,
+      branch,
+      commit,
+      etag: sourceEtag,
+      ...(renameWarnings.length > 0 && { warnings: renameWarnings }),
+    };
   } finally {
     if (mode === 'propose' && originalBranch && git?.available) {
       await git.switchBranch(originalBranch);

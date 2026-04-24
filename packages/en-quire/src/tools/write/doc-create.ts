@@ -77,6 +77,13 @@ export async function handleDocCreate(
         userMessage: args.message,
       });
       commit = await git.commitFile(resolved.relativePath, commitMsg);
+
+      if (mode === 'propose' && branch) {
+        const pushResult = await git.pushProposalBranch(branch);
+        if (pushResult.warning) {
+          createWarnings.push(pushResult.warning);
+        }
+      }
     }
 
     // Index the new document (use prefixed path)

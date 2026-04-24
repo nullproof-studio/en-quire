@@ -8,16 +8,22 @@ export class GitOperations {
   private _available: boolean;
   private _configuredDefault: string | null;
   private _defaultBranch?: string;
+  private _remote: string | null;
+  private _pushProposals: boolean;
 
   constructor(
     documentRoot: string,
     forceEnabled?: boolean | null,
     configuredDefaultBranch?: string | null,
+    remote?: string | null,
+    pushProposals?: boolean | null,
   ) {
     this.git = simpleGit(documentRoot);
     const detection = detectGit(documentRoot);
     this._available = forceEnabled === false ? false : detection.available;
     this._configuredDefault = configuredDefaultBranch ?? null;
+    this._remote = remote ?? null;
+    this._pushProposals = pushProposals === true;
   }
 
   get available(): boolean {
@@ -125,6 +131,27 @@ export class GitOperations {
   async deleteBranch(branch: string): Promise<void> {
     this.requireGit('delete branch');
     await this.git.deleteLocalBranch(branch, true);
+  }
+
+  /**
+   * Push a proposal branch to the configured remote when the root's
+   * `git.push_proposals` flag is on. Returns `{ pushed: false }` quietly
+   * when either the remote or the flag is not set — the caller doesn't
+   * need to pre-check. Push errors are caught and surfaced as a warning
+   * string so the local commit is not clobbered when the network fails.
+   */
+  async pushProposalBranch(branch: string): Promise<{ pushed: boolean; warning?: string }> {
+    this.requireGit('push proposal branch');
+    if (!this._remote || !this._pushProposals) {
+      return { pushed: false };
+    }
+    try {
+      await this.git.push(this._remote, branch);
+      return { pushed: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { pushed: false, warning: `Failed to push ${branch} to ${this._remote}: ${msg}` };
+    }
   }
 
   /**
