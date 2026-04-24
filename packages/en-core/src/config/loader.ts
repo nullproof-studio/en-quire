@@ -44,6 +44,22 @@ export function loadConfig(configPath: string): ResolvedConfig {
 
   const validated = result.data;
 
+  // HTTP transport requires every caller to have a Bearer `key` — the
+  // auto-select fallback in resolver.ts is stdio-only, so an HTTP request
+  // without a recognisable token is indistinguishable from any other. Fail
+  // loudly at startup rather than at the first 401.
+  if (validated.transport === 'streamable-http') {
+    const missing = Object.entries(validated.callers)
+      .filter(([, caller]) => !caller.key)
+      .map(([id]) => id);
+    if (missing.length > 0) {
+      throw new ValidationError(
+        `HTTP transport requires every caller to have a Bearer 'key'. ` +
+        `Missing keys for caller(s): ${missing.join(', ')}.`,
+      );
+    }
+  }
+
   // Resolve document roots
   const document_roots: Record<string, ResolvedRoot> = {};
   for (const [name, root] of Object.entries(validated.document_roots)) {
