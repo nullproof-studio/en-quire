@@ -136,12 +136,11 @@ export async function handleProposalApprove(
   requirePermission(ctx.caller, 'approve', file);
 
   const mergeMessage = args.message ?? `[${getProductName()}] Approve proposal: ${args.branch}`;
-  await git.mergeBranch(args.branch, mergeMessage);
-  await git.deleteBranch(args.branch);
+  const { merge_commit } = await git.approveProposal(args.branch, mergeMessage);
 
   return {
     success: true,
-    merge_commit: '',
+    merge_commit,
     file,
     branch: args.branch,
   };

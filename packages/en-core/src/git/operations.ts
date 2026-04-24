@@ -127,6 +127,46 @@ export class GitOperations {
     await this.git.deleteLocalBranch(branch, true);
   }
 
+  /**
+   * Merge a proposal branch into the default branch with safety guarantees:
+   *   1. Remember the caller's current branch.
+   *   2. Ensure the working tree is on the default branch before the merge
+   *      — otherwise the merge would land on whatever happened to be
+   *      checked out.
+   *   3. Merge (--no-ff), capture the merge commit SHA, delete the branch.
+   *   4. In `finally`, attempt to restore the caller's original branch —
+   *      unless the original was the proposal itself (just deleted) or
+   *      was already the default.
+   * If the merge throws (e.g. a conflict once detection lands), the finally
+   * still runs so the working tree doesn't drift away from where the caller
+   * left it.
+   */
+  async approveProposal(branch: string, message: string): Promise<{ merge_commit: string }> {
+    this.requireGit('approve proposal');
+
+    const original = await this.getCurrentBranch();
+    const def = await this.resolveDefaultBranch();
+    const shouldRestore = original !== branch && original !== def;
+
+    try {
+      if (original !== def) {
+        await this.git.checkout(def);
+      }
+      await this.mergeBranch(branch, message);
+      const mergeCommit = (await this.git.raw(['rev-parse', 'HEAD'])).trim();
+      await this.deleteBranch(branch);
+      return { merge_commit: mergeCommit };
+    } finally {
+      if (shouldRestore) {
+        try {
+          await this.git.checkout(original);
+        } catch {
+          // Original branch no longer reachable — leave the tree on default.
+        }
+      }
+    }
+  }
+
   async listBranches(pattern?: string): Promise<string[]> {
     this.requireGit('list branches');
     const result = await this.git.branchLocal();
