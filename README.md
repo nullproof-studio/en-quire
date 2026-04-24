@@ -176,15 +176,29 @@ doc_replace_section({
   content: "\nAdded new environment check for API keys.\n",
   mode: "propose"
 })
-→ { success: true, mode: "propose", branch: "propose/michelle/sops/deployment/20260317T1423Z" }
+→ { success: true, mode: "propose", branch: "propose/michelle/sops/deployment.md/20260317T1423Z" }
 ```
 
-An approver can then review and merge:
+An approver can review and merge through the MCP:
 
 ```
-doc_proposal_diff({ branch: "propose/michelle/sops/deployment/20260317T1423Z" })
-doc_proposal_approve({ branch: "propose/michelle/sops/deployment/20260317T1423Z" })
+doc_proposal_diff({ branch: "propose/michelle/sops/deployment.md/20260317T1423Z" })
+doc_proposal_approve({ branch: "propose/michelle/sops/deployment.md/20260317T1423Z" })
 ```
+
+Or on GitHub/GitLab — when `git.remote` + `git.push_proposals` + `git.pr_hook` are configured on a root, every propose write also pushes the branch and fires the hook (typically `gh pr create ...`) so the proposal shows up as a real PR:
+
+```yaml
+document_roots:
+  docs:
+    path: /data/docs
+    git:
+      remote: origin
+      push_proposals: true
+      pr_hook: "gh pr create --head {branch} --title 'Proposal: {file}' --base main"
+```
+
+`doc_proposal_approve` pre-flight-fetches the remote before merging and refuses if the branch is gone (likely already merged upstream), preventing divergent local history. `doc_proposals_list` stays current across sessions via a startup `git fetch --prune`.
 
 ### 7. Work with YAML files
 
@@ -389,7 +403,8 @@ curl http://localhost:3100/health
 ## Roadmap
 
 - **v0.1 — Core**: Document parsing, section addressing, read/write tools, git integration, full-text search, basic RBAC, Docker image, stdio transport, streamable-http transport.
-- **v0.2 — Governance**: Proposal workflows, remote push, PR hooks, audit log queries, conflict detection.
+- **v0.2 — Governance** (shipped): Proposal workflows, remote push (`git.push_proposals`), PR hooks (`git.pr_hook`), safe approve with pre-flight fetch, commit-metadata hydration, startup fetch-prune reconciliation, HTTP bearer-token auth + session-bound callers, localhost-default binding, authorization correctness fixes (rename destination scope, file-scoped approve/reject, branch-validated reject), symlink-ancestor realpath check.
+- **v0.2 — remaining**: Audit log queries, conflict detection (`can_merge` / `conflicts[]`).
 - **v0.3 — Search & Intelligence**: Semantic vector search, cross-document reference tracking, inverse lookups, context bundle builder.
 - **v0.4 — Scale & Polish**: Bulk operations, watch mode, plugin hooks.
 
