@@ -21,6 +21,11 @@ function writeConfig(yaml: string): string {
   return path;
 }
 
+// 32+ char placeholder tokens for the "valid config" tests. Intentionally
+// look random-ish so they pass the strength + placeholder checks.
+const STRONG_ALICE = 'sk-alice-a1B2c3D4e5F6g7H8i9J0kLmNoPqR';
+const STRONG_BOB = 'sk-bob-Z9y8x7w6V5u4T3s2R1q0pOnMlK';
+
 describe('loadConfig — HTTP transport caller-key validation', () => {
   it('throws when HTTP transport is configured and any caller lacks a key', () => {
     const path = writeConfig(`
@@ -30,7 +35,7 @@ document_roots:
 transport: streamable-http
 callers:
   alice:
-    key: sk-alice-valid
+    key: ${STRONG_ALICE}
     scopes:
       - path: "**"
         permissions: [read]
@@ -44,7 +49,7 @@ callers:
     expect(() => loadConfig(path)).toThrow(/bob/);
   });
 
-  it('passes when HTTP transport is configured and every caller has a key', () => {
+  it('passes when HTTP transport is configured and every caller has a strong key', () => {
     const path = writeConfig(`
 document_roots:
   notes:
@@ -52,12 +57,12 @@ document_roots:
 transport: streamable-http
 callers:
   alice:
-    key: sk-alice-valid
+    key: ${STRONG_ALICE}
     scopes:
       - path: "**"
         permissions: [read]
   bob:
-    key: sk-bob-valid
+    key: ${STRONG_BOB}
     scopes:
       - path: "**"
         permissions: [read]
@@ -96,5 +101,101 @@ document_roots:
 transport: streamable-http
 `);
     expect(() => loadConfig(path)).not.toThrow();
+  });
+});
+
+describe('loadConfig — HTTP transport caller-key STRENGTH validation', () => {
+  it('rejects keys shorter than 32 characters under HTTP transport', () => {
+    const path = writeConfig(`
+document_roots:
+  notes:
+    path: .
+transport: streamable-http
+callers:
+  alice:
+    key: too-short
+    scopes:
+      - path: "**"
+        permissions: [read]
+`);
+    expect(() => loadConfig(path)).toThrow(/at least 32/i);
+    expect(() => loadConfig(path)).toThrow(/alice/);
+  });
+
+  it('rejects placeholder keys even when the length is sufficient', () => {
+    // 36 chars of "changeme", so length passes but pattern catches it
+    const path = writeConfig(`
+document_roots:
+  notes:
+    path: .
+transport: streamable-http
+callers:
+  alice:
+    key: changeme-changeme-changeme-changeme
+    scopes:
+      - path: "**"
+        permissions: [read]
+`);
+    expect(() => loadConfig(path)).toThrow(/placeholder/i);
+  });
+
+  it('rejects repeated-character keys (looks like a stand-in)', () => {
+    const path = writeConfig(`
+document_roots:
+  notes:
+    path: .
+transport: streamable-http
+callers:
+  alice:
+    key: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    scopes:
+      - path: "**"
+        permissions: [read]
+`);
+    expect(() => loadConfig(path)).toThrow(/placeholder/i);
+  });
+
+  it('does not enforce key strength under stdio transport', () => {
+    // stdio callers don't use bearer auth, so weak-looking keys should pass.
+    // The key field may still be set for other purposes (caller ID display,
+    // future cross-transport tooling), and stdio validation shouldn't care.
+    const path = writeConfig(`
+document_roots:
+  notes:
+    path: .
+transport: stdio
+callers:
+  alice:
+    key: changeme
+    scopes:
+      - path: "**"
+        permissions: [read]
+`);
+    expect(() => loadConfig(path)).not.toThrow();
+  });
+});
+
+describe('loadConfig — listen_host', () => {
+  it('defaults to 127.0.0.1 when not specified', () => {
+    const path = writeConfig(`
+document_roots:
+  notes:
+    path: .
+transport: stdio
+`);
+    const config = loadConfig(path);
+    expect(config.listen_host).toBe('127.0.0.1');
+  });
+
+  it('accepts an explicit override', () => {
+    const path = writeConfig(`
+document_roots:
+  notes:
+    path: .
+transport: stdio
+listen_host: "0.0.0.0"
+`);
+    const config = loadConfig(path);
+    expect(config.listen_host).toBe('0.0.0.0');
   });
 });
