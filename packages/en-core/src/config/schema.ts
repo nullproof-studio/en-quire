@@ -43,6 +43,7 @@ const RootGitSchema = z.object({
   auto_commit: z.boolean().default(true),
   remote: z.string().nullable().default(null),
   pr_hook: z.string().nullable().default(null),
+  default_branch: z.string().nullable().default(null), // null = detect from origin HEAD / local branches
 });
 
 const DocumentRootSchema = z.object({

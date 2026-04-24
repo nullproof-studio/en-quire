@@ -151,6 +151,7 @@ export interface RootGitConfig {
   auto_commit: boolean;
   remote: string | null;
   pr_hook: string | null;
+  default_branch: string | null; // null = detect from origin HEAD / local branches
 }
 
 /** A resolved document root */

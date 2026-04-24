@@ -6,11 +6,18 @@ import { detectGit } from './detector.js';
 export class GitOperations {
   private git: SimpleGit;
   private _available: boolean;
+  private _configuredDefault: string | null;
+  private _defaultBranch?: string;
 
-  constructor(documentRoot: string, forceEnabled?: boolean | null) {
+  constructor(
+    documentRoot: string,
+    forceEnabled?: boolean | null,
+    configuredDefaultBranch?: string | null,
+  ) {
     this.git = simpleGit(documentRoot);
     const detection = detectGit(documentRoot);
     this._available = forceEnabled === false ? false : detection.available;
+    this._configuredDefault = configuredDefaultBranch ?? null;
   }
 
   get available(): boolean {
@@ -21,6 +28,55 @@ export class GitOperations {
     if (!this._available) {
       throw new GitRequiredError(operation);
     }
+  }
+
+  /**
+   * Resolve the repo's default branch name. Precedence:
+   *   1. `git.default_branch` from config (explicit override)
+   *   2. `refs/remotes/origin/HEAD` (what origin says is default)
+   *   3. Local `main` or `master`, in that order
+   *   4. Fallback to `main`
+   * The result is memoised — a repo's default branch doesn't change during
+   * a server session, so one probe is enough.
+   */
+  async resolveDefaultBranch(): Promise<string> {
+    this.requireGit('resolve default branch');
+    if (this._defaultBranch) return this._defaultBranch;
+
+    if (this._configuredDefault) {
+      this._defaultBranch = this._configuredDefault;
+      return this._defaultBranch;
+    }
+
+    const remoteHead = await this.detectRemoteHead();
+    if (remoteHead) {
+      this._defaultBranch = remoteHead;
+      return this._defaultBranch;
+    }
+
+    this._defaultBranch = await this.detectLocalDefault();
+    return this._defaultBranch;
+  }
+
+  private async detectRemoteHead(): Promise<string | null> {
+    try {
+      const result = await this.git.raw(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']);
+      const trimmed = result.trim();
+      return trimmed.startsWith('origin/') ? trimmed.slice('origin/'.length) : trimmed;
+    } catch {
+      return null;
+    }
+  }
+
+  private async detectLocalDefault(): Promise<string> {
+    try {
+      const { all } = await this.git.branchLocal();
+      if (all.includes('main')) return 'main';
+      if (all.includes('master')) return 'master';
+    } catch {
+      // fall through
+    }
+    return 'main';
   }
 
   async commitFile(filePath: string, message: string): Promise<string> {
@@ -47,14 +103,10 @@ export class GitOperations {
     await this.git.checkout(name);
   }
 
-  async switchToMain(): Promise<void> {
-    this.requireGit('switch to main');
-    // Try 'main' first, fall back to 'master'
-    try {
-      await this.git.checkout('main');
-    } catch {
-      await this.git.checkout('master');
-    }
+  async switchToDefault(): Promise<void> {
+    this.requireGit('switch to default branch');
+    const def = await this.resolveDefaultBranch();
+    await this.git.checkout(def);
   }
 
   async getCurrentBranch(): Promise<string> {
@@ -87,7 +139,8 @@ export class GitOperations {
 
   async getDiff(branch: string): Promise<string> {
     this.requireGit('get diff');
-    return await this.git.diff(['main...', branch]);
+    const def = await this.resolveDefaultBranch();
+    return await this.git.diff([`${def}...${branch}`]);
   }
 
   async getModifiedFiles(): Promise<string[]> {
@@ -98,7 +151,8 @@ export class GitOperations {
 
   async getLog(branch?: string): Promise<Array<{ hash: string; message: string; date: string }>> {
     this.requireGit('get log');
-    const options = branch ? { from: 'main', to: branch } : {};
+    const def = branch ? await this.resolveDefaultBranch() : undefined;
+    const options = branch ? { from: def, to: branch } : {};
     const log = await this.git.log(options);
     return log.all.map((entry) => ({
       hash: entry.hash,

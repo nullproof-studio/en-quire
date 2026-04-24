@@ -72,7 +72,7 @@ async function main() {
 
   const roots: Record<string, RootContext> = {};
   for (const [name, root] of Object.entries(config.document_roots)) {
-    const git = new GitOperations(root.path, root.git.enabled);
+    const git = new GitOperations(root.path, root.git.enabled, root.git.default_branch);
     roots[name] = { root, git };
     log.info('Root configured', {
       name,
