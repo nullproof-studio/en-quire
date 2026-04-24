@@ -70,15 +70,39 @@ export interface ParsedCommitMetadata {
  * commit wasn't produced by en-quire/en-scribe. User messages that span
  * multiple lines will have only their first line captured — the metadata
  * grammar is line-oriented by design.
+ *
+ * Implemented as a line-by-line scan rather than per-field regex to avoid
+ * polynomial backtracking on pathological whitespace input (flagged by
+ * CodeQL on an earlier regex-based version).
  */
 export function parseCommitMessage(raw: string): ParsedCommitMetadata | null {
-  const caller = /^Caller:\s*(.+?)\s*$/m.exec(raw)?.[1];
-  const operation = /^Operation:\s*(.+?)\s*$/m.exec(raw)?.[1];
-  const target = /^Target:\s*(.+?)\s*$/m.exec(raw)?.[1];
-  const mode = /^Mode:\s*(write|propose)\s*$/m.exec(raw)?.[1];
-  if (!caller || !operation || !target || !mode) return null;
+  let caller: string | undefined;
+  let operation: string | undefined;
+  let target: string | undefined;
+  let mode: string | undefined;
+  let userMessage: string | undefined;
 
-  const userMessage = /^Message:\s*(.+?)\s*$/m.exec(raw)?.[1];
+  for (const line of raw.split('\n')) {
+    // Simple `Field: value` recogniser. trim() on the value is linear,
+    // startsWith() on the prefix is linear, no backtracking.
+    const colon = line.indexOf(':');
+    if (colon < 0) continue;
+    const name = line.slice(0, colon);
+    const value = line.slice(colon + 1).trim();
+    if (value === '') continue;
+
+    switch (name) {
+      case 'Caller': caller ??= value; break;
+      case 'Operation': operation ??= value; break;
+      case 'Target': target ??= value; break;
+      case 'Mode':
+        if (value === 'write' || value === 'propose') mode ??= value;
+        break;
+      case 'Message': userMessage ??= value; break;
+    }
+  }
+
+  if (!caller || !operation || !target || !mode) return null;
 
   return {
     operation,
