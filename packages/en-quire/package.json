@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "@nullproof-studio/en-core": "0.1.5",
+    "@nullproof-studio/en-core": "0.2.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",
     "remark-parse": "^11.0.0",

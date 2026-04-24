@@ -36,7 +36,7 @@ interface ServerDependencies {
 function createServer(deps: ServerDependencies): McpServer {
   const server = new McpServer({
     name: 'en-scribe',
-    version: '0.1.0',
+    version: '0.2.0',
   });
 
   const ctx: ToolContext = {
