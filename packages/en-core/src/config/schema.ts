@@ -56,6 +56,11 @@ export const ConfigSchema = z.object({
   database: z.string().optional(), // Path to .enquire.db; defaults to next to config file
   transport: z.enum(['stdio', 'streamable-http']).default('stdio'),
   port: z.number().int().positive().default(3100),
+  // Interface to bind the HTTP server to. Defaults to loopback so an
+  // operator who flips `transport: streamable-http` doesn't accidentally
+  // serve on a LAN. Set to "0.0.0.0" only if you intend network exposure —
+  // Bearer auth is required in that case (enforced at startup).
+  listen_host: z.string().default('127.0.0.1'),
   search: SearchSchema.default({}),
   logging: LoggingSchema.default({}),
   callers: z.record(z.string(), CallerConfigSchema).default({}),

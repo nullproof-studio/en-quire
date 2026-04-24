@@ -18,6 +18,8 @@
     "build": "npm run build -w @nullproof-studio/en-core && npm run build -w @nullproof-studio/en-quire && npm run build -w @nullproof-studio/en-scribe",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:all": "npm run test && npm run test:integration",
     "lint": "tsc --noEmit -p packages/en-core && tsc --noEmit -p packages/en-quire && tsc --noEmit -p packages/en-scribe",
     "clean": "npm run clean -w @nullproof-studio/en-core --if-present && npm run clean -w @nullproof-studio/en-quire --if-present && npm run clean -w @nullproof-studio/en-scribe --if-present"
   },

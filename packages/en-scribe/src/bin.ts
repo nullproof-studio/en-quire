@@ -153,12 +153,18 @@ async function startHttpTransport(
   });
 
   const port = config.port;
-  httpServer.listen(port, () => {
+  const host = config.listen_host;
+  httpServer.listen(port, host, () => {
     log.info('Server listening', {
       transport: 'streamable-http',
+      host,
       port,
       roots: Object.keys(config.document_roots),
     });
+    if (host === '0.0.0.0') {
+      log.warn('HTTP server bound to 0.0.0.0 — exposed on every interface. ' +
+        'Confirm this is intentional and that caller keys are strong.');
+    }
   });
 
   const shutdown = async () => {

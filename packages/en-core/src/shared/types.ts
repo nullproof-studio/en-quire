@@ -167,6 +167,7 @@ export interface ResolvedConfig {
   database: string; // absolute path to .enquire.db
   transport: 'stdio' | 'streamable-http';
   port: number;
+  listen_host: string; // Interface to bind the HTTP server to (default 127.0.0.1)
   search: {
     fulltext: boolean;
     sync_on_start: 'blocking' | 'background';
