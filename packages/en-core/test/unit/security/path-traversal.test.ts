@@ -62,4 +62,45 @@ describe('safePath — path traversal', () => {
     const result = safePath(docRoot, 'link.md');
     expect(result).toBe(join(docRoot, 'link.md'));
   });
+
+  // Regression tests for P1 #67 — safePath must resolve symlinks in the
+  // path's *ancestors* even when the final target itself doesn't exist yet.
+  // Otherwise a symlinked directory inside the root lets writes land at
+  // the symlink's target, outside the root.
+
+  it('rejects new file under a symlinked directory that escapes the root', () => {
+    // /docRoot/link-dir -> /outsideDir (pre-existing symlink, target exists)
+    symlinkSync(outsideDir, join(docRoot, 'link-dir'));
+
+    // Writing "link-dir/new.md" would realpath to /outsideDir/new.md,
+    // which is outside the document root.
+    expect(() => safePath(docRoot, 'link-dir/new.md')).toThrow(PathTraversalError);
+  });
+
+  it('rejects deeply nested new path whose ancestor symlink escapes the root', () => {
+    symlinkSync(outsideDir, join(docRoot, 'link-dir'));
+
+    // Even with multiple missing descendants under the symlinked ancestor,
+    // the ancestor walk must find the symlinked directory and reject.
+    expect(() => safePath(docRoot, 'link-dir/sub/deep/new.md')).toThrow(PathTraversalError);
+  });
+
+  it('allows a new file under a symlinked directory that stays within root', () => {
+    // /docRoot/real-dir exists, /docRoot/loop -> /docRoot/real-dir.
+    // Writing "loop/new.md" resolves to /docRoot/real-dir/new.md — still
+    // inside the root, so it must be allowed.
+    const realDir = join(docRoot, 'real-dir');
+    mkdirSync(realDir, { recursive: true });
+    symlinkSync(realDir, join(docRoot, 'loop'));
+
+    const result = safePath(docRoot, 'loop/new.md');
+    expect(result).toBe(join(docRoot, 'loop/new.md'));
+  });
+
+  it('allows deeply nested new paths under real directories', () => {
+    // No symlinks in the path — nested creation is a common case and
+    // must not regress.
+    const result = safePath(docRoot, 'a/b/c/new.md');
+    expect(result).toBe(join(docRoot, 'a/b/c/new.md'));
+  });
 });
