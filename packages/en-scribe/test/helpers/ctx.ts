@@ -1,7 +1,8 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import Database from 'better-sqlite3';
 import type {
   ToolContext,
@@ -16,13 +17,31 @@ import { initSearchSchema, GitOperations } from '@nullproof-studio/en-core';
  * caller permissions and an in-memory sqlite db. Callers are responsible
  * for cleaning up the tmp directory.
  */
-export function makeCtx(options: { rootName?: string; requireReadBeforeWrite?: boolean } = {}): {
+export function makeCtx(options: {
+  rootName?: string;
+  requireReadBeforeWrite?: boolean;
+  gitEnabled?: boolean;
+} = {}): {
   ctx: ToolContext;
   rootDir: string;
   db: Database.Database;
 } {
   const rootName = options.rootName ?? 'notes';
   const rootDir = mkdtempSync(join(tmpdir(), `enscribe-test-${rootName}-`));
+
+  if (options.gitEnabled) {
+    const git = (args: string[]): void => {
+      execFileSync('git', args, { cwd: rootDir, stdio: 'pipe' });
+    };
+    git(['init', '-q']);
+    git(['config', 'user.email', 'test@example.com']);
+    git(['config', 'user.name', 'Test']);
+    git(['config', 'commit.gpgsign', 'false']);
+    git(['symbolic-ref', 'HEAD', 'refs/heads/main']);
+    writeFileSync(join(rootDir, '.seed'), 'seed\n');
+    git(['add', '.seed']);
+    git(['commit', '-m', 'init']);
+  }
 
   const db = new Database(':memory:');
   initSearchSchema(db);
@@ -51,13 +70,13 @@ export function makeCtx(options: { rootName?: string; requireReadBeforeWrite?: b
 
   const caller: CallerIdentity = {
     id: 'test',
-    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'admin', 'exec'] }],
+    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'exec'] }],
   };
 
   const roots: Record<string, RootContext> = {
     [rootName]: {
       root: config.document_roots[rootName],
-      git: new GitOperations(rootDir, false),
+      git: new GitOperations(rootDir, options.gitEnabled ? null : false),
     },
   };
 

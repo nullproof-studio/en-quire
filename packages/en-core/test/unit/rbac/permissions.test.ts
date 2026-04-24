@@ -6,7 +6,7 @@ import type { CallerIdentity } from '@nullproof-studio/en-core';
 
 const adminCaller: CallerIdentity = {
   id: 'admin',
-  scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'admin', 'exec'] }],
+  scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'exec'] }],
 };
 
 const readOnlyCaller: CallerIdentity = {

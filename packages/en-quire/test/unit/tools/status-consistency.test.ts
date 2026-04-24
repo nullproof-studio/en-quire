@@ -81,7 +81,7 @@ function makeMultiRootCtx(): TestEnv {
 
   const caller: CallerIdentity = {
     id: 'test',
-    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'admin', 'exec'] }],
+    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'exec'] }],
   };
 
   const roots: Record<string, RootContext> = {

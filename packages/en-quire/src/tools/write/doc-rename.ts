@@ -38,6 +38,12 @@ export async function handleDocRename(
   const git = rootCtx?.git;
   const mode = resolveWriteMode(ctx.caller, args.source, args.mode);
 
+  // A rename moves the file to a new path, so the caller must have the
+  // resolved mode's permission on the DESTINATION as well — not just the
+  // source. Without this, a caller with write on "public/**" could smuggle
+  // a file into "protected/**" by renaming across scopes.
+  requirePermission(ctx.caller, mode, args.destination);
+
   if (mode === 'propose' && !git?.available) {
     throw new GitRequiredError('Proposal workflows');
   }

@@ -131,7 +131,7 @@ export interface EncodingInfo {
 }
 
 /** Permission types for RBAC */
-export type Permission = 'read' | 'write' | 'propose' | 'approve' | 'search' | 'admin' | 'exec';
+export type Permission = 'read' | 'write' | 'propose' | 'approve' | 'search' | 'exec';
 
 /** Caller identity resolved from transport context */
 export interface CallerIdentity {
