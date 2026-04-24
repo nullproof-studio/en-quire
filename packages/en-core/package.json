@@ -1,0 +1,48 @@
+{
+  "name": "@nullproof-studio/en-core",
+  "version": "0.1.5",
+  "description": "Reliability primitives shared by the en-quire and en-scribe MCP servers: etag, proposals, diff, file-utils, git, RBAC, parser registry.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Nullproof Studio",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nullproof-studio/en-quire.git",
+    "directory": "packages/en-core"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-sqlite3": "^11.9.1",
+    "diff": "^8.0.3",
+    "micromatch": "^4.0.8",
+    "simple-git": "^3.27.0",
+    "winston": "^3.19.0",
+    "yaml": "^2.7.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/diff": "^6.0.0",
+    "@types/micromatch": "^4.0.9",
+    "@types/node": "^22.15.3",
+    "@types/unist": "^3.0.0",
+    "typescript": "^5.8.3"
+  }
+}

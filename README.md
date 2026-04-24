@@ -8,6 +8,20 @@ An MCP server that treats markdown and YAML files as structured, section-address
 
 ---
 
+## Packages
+
+This repo is an npm workspaces monorepo with three packages:
+
+| Package | Role | Bin |
+|---|---|---|
+| [`@nullproof-studio/en-core`](packages/en-core/) | Shared reliability primitives (etag, proposals, diff, git, RBAC, parser registry). Library only. | — |
+| [`@nullproof-studio/en-quire`](packages/en-quire/) | **Investigative** — reads and edits with structural understanding (sections, outlines, frontmatter, TOC). This README covers en-quire in depth. | `enquire` |
+| [`@nullproof-studio/en-scribe`](packages/en-scribe/) | **Literal** — reads and edits plain-text files without interpretation (ranges, anchors, append). Sibling MCP. See [packages/en-scribe/README.md](packages/en-scribe/README.md). | `enscribe` |
+
+Keep the two binaries distinct: auto-detecting headings belongs in en-quire; byte- and line-offset ops belong in en-scribe. Both share en-core's reliability guarantees so etag and proposal semantics can't drift.
+
+---
+
 ## The Problem
 
 Agent systems increasingly depend on markdown files as operational infrastructure. But existing tooling falls short:
@@ -289,60 +303,76 @@ callers:
 ```bash
 git clone https://github.com/nullproof-studio/en-quire.git
 cd en-quire
-npm install
-npm run build
+npm install                # installs all workspaces
+npm run build              # builds en-core, en-quire, en-scribe in order
 ```
 
 ### Run locally
 
 ```bash
-# stdio transport (default)
-npm start -- --config path/to/en-quire.config.yaml
+# en-quire, stdio transport (default)
+npm start -w @nullproof-studio/en-quire -- --config path/to/en-quire.config.yaml
 
 # Development mode (no build step)
-npm run dev -- --config path/to/en-quire.config.yaml
+npm run dev -w @nullproof-studio/en-quire -- --config path/to/en-quire.config.yaml
+
+# en-scribe
+npm run dev -w @nullproof-studio/en-scribe -- --config path/to/en-scribe.config.yaml
 ```
 
 ### Run tests
 
 ```bash
-npm test              # Single run
-npm run test:watch    # Watch mode
+npm test              # single run across all packages (vitest discovers packages/*/test)
+npm run test:watch    # watch mode
 ```
 
-### Publish npm package
+### Publish npm packages
+
+Published in dependency order — en-core first, then the two binaries:
 
 ```bash
 npm run build
 npm run lint
 npm test
-npm publish --access public
+npm publish -w @nullproof-studio/en-core
+npm publish -w @nullproof-studio/en-quire
+npm publish -w @nullproof-studio/en-scribe
 ```
 
-The package is published as `@nullproof-studio/en-quire`. Ensure `version` in `package.json` is updated before publishing.
+CI runs `npm publish --dry-run` for each package on every PR to catch tarball-shape regressions before release. All three are configured for public access via `publishConfig.access`; bump versions in the respective `packages/*/package.json` before running `publish`.
 
 ### Build and publish Docker image
 
+One multi-stage image ships both binaries. The default entrypoint is `enquire`; override for en-scribe.
+
 ```bash
 # Build
-npm run build
 docker build -t ghcr.io/nullproof-studio/en-quire:latest .
 
-# Test locally
+# Run en-quire (default)
 docker run -i --rm \
   -v /path/to/docs:/data/docs:rw \
   -v /path/to/config:/app/config:ro \
-  -v /path/to/logs:/app/logs:rw \
-  ghcr.io/nullproof-studio/en-quire:latest
+  ghcr.io/nullproof-studio/en-quire:latest \
+  --config /app/config/en-quire.config.yaml
+
+# Run en-scribe from the same image
+docker run -i --rm \
+  --entrypoint enscribe \
+  -v /path/to/docs:/data/docs:rw \
+  -v /path/to/config:/app/config:ro \
+  ghcr.io/nullproof-studio/en-quire:latest \
+  --config /app/config/en-scribe.config.yaml
 
 # Publish to GitHub Container Registry
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 docker push ghcr.io/nullproof-studio/en-quire:latest
-docker tag ghcr.io/nullproof-studio/en-quire:latest ghcr.io/nullproof-studio/en-quire:0.1.0
-docker push ghcr.io/nullproof-studio/en-quire:0.1.0
+docker tag ghcr.io/nullproof-studio/en-quire:latest ghcr.io/nullproof-studio/en-quire:0.2.0
+docker push ghcr.io/nullproof-studio/en-quire:0.2.0
 ```
 
-When using streamable-http transport, the Docker image includes a health check at `GET /health`:
+When using streamable-http transport, the image includes a health check at `GET /health`:
 
 ```bash
 docker run -d --name en-quire \

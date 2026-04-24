@@ -1,0 +1,4 @@
+{"role":"system","content":"You are a helpful assistant."}
+{"role":"user","content":"Hello how are you today"}
+{"role":"assistant","content":"I am doing well, thanks!"}
+{"role":"user","content":"Great, can you help me?"}

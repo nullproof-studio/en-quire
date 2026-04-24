@@ -1,34 +1,8 @@
 {
-  "name": "@nullproof-studio/en-quire",
-  "version": "0.1.5",
-  "description": "Structured document management for agent systems, with governance. An MCP server.",
+  "name": "en-quire-monorepo",
+  "private": true,
+  "description": "Monorepo root for @nullproof-studio/en-core, en-quire, and en-scribe.",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "enquire": "dist/index.js"
-  },
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "lint": "tsc --noEmit",
-    "clean": "rm -rf dist"
-  },
-  "keywords": [
-    "mcp",
-    "mcp-server",
-    "markdown",
-    "document-management",
-    "agent",
-    "rbac",
-    "git",
-    "governance",
-    "typescript"
-  ],
-  "author": "Nullproof Studio",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -37,27 +11,18 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "better-sqlite3": "^11.9.1",
-    "diff": "^8.0.3",
-    "micromatch": "^4.0.8",
-    "remark-frontmatter": "^5.0.0",
-    "remark-gfm": "^4.0.0",
-    "remark-parse": "^11.0.0",
-    "remark-stringify": "^11.0.0",
-    "simple-git": "^3.27.0",
-    "unified": "^11.0.5",
-    "winston": "^3.19.0",
-    "yaml": "^2.7.1",
-    "zod": "^3.24.4"
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @nullproof-studio/en-core && npm run build -w @nullproof-studio/en-quire && npm run build -w @nullproof-studio/en-scribe",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit -p packages/en-core && tsc --noEmit -p packages/en-quire && tsc --noEmit -p packages/en-scribe",
+    "clean": "npm run clean -w @nullproof-studio/en-core --if-present && npm run clean -w @nullproof-studio/en-quire --if-present && npm run clean -w @nullproof-studio/en-scribe --if-present"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/diff": "^6.0.0",
-    "@types/micromatch": "^4.0.9",
     "@types/node": "^22.15.3",
-    "tsx": "^4.19.4",
     "typescript": "^5.8.3",
     "vitest": "^3.1.3"
   }
