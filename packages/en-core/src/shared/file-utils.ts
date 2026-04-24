@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, realpathSync, lstatSync } from 'node:fs';
-import { resolve, relative, join } from 'node:path';
+import { resolve, relative, join, dirname } from 'node:path';
 import { PathTraversalError, NotFoundError } from './errors.js';
 import { decodeAndNormalise, normaliseOutbound } from './encoding.js';
 import type { EncodingInfo, LineEnding } from './types.js';
@@ -12,7 +12,12 @@ import type { EncodingInfo, LineEnding } from './types.js';
  * Security checks:
  * 1. Null byte injection — rejected outright
  * 2. Path traversal — resolved path must remain within document root
- * 3. Symlink escape — if target exists and is a symlink, its real path must be within root
+ * 3. Symlink escape — the target (or, for new files, the nearest existing
+ *    ancestor of the target) must realpath inside the root. Walking to the
+ *    nearest existing ancestor is what protects write paths: a symlinked
+ *    directory inside the root (e.g. `root/link-dir -> /etc`) would
+ *    otherwise let `root/link-dir/new-file.md` land at `/etc/new-file.md`,
+ *    because the non-existent target skips realpath entirely.
  */
 export function safePath(documentRoot: string, relativePath: string): string {
   // Reject null bytes (can bypass path checks in some environments)
@@ -27,19 +32,29 @@ export function safePath(documentRoot: string, relativePath: string): string {
     throw new PathTraversalError(relativePath);
   }
 
-  // If the target exists, resolve symlinks and verify the real path is still within root
-  if (existsSync(resolved)) {
-    try {
-      const realPath = realpathSync(resolved);
-      const realRoot = realpathSync(documentRoot);
-      const realRel = relative(realRoot, realPath);
-      if (realRel.startsWith('..')) {
-        throw new PathTraversalError(relativePath);
-      }
-    } catch (err) {
-      if (err instanceof PathTraversalError) throw err;
-      // If realpath fails for other reasons, let the downstream operation handle it
+  // Find the nearest existing ancestor — the target itself if it exists,
+  // otherwise walk up one directory at a time until we hit something.
+  // existsSync follows symlinks, so if an ancestor is a symlinked directory
+  // whose target exists, the walk stops there and realpath reveals where
+  // the write will actually land.
+  let ancestor = resolved;
+  while (!existsSync(ancestor)) {
+    const parent = dirname(ancestor);
+    if (parent === ancestor) break; // filesystem root — nothing more to climb
+    ancestor = parent;
+  }
+
+  try {
+    const realAncestor = realpathSync(ancestor);
+    const realRoot = realpathSync(documentRoot);
+    const realRel = relative(realRoot, realAncestor);
+    if (realRel.startsWith('..')) {
+      throw new PathTraversalError(relativePath);
     }
+  } catch (err) {
+    if (err instanceof PathTraversalError) throw err;
+    // realpath can fail for other reasons (EACCES, etc) — let the downstream
+    // operation surface a meaningful error rather than masking it here.
   }
 
   return resolved;
