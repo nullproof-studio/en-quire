@@ -89,6 +89,24 @@ async function main() {
     });
   }
 
+  // Startup sync: fetch+prune per git-enabled root so `text_proposals_list`
+  // is current from the first call. Graceful offline — a fetch failure
+  // logs a warning but does not halt startup.
+  for (const [name, rootCtx] of Object.entries(roots)) {
+    const git = rootCtx.git;
+    if (!git?.available) continue;
+    try {
+      const result = await git.fetchAndPrune();
+      if (result.ok) {
+        log.info('Proposal sync on startup', { root: name });
+      } else if (result.warning) {
+        log.warn('Proposal sync on startup failed', { root: name, warning: result.warning });
+      }
+    } catch (err) {
+      log.warn('Proposal sync on startup errored', { root: name, error: String(err) });
+    }
+  }
+
   // Plaintext index sync — a single FTS row per file via the whole-file
   // pseudo-section. Line-chunked indexing for text_search ships later.
   for (const [name, root] of Object.entries(config.document_roots)) {

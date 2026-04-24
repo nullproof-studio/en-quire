@@ -2,7 +2,7 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { GitRequiredError } from '../shared/errors.js';
+import { GitRequiredError, ValidationError } from '../shared/errors.js';
 import { tokeniseCommand } from '../shared/tokenise-command.js';
 import { detectGit } from './detector.js';
 
@@ -186,6 +186,27 @@ export class GitOperations {
   }
 
   /**
+   * Run `git fetch --prune` against the configured remote. Returns
+   * `{ ok: false }` quietly when no remote is configured, and returns a
+   * warning string (rather than throwing) on network failures so callers
+   * can decide whether to continue gracefully or abort. Used both at
+   * bin startup and as the first step of the safe-approve pre-flight.
+   */
+  async fetchAndPrune(): Promise<{ ok: boolean; warning?: string }> {
+    this.requireGit('fetch');
+    if (!this._remote) {
+      return { ok: false };
+    }
+    try {
+      await this.git.raw(['fetch', '--prune', this._remote]);
+      return { ok: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ok: false, warning: `fetch --prune ${this._remote} failed: ${msg}` };
+    }
+  }
+
+  /**
    * Push a proposal branch to the configured remote when the root's
    * `git.push_proposals` flag is on. Returns `{ pushed: false }` quietly
    * when either the remote or the flag is not set — the caller doesn't
@@ -208,6 +229,14 @@ export class GitOperations {
 
   /**
    * Merge a proposal branch into the default branch with safety guarantees:
+   *   0. PRE-FLIGHT — if the root has a remote configured, fetch --prune
+   *      and verify the proposal branch still exists on the remote.
+   *      Refuses if the branch is gone (merged / rejected upstream) or
+   *      the remote can't be reached; both cases mean we cannot verify
+   *      the proposal's upstream state and merging blindly could produce
+   *      a local merge commit that diverges from origin's merge commit,
+   *      breaking the next `git push`. Skipped when no remote is
+   *      configured (local-only proposals).
    *   1. Remember the caller's current branch.
    *   2. Ensure the working tree is on the default branch before the merge
    *      — otherwise the merge would land on whatever happened to be
@@ -222,6 +251,30 @@ export class GitOperations {
    */
   async approveProposal(branch: string, message: string): Promise<{ merge_commit: string }> {
     this.requireGit('approve proposal');
+
+    // Pre-flight: verify remote state before any mutation. Same principle
+    // as etag checks on document writes — writes verify, reads don't.
+    if (this._remote) {
+      const fetchResult = await this.fetchAndPrune();
+      if (!fetchResult.ok) {
+        throw new ValidationError(
+          `Cannot verify remote state of "${branch}" — ${fetchResult.warning ?? 'remote unreachable'}. ` +
+          `Approval refused to prevent divergent history. Try again when the remote is reachable.`,
+        );
+      }
+      try {
+        // show-ref --verify exits 128 (rejects) with stderr "fatal:..." when
+        // the ref is missing, which simple-git surfaces as a thrown error.
+        // The --quiet form exits 1 silently and simple-git treats that as
+        // success — so we use the noisy form and swallow the stderr here.
+        await this.git.raw(['show-ref', '--verify', `refs/remotes/${this._remote}/${branch}`]);
+      } catch {
+        throw new ValidationError(
+          `Proposal branch "${branch}" is no longer on remote "${this._remote}" — ` +
+          `likely merged or rejected upstream already. Pull the default branch to reconcile local state.`,
+        );
+      }
+    }
 
     const original = await this.getCurrentBranch();
     const def = await this.resolveDefaultBranch();
