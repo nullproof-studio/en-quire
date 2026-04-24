@@ -4,8 +4,9 @@ import type { ToolContext } from './context.js';
 import { requirePermission } from '../rbac/permissions.js';
 import { GitRequiredError, ValidationError } from '../shared/errors.js';
 import { getProductName } from '../shared/logger.js';
-import { parseProposalBranch } from '../git/commit-message.js';
+import { parseProposalBranch, parseCommitMessage } from '../git/commit-message.js';
 import type { GitOperations } from '../git/operations.js';
+import { getLogger } from '../shared/logger.js';
 
 /**
  * Format-agnostic proposal governance handlers.
@@ -47,22 +48,48 @@ async function collectProposals(ctx: ToolContext) {
     diff_summary: string;
   }> = [];
 
+  const log = getLogger();
+
   for (const [name, rootCtx] of Object.entries(ctx.roots)) {
     if (!rootCtx.git?.available) continue;
 
     const branches = await rootCtx.git.listBranches('propose/');
     for (const branch of branches) {
       const { caller, file, timestamp } = parseProposalBranch(branch, name);
+
+      let section = '';
+      let operation = '';
+      let message = '';
+      let created = timestamp;
+      let diff_summary = '';
+
+      try {
+        const tip = await rootCtx.git.getProposalTipCommit(branch);
+        created = tip.authorDate;
+        diff_summary = tip.diffSummary;
+
+        const meta = parseCommitMessage(tip.message);
+        if (meta) {
+          section = meta.target;
+          operation = meta.operation;
+          message = meta.userMessage ?? '';
+        }
+      } catch (err) {
+        // Branch exists but tip inspection failed (e.g. shallow clone,
+        // missing ref). Fall back to branch-name-derived fields.
+        log.warn('proposals:tip-inspection-failed', { branch, error: String(err) });
+      }
+
       allProposals.push({
         branch,
         caller,
         file,
         root: name,
-        section: '',
-        operation: '',
-        message: '',
-        created: timestamp,
-        diff_summary: '',
+        section,
+        operation,
+        message,
+        created,
+        diff_summary,
       });
     }
   }
@@ -111,7 +138,15 @@ export async function handleProposalDiff(
 
   const diff = await git.getDiff(args.branch);
 
-  return { diff, file, caller, message: '' };
+  let message = '';
+  try {
+    const tip = await git.getProposalTipCommit(args.branch);
+    message = parseCommitMessage(tip.message)?.userMessage ?? '';
+  } catch {
+    // Leave message empty if tip inspection fails.
+  }
+
+  return { diff, file, caller, message };
 }
 
 // --- proposal_approve ---

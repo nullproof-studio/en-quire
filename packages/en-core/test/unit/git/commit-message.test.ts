@@ -1,6 +1,11 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { buildCommitMessage, buildProposalBranch, parseProposalBranch } from '@nullproof-studio/en-core';
+import {
+  buildCommitMessage,
+  buildProposalBranch,
+  parseProposalBranch,
+  parseCommitMessage,
+} from '@nullproof-studio/en-core';
 import { ValidationError } from '@nullproof-studio/en-core';
 
 describe('buildCommitMessage', () => {
@@ -48,6 +53,63 @@ describe('buildProposalBranch', () => {
   it('handles nested paths', () => {
     const branch = buildProposalBranch('alice', 'docs/sops/deploy.md');
     expect(branch).toMatch(/^propose\/alice\/docs\/sops\/deploy\.md\/\d{8}T\d{6}Z$/);
+  });
+});
+
+describe('parseCommitMessage', () => {
+  it('round-trips a message built by buildCommitMessage', () => {
+    const raw = buildCommitMessage({
+      operation: 'Replace section',
+      target: '2.7 Checks',
+      file: 'sops/deployment.md',
+      caller: 'michelle',
+      mode: 'write',
+    });
+    const parsed = parseCommitMessage(raw);
+    expect(parsed).toEqual({
+      operation: 'Replace section',
+      target: '2.7 Checks',
+      caller: 'michelle',
+      mode: 'write',
+    });
+  });
+
+  it('includes the optional user message when present', () => {
+    const raw = buildCommitMessage({
+      operation: 'Append',
+      target: 'Overview',
+      file: 'docs/readme.md',
+      caller: 'bot',
+      mode: 'propose',
+      userMessage: 'Added new requirement',
+    });
+    const parsed = parseCommitMessage(raw);
+    expect(parsed?.userMessage).toBe('Added new requirement');
+    expect(parsed?.mode).toBe('propose');
+  });
+
+  it('returns null for input with no structured metadata block', () => {
+    expect(parseCommitMessage('Some plain commit message')).toBeNull();
+  });
+
+  it('returns null when required fields are missing', () => {
+    // Only Caller and Operation — no Target / Mode
+    expect(parseCommitMessage('Caller: x\nOperation: y')).toBeNull();
+  });
+
+  it('tolerates trailing whitespace and extra blank lines', () => {
+    const raw = [
+      '[en-quire] Append "Overview" in docs/a.md',
+      '',
+      'Caller: alice ',
+      'Operation: Append',
+      'Target: Overview',
+      'Mode: write',
+      '',
+    ].join('\n');
+    const parsed = parseCommitMessage(raw);
+    expect(parsed?.caller).toBe('alice');
+    expect(parsed?.operation).toBe('Append');
   });
 });
 

@@ -54,6 +54,41 @@ export function buildProposalBranch(caller: string, filePath: string): string {
   return `propose/${caller}/${filePath}/${timestamp}`;
 }
 
+export interface ParsedCommitMetadata {
+  operation: string;
+  target: string;
+  caller: string;
+  mode: 'write' | 'propose';
+  userMessage?: string;
+}
+
+/**
+ * Parse the structured metadata block that `buildCommitMessage` emits.
+ * Returns null if any required field is missing — proposal branches are
+ * expected to carry this block on their tip commit, so a null return is a
+ * signal that either the commit predates the metadata convention or the
+ * commit wasn't produced by en-quire/en-scribe. User messages that span
+ * multiple lines will have only their first line captured — the metadata
+ * grammar is line-oriented by design.
+ */
+export function parseCommitMessage(raw: string): ParsedCommitMetadata | null {
+  const caller = /^Caller:\s*(.+?)\s*$/m.exec(raw)?.[1];
+  const operation = /^Operation:\s*(.+?)\s*$/m.exec(raw)?.[1];
+  const target = /^Target:\s*(.+?)\s*$/m.exec(raw)?.[1];
+  const mode = /^Mode:\s*(write|propose)\s*$/m.exec(raw)?.[1];
+  if (!caller || !operation || !target || !mode) return null;
+
+  const userMessage = /^Message:\s*(.+?)\s*$/m.exec(raw)?.[1];
+
+  return {
+    operation,
+    target,
+    caller,
+    mode: mode as 'write' | 'propose',
+    ...(userMessage && { userMessage }),
+  };
+}
+
 const PROPOSAL_BRANCH_RE = /^propose\/([^/]+)\/(.+)\/(\d{8}T\d{6}Z)$/;
 
 /**

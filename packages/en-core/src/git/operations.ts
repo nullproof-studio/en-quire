@@ -183,6 +183,43 @@ export class GitOperations {
     return await this.git.diff([`${def}...${branch}`]);
   }
 
+  /**
+   * Fetch the tip commit of a proposal branch along with the shortstat
+   * diff against the default branch. The caller combines these with
+   * `parseCommitMessage` to populate the structured metadata fields on
+   * `doc_proposals_list` / `doc_proposal_diff` responses.
+   */
+  async getProposalTipCommit(branch: string): Promise<{
+    sha: string;
+    authorDate: string;
+    message: string;
+    diffSummary: string;
+  }> {
+    this.requireGit('get proposal tip');
+
+    // Use a unique delimiter to isolate the full commit message (subject + body)
+    // from git-log's default field-separated output. `%H` = SHA, `%aI` = author
+    // date ISO 8601-strict, `%B` = raw body including subject.
+    const DELIM = '\x1Fen-quire-log-end\x1F';
+    const raw = await this.git.raw(['log', '-1', `--format=%H%n%aI%n%B${DELIM}`, branch]);
+    const endIdx = raw.indexOf(DELIM);
+    if (endIdx < 0) {
+      throw new Error(`No commits on branch: ${branch}`);
+    }
+    const [sha, authorDate, ...bodyLines] = raw.slice(0, endIdx).split('\n');
+    const message = bodyLines.join('\n').trimEnd();
+
+    const def = await this.resolveDefaultBranch();
+    const shortstat = (await this.git.raw(['diff', '--shortstat', `${def}...${branch}`])).trim();
+
+    return {
+      sha,
+      authorDate,
+      message,
+      diffSummary: shortstat,
+    };
+  }
+
   async getModifiedFiles(): Promise<string[]> {
     this.requireGit('get modified files');
     const status = await this.git.status();
