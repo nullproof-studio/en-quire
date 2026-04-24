@@ -17,6 +17,7 @@ export * from './config/roots.js';
 export * from './config/schema.js';
 
 // RBAC
+export * from './rbac/http-auth.js';
 export * from './rbac/permissions.js';
 export * from './rbac/resolver.js';
 export * from './rbac/types.js';

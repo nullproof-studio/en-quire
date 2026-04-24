@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { parseArgs } from 'node:util';
-import { createServer as createHttpServer } from 'node:http';
+import { createServer as createHttpServer, type ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -13,6 +13,7 @@ import {
   syncIndex,
   GitOperations,
   resolveCaller,
+  authenticateBearer,
   initLogger,
   getLogger,
   ToolRegistry,
@@ -90,9 +91,6 @@ async function main() {
     });
   }
 
-  // Resolve caller identity (for stdio, uses config defaults)
-  const caller = resolveCaller(config);
-
   // Sync search index per root
   for (const [name, root] of Object.entries(config.document_roots)) {
     if (config.search.sync_on_start === 'background') {
@@ -124,8 +122,12 @@ async function main() {
   }
 
   if (config.transport === 'streamable-http') {
-    await startHttpTransport(config, db, roots, caller);
+    // HTTP transport MUST NOT use the resolveCaller auto-select fallback —
+    // every request authenticates its own caller via Bearer token.
+    await startHttpTransport(config, db, roots);
   } else {
+    // stdio is inherently single-process; the startup-resolved caller is safe.
+    const caller = resolveCaller(config);
     await startStdioTransport(config, db, roots, caller);
   }
 }
@@ -150,14 +152,28 @@ async function startHttpTransport(
   config: ReturnType<typeof loadConfig>,
   db: ReturnType<typeof openDatabase>,
   roots: Record<string, RootContext>,
-  caller: ReturnType<typeof resolveCaller>,
 ) {
   const log = getLogger();
 
-  // Map of session ID → transport for stateful session management
-  const sessions = new Map<string, { server: ReturnType<typeof createServer>; transport: StreamableHTTPServerTransport }>();
+  // Map of session ID → transport, server, and the caller that was
+  // authenticated when the session was opened. Subsequent requests on the
+  // same session must present a Bearer token that resolves to the same
+  // caller — the session ID alone is NOT authentication.
+  const sessions = new Map<string, {
+    server: ReturnType<typeof createServer>;
+    transport: StreamableHTTPServerTransport;
+    callerId: string;
+  }>();
 
   const MAX_REQUEST_BODY = 10 * 1024 * 1024; // 10 MB
+
+  const unauthorized = (res: ServerResponse, reason: string) => {
+    res.writeHead(401, {
+      'Content-Type': 'application/json',
+      'WWW-Authenticate': 'Bearer realm="en-quire"',
+    });
+    res.end(JSON.stringify({ error: 'unauthorized', reason }));
+  };
 
   const httpServer = createHttpServer(async (req, res) => {
     // Reject oversized requests early
@@ -170,7 +186,8 @@ async function startHttpTransport(
 
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
-    // Health check endpoint
+    // Health check endpoint — intentionally unauthenticated so ops tooling
+    // can probe without a token.
     if (url.pathname === '/health' && req.method === 'GET') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok', sessions: sessions.size }));
@@ -183,11 +200,27 @@ async function startHttpTransport(
       return;
     }
 
+    // Every /mcp request authenticates BEFORE any session state is allocated
+    // or consulted. Missing/malformed/invalid token → 401, no session lookup.
+    const auth = authenticateBearer(req.headers.authorization, config.callers);
+    if (!auth.ok) {
+      log.debug('auth:rejected', { reason: auth.reason, path: url.pathname });
+      unauthorized(res, auth.reason);
+      return;
+    }
+
     // Handle DELETE for session termination
     if (req.method === 'DELETE') {
       const sessionId = req.headers['mcp-session-id'] as string | undefined;
       if (sessionId && sessions.has(sessionId)) {
         const session = sessions.get(sessionId)!;
+        if (session.callerId !== auth.caller.id) {
+          log.warn('auth:session-caller-mismatch', {
+            sessionId, expected: session.callerId, got: auth.caller.id,
+          });
+          unauthorized(res, 'session_caller_mismatch');
+          return;
+        }
         await session.transport.close();
         sessions.delete(sessionId);
         log.debug('Session terminated', { sessionId });
@@ -204,8 +237,15 @@ async function startHttpTransport(
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
     if (sessionId && sessions.has(sessionId)) {
-      // Existing session
-      await sessions.get(sessionId)!.transport.handleRequest(req, res);
+      const session = sessions.get(sessionId)!;
+      if (session.callerId !== auth.caller.id) {
+        log.warn('auth:session-caller-mismatch', {
+          sessionId, expected: session.callerId, got: auth.caller.id,
+        });
+        unauthorized(res, 'session_caller_mismatch');
+        return;
+      }
+      await session.transport.handleRequest(req, res);
       return;
     }
 
@@ -216,12 +256,12 @@ async function startHttpTransport(
       return;
     }
 
-    // No session ID — create a new session (initialization request)
+    // No session ID — create a new session bound to the authenticated caller
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
     });
 
-    const server = createServer({ config, db, roots, caller });
+    const server = createServer({ config, db, roots, caller: auth.caller });
     await server.connect(transport);
 
     // Store session once we know the ID (after handleRequest processes the init)
@@ -236,8 +276,10 @@ async function startHttpTransport(
 
     // After handling the init request, the session ID is set
     if (transport.sessionId) {
-      sessions.set(transport.sessionId, { server, transport });
-      log.debug('Session created', { sessionId: transport.sessionId });
+      sessions.set(transport.sessionId, {
+        server, transport, callerId: auth.caller.id,
+      });
+      log.debug('Session created', { sessionId: transport.sessionId, caller: auth.caller.id });
     }
   });
 
