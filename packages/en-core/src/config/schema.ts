@@ -1,8 +1,12 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 
+// `admin` was reserved in earlier drafts but never gated any tool handler
+// — `exec` is the real privileged-operation gate. Having an ungated
+// permission in the enum is a footgun (operators grant it expecting
+// restrictions, nothing happens), so it's been removed.
 const PermissionSchema = z.enum([
-  'read', 'write', 'propose', 'approve', 'search', 'admin', 'exec',
+  'read', 'write', 'propose', 'approve', 'search', 'exec',
 ]);
 
 const CallerScopeSchema = z.object({

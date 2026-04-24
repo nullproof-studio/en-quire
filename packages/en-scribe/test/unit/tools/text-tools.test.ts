@@ -4,7 +4,8 @@ import { readFileSync, writeFileSync, existsSync, rmSync, mkdirSync } from 'node
 import { join } from 'node:path';
 import type Database from 'better-sqlite3';
 import type { ToolContext } from '@nullproof-studio/en-core';
-import { computeEtag, ValidationError } from '@nullproof-studio/en-core';
+import { computeEtag, ValidationError, PermissionDeniedError } from '@nullproof-studio/en-core';
+import type { CallerIdentity } from '@nullproof-studio/en-core';
 // Register plaintext parser for the root in these tests
 import '../../../src/parsers/plaintext-parser.js';
 import { handleTextRead } from '../../../src/tools/read/text-read.js';
@@ -176,6 +177,38 @@ describe('text_rename', () => {
     await expect(
       handleTextRename({ source: `${ROOT}/missing.txt`, destination: `${ROOT}/also-missing.txt` }, ctx),
     ).rejects.toThrow();
+  });
+
+  it('denies rename when caller lacks write permission on the destination, even with write on source', async () => {
+    // Caller can write anywhere under notes/public/ but not notes/protected/
+    const scopedCaller: CallerIdentity = {
+      id: 'scoped',
+      scopes: [
+        { path: `${ROOT}/public/**`, permissions: ['read', 'write', 'search'] },
+        { path: `${ROOT}/protected/**`, permissions: ['read', 'search'] },
+      ],
+    };
+    ctx.caller = scopedCaller;
+
+    // Seed a file the caller can write
+    mkdirSync(join(rootDir, 'public'), { recursive: true });
+    writeFileSync(join(rootDir, 'public', 'a.txt'), sample);
+
+    // Intra-scope rename is fine
+    await expect(
+      handleTextRename({ source: `${ROOT}/public/a.txt`, destination: `${ROOT}/public/b.txt` }, ctx),
+    ).resolves.toBeTruthy();
+
+    // Cross-scope rename must be denied — this is the bug fix.
+    // Seed a fresh source first.
+    writeFileSync(join(rootDir, 'public', 'a.txt'), sample);
+    await expect(
+      handleTextRename({ source: `${ROOT}/public/a.txt`, destination: `${ROOT}/protected/a.txt` }, ctx),
+    ).rejects.toThrow(PermissionDeniedError);
+
+    // Source must not have been moved
+    expect(existsSync(join(rootDir, 'public', 'a.txt'))).toBe(true);
+    expect(existsSync(join(rootDir, 'protected', 'a.txt'))).toBe(false);
   });
 });
 

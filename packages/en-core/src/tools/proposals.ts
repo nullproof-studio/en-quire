@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
 import { requirePermission } from '../rbac/permissions.js';
-import { GitRequiredError } from '../shared/errors.js';
+import { GitRequiredError, ValidationError } from '../shared/errors.js';
 import { getProductName } from '../shared/logger.js';
 import type { GitOperations } from '../git/operations.js';
 
@@ -136,10 +136,14 @@ export async function handleProposalApprove(
   args: z.infer<typeof ProposalApproveSchema>,
   ctx: ToolContext,
 ) {
-  requirePermission(ctx.caller, 'approve', '**');
-
+  // Resolve the root + target file BEFORE the permission check so the
+  // check can be scoped to the specific file, not a global '**'. A caller
+  // with approve on skills/** must not be able to approve a proposal
+  // targeting sops/** just because they have 'approve' somewhere.
   const { name: root, git } = findGitRoot(ctx, args.root);
   const { file } = parseProposalBranch(args.branch, root);
+
+  requirePermission(ctx.caller, 'approve', file);
 
   const mergeMessage = args.message ?? `[${getProductName()}] Approve proposal: ${args.branch}`;
   await git.mergeBranch(args.branch, mergeMessage);
@@ -165,9 +169,27 @@ export async function handleProposalReject(
   args: z.infer<typeof ProposalRejectSchema>,
   ctx: ToolContext,
 ) {
-  requirePermission(ctx.caller, 'approve', '**');
+  // Branch validation must happen BEFORE any git state is touched —
+  // otherwise a caller with global 'approve' could pass any local branch
+  // name (e.g. 'main', 'feature/whatever') and delete it. The prefix check
+  // plus the structural check below keep this function to `propose/*`
+  // branches only.
+  if (!args.branch.startsWith('propose/')) {
+    throw new ValidationError(
+      `Can only reject proposal branches (propose/...). Got: ${args.branch}`,
+    );
+  }
+  // Minimum structure: propose/{caller}/{...file}/{timestamp}
+  if (args.branch.split('/').length < 4) {
+    throw new ValidationError(
+      `Malformed proposal branch: ${args.branch}`,
+    );
+  }
 
-  const { git } = findGitRoot(ctx, args.root);
+  const { name: root, git } = findGitRoot(ctx, args.root);
+  const { file } = parseProposalBranch(args.branch, root);
+
+  requirePermission(ctx.caller, 'approve', file);
 
   await git.deleteBranch(args.branch);
 
