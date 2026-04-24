@@ -10,6 +10,8 @@ import {
   removeFromIndex,
   buildCommitMessage,
   buildProposalBranch,
+  runPostProposeHooks,
+  getLogger,
   requirePermission,
   resolveWriteMode,
   NotFoundError,
@@ -97,8 +99,11 @@ export async function handleTextRename(
       );
 
       if (mode === 'propose' && branch) {
-        const pushResult = await git.pushProposalBranch(branch);
-        if (pushResult.warning) pushWarnings.push(pushResult.warning);
+        pushWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.destination, caller: ctx.caller.id },
+          getLogger(),
+        ));
       }
     }
 

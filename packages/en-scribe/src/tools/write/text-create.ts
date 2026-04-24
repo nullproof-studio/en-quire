@@ -11,6 +11,8 @@ import {
   indexDocument,
   buildCommitMessage,
   buildProposalBranch,
+  runPostProposeHooks,
+  getLogger,
   requirePermission,
   resolveWriteMode,
   GitRequiredError,
@@ -74,8 +76,11 @@ export async function handleTextCreate(
       commit = await git.commitFile(resolved.relativePath, commitMsg);
 
       if (mode === 'propose' && branch) {
-        const pushResult = await git.pushProposalBranch(branch);
-        if (pushResult.warning) pushWarnings.push(pushResult.warning);
+        pushWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.file, caller: ctx.caller.id },
+          getLogger(),
+        ));
       }
     }
 

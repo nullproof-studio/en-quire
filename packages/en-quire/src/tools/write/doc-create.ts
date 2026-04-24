@@ -9,6 +9,7 @@ import { computeEtag } from '@nullproof-studio/en-core';
 import { parserRegistry } from '@nullproof-studio/en-core';
 import { indexDocument } from '@nullproof-studio/en-core';
 import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
+import { runPostProposeHooks, getLogger } from '@nullproof-studio/en-core';
 import { requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
 import { GitRequiredError, ValidationError } from '@nullproof-studio/en-core';
 import { resolveFilePath } from '@nullproof-studio/en-core';
@@ -79,10 +80,11 @@ export async function handleDocCreate(
       commit = await git.commitFile(resolved.relativePath, commitMsg);
 
       if (mode === 'propose' && branch) {
-        const pushResult = await git.pushProposalBranch(branch);
-        if (pushResult.warning) {
-          createWarnings.push(pushResult.warning);
-        }
+        createWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.file, caller: ctx.caller.id },
+          getLogger(),
+        ));
       }
     }
 

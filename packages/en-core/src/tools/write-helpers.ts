@@ -6,6 +6,7 @@ import { parserRegistry } from '../document/parser-registry.js';
 import type { DocumentParser } from '../document/parser-registry.js';
 import { indexDocument } from '../search/indexer.js';
 import { buildCommitMessage, buildProposalBranch } from '../git/commit-message.js';
+import { runPostProposeHooks } from '../git/post-propose.js';
 import { generateDiff } from '../shared/diff.js';
 import { resolveWriteMode } from '../rbac/permissions.js';
 import { GitRequiredError, ValidationError } from '../shared/errors.js';
@@ -109,17 +110,12 @@ export async function executeWrite(
       commit = await git.commitFile(resolved.relativePath, commitMsg);
       logger.debug('write:git-committed', { file: params.file, commit });
 
-      // Push proposal branches to the configured remote (no-op unless
-      // git.remote + git.push_proposals are both set on the root).
       if (mode === 'propose' && branch) {
-        const pushResult = await git.pushProposalBranch(branch);
-        if (pushResult.pushed) {
-          logger.info('write:pushed', { file: params.file, branch });
-        }
-        if (pushResult.warning) {
-          logger.warn('write:push-failed', { file: params.file, branch, warning: pushResult.warning });
-          warnings.push(pushResult.warning);
-        }
+        warnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: params.file, caller: ctx.caller.id },
+          logger,
+        ));
       }
     }
 

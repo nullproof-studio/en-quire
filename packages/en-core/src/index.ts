@@ -7,6 +7,7 @@ export * from './shared/errors.js';
 export * from './shared/etag.js';
 export * from './shared/file-utils.js';
 export * from './shared/logger.js';
+export * from './shared/tokenise-command.js';
 export * from './shared/types.js';
 export * from './shared/word-count.js';
 
@@ -26,6 +27,7 @@ export * from './rbac/types.js';
 export * from './git/commit-message.js';
 export * from './git/detector.js';
 export * from './git/operations.js';
+export * from './git/post-propose.js';
 
 // Search
 export * from './search/database.js';

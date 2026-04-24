@@ -6,6 +6,7 @@ import { safePath, readDocument } from '@nullproof-studio/en-core';
 import { computeEtag, validateEtag } from '@nullproof-studio/en-core';
 import { removeFromIndex } from '@nullproof-studio/en-core';
 import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
+import { runPostProposeHooks, getLogger } from '@nullproof-studio/en-core';
 import { requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
 import { NotFoundError, ValidationError, GitRequiredError } from '@nullproof-studio/en-core';
 import { resolveFilePath } from '@nullproof-studio/en-core';
@@ -91,10 +92,11 @@ export async function handleDocRename(
       );
 
       if (mode === 'propose' && branch) {
-        const pushResult = await git.pushProposalBranch(branch);
-        if (pushResult.warning) {
-          renameWarnings.push(pushResult.warning);
-        }
+        renameWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.destination, caller: ctx.caller.id },
+          getLogger(),
+        ));
       }
     }
 

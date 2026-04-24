@@ -1,7 +1,12 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { simpleGit, type SimpleGit } from 'simple-git';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { GitRequiredError } from '../shared/errors.js';
+import { tokeniseCommand } from '../shared/tokenise-command.js';
 import { detectGit } from './detector.js';
+
+const execFileAsync = promisify(execFile);
 
 export class GitOperations {
   private git: SimpleGit;
@@ -10,6 +15,8 @@ export class GitOperations {
   private _defaultBranch?: string;
   private _remote: string | null;
   private _pushProposals: boolean;
+  private _prHook: string | null;
+  private _documentRoot: string;
 
   constructor(
     documentRoot: string,
@@ -17,13 +24,16 @@ export class GitOperations {
     configuredDefaultBranch?: string | null,
     remote?: string | null,
     pushProposals?: boolean | null,
+    prHook?: string | null,
   ) {
+    this._documentRoot = documentRoot;
     this.git = simpleGit(documentRoot);
     const detection = detectGit(documentRoot);
     this._available = forceEnabled === false ? false : detection.available;
     this._configuredDefault = configuredDefaultBranch ?? null;
     this._remote = remote ?? null;
     this._pushProposals = pushProposals === true;
+    this._prHook = prHook ?? null;
   }
 
   get available(): boolean {
@@ -131,6 +141,48 @@ export class GitOperations {
   async deleteBranch(branch: string): Promise<void> {
     this.requireGit('delete branch');
     await this.git.deleteLocalBranch(branch, true);
+  }
+
+  /**
+   * Run the configured `git.pr_hook` command with per-token substitution
+   * of `{branch}`, `{file}`, and `{caller}`. The command is tokenised FIRST,
+   * then each token is substituted individually, so a substituted value that
+   * contains whitespace or shell metacharacters cannot split into new argv
+   * entries. Uses `execFile` (never `exec`), so the shell is never invoked.
+   *
+   * Returns `{ ran: false }` quietly when the hook is not configured. Hook
+   * failures (non-zero exit, missing command, timeout) surface as warnings,
+   * never thrown — a failed hook must not roll back the proposal commit
+   * that already landed.
+   */
+  async runPrHook(subs: { branch: string; file: string; caller: string }): Promise<{ ran: boolean; warning?: string }> {
+    if (!this._prHook) return { ran: false };
+
+    const tokens = tokeniseCommand(this._prHook);
+    if (tokens.length === 0) {
+      return { ran: false, warning: 'pr_hook is set but empty after tokenisation' };
+    }
+
+    const substitute = (t: string): string => t
+      .replaceAll('{branch}', subs.branch)
+      .replaceAll('{file}', subs.file)
+      .replaceAll('{caller}', subs.caller);
+
+    const [program, ...rest] = tokens.map(substitute);
+
+    try {
+      await execFileAsync(program, rest, {
+        cwd: this._documentRoot,
+        timeout: 30_000,
+        maxBuffer: 1_048_576,
+      });
+      return { ran: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const code = (err as NodeJS.ErrnoException | { code?: number }).code;
+      const codeSuffix = code !== undefined ? ` (exit ${code})` : '';
+      return { ran: false, warning: `pr_hook failed${codeSuffix}: ${msg}` };
+    }
   }
 
   /**

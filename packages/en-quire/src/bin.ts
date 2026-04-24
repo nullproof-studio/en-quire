@@ -84,6 +84,7 @@ async function main() {
       root.git.default_branch,
       root.git.remote,
       root.git.push_proposals,
+      root.git.pr_hook,
     );
     roots[name] = { root, git };
     log.info('Root configured', {
