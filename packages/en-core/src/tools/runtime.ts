@@ -28,11 +28,16 @@ export function wrapHandler<T>(
     } catch (err) {
       const durationMs = Math.round(performance.now() - start);
       const error = err instanceof EnquireError
-        ? {
-            error: err.code,
-            message: err.message,
-            ...('current_etag' in err && { current_etag: (err as { current_etag?: string }).current_etag }),
-          }
+        ? (() => {
+            const errExtras = err as unknown as { current_etag?: string; candidates?: unknown };
+            return {
+              error: err.code,
+              message: err.message,
+              ...(typeof errExtras.current_etag === 'string' && { current_etag: errExtras.current_etag }),
+              ...(Array.isArray(errExtras.candidates) && errExtras.candidates.length > 0
+                && { candidates: errExtras.candidates as string[] }),
+            };
+          })()
         : { error: 'internal_error', message: String(err) };
       logger.error('tool:error', { tool, error: error.error, message: error.message, durationMs });
       return {

@@ -7,6 +7,7 @@ import { safePath } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { logExecAudit } from '@nullproof-studio/en-core';
 import { tokeniseCommand } from '@nullproof-studio/en-core';
+import { NotFoundError, rankByLevenshtein } from '@nullproof-studio/en-core';
 
 const execFileAsync = promisify(execFile);
 
@@ -30,7 +31,13 @@ export async function handleDocExec(
   const rootName = args.root ?? Object.keys(ctx.config.document_roots)[0];
   const root = ctx.config.document_roots[rootName];
   if (!root) {
-    throw new Error(`Unknown root "${rootName}". Available: ${Object.keys(ctx.config.document_roots).join(', ')}`);
+    const candidates = rankByLevenshtein(rootName ?? '', Object.keys(ctx.config.document_roots), 20);
+    throw new NotFoundError(
+      'root',
+      rootName ?? '',
+      candidates,
+      'Set the `root` parameter to a configured root name.',
+    );
   }
   const workDir = args.working_dir
     ? safePath(root.path, args.working_dir)

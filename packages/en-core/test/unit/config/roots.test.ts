@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { resolveFilePath, resolveScope } from '@nullproof-studio/en-core';
+import { resolveFilePath, resolveScope, NotFoundError } from '@nullproof-studio/en-core';
 import type { ResolvedRoot } from '@nullproof-studio/en-core';
 
 const singleRoot: Record<string, ResolvedRoot> = {
@@ -60,12 +60,45 @@ describe('resolveFilePath', () => {
 
   it('throws on bare path in multi-root config', () => {
     expect(() => resolveFilePath(multiRoots, 'article.md'))
-      .toThrow('Cannot resolve root');
+      .toThrow(NotFoundError);
   });
 
-  it('throws on unknown root prefix', () => {
-    expect(() => resolveFilePath(multiRoots, 'unknown/file.md'))
-      .toThrow('Cannot resolve root');
+  it('throws on unknown root prefix with ranked candidates and format hint', () => {
+    let caught: unknown;
+    try {
+      resolveFilePath(multiRoots, 'docz/file.md');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(NotFoundError);
+    const err = caught as NotFoundError;
+    expect(err.resource).toBe('root');
+    expect(err.candidates).toBeDefined();
+    // "docs" is closest to "docz" (distance 1) and should rank first
+    expect(err.candidates![0]).toBe('docs');
+    expect(err.candidates!.length).toBeLessThanOrEqual(20);
+    expect(err.message).toContain('docs');
+    // Format hint should explain how to prefix paths
+    expect(err.message).toMatch(/prefix the path with a root name/i);
+  });
+
+  it('caps candidate list at 20', () => {
+    const manyRoots: Record<string, ResolvedRoot> = {};
+    for (let i = 0; i < 50; i++) {
+      manyRoots[`root${i}`] = {
+        name: `root${i}`,
+        path: `/data/root${i}`,
+        git: { enabled: null, auto_commit: true, remote: null, pr_hook: null },
+      };
+    }
+    let caught: unknown;
+    try {
+      resolveFilePath(manyRoots, 'unknown/file.md');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(NotFoundError);
+    expect((caught as NotFoundError).candidates!.length).toBe(20);
   });
 
   it('throws on root-only path (no file)', () => {

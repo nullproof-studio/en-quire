@@ -6,6 +6,7 @@ export * from './shared/encoding.js';
 export * from './shared/errors.js';
 export * from './shared/etag.js';
 export * from './shared/file-utils.js';
+export * from './shared/levenshtein.js';
 export * from './shared/logger.js';
 export * from './shared/tokenise-command.js';
 export * from './shared/types.js';
