@@ -36,6 +36,7 @@ import {
 
 // Admin
 import { DocExecSchema, handleDocExec } from './tools/admin/doc-exec.js';
+import { DocAuditLogSchema, handleDocAuditLog } from './tools/admin/doc-audit-log.js';
 
 /**
  * Register all en-quire tools into a registry.
@@ -78,4 +79,5 @@ export function registerEnQuireTools(registry: ToolRegistry): void {
 
   // Admin
   registry.register({ name: 'doc_exec', description: 'Execute a command in a document root (admin)', schema: DocExecSchema.shape, handler: handleDocExec });
+  registry.register({ name: 'doc_audit_log', description: 'Query the doc_exec audit trail (admin). Filter by date range (start_date / end_date as ISO 8601), caller, or command substring. Returns entries newest-first with stdout/stderr truncated to 500 chars; total reflects the unfiltered match count.', schema: DocAuditLogSchema.shape, handler: handleDocAuditLog });
 }
