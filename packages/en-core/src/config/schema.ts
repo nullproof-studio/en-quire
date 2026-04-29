@@ -45,10 +45,11 @@ const SearchSchema = z.object({
 }).passthrough();
 // `passthrough` keeps Zod from erroring on unrecognised keys —
 // `search.fulltext` was a stale toggle that never gated any code path,
-// so it was removed in v0.3. Operators with `fulltext: false` in old
-// configs see no behaviour change (FTS was always on), and Zod's
-// passthrough mode silently accepts the legacy key without breaking
-// startup.
+// so it was removed in v0.3. Operators with `fulltext` in their config
+// get an explicit deprecation warning at load time (see
+// warnLegacyConfigKeys in loader.ts) so the no-op key doesn't quietly
+// linger; passthrough only handles the parse, the warning handles the
+// operator-visibility side.
 
 const LoggingSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'debug']).default('info'),

@@ -7,6 +7,27 @@ import { ValidationError } from '../shared/errors.js';
 import type { ResolvedConfig, ResolvedRoot } from '../shared/types.js';
 
 /**
+ * Warn on known stale / deprecated config keys before zod strips them.
+ *
+ * `search.fulltext` was a v0.2 toggle that never gated any code path —
+ * FTS5 indexing is always on. The schema uses `passthrough` so existing
+ * configs don't fail to load, but operators with `fulltext: false`
+ * inherited from earlier versions need to know their toggle is a no-op
+ * and the server is full-text-indexing regardless.
+ */
+function warnLegacyConfigKeys(parsed: unknown): void {
+  if (!parsed || typeof parsed !== 'object') return;
+  const search = (parsed as { search?: unknown }).search;
+  if (search && typeof search === 'object' && 'fulltext' in search) {
+    console.warn(
+      'en-quire config: `search.fulltext` is deprecated and has no effect — '
+        + 'FTS5 indexing is always on in v0.3+. Remove the key from your config '
+        + 'to silence this warning.',
+    );
+  }
+}
+
+/**
  * Load and validate configuration from a YAML file.
  * Applies defaults for missing optional fields.
  */
@@ -33,6 +54,14 @@ export function loadConfig(configPath: string): ResolvedConfig {
       err,
     );
   }
+
+  // Surface deprecated / no-op config keys before zod strips them. The
+  // loader runs before the structured logger is initialised, so warnings
+  // go to stderr via console.warn — operators see them at startup
+  // alongside other Node messages, and CI captures them in the same
+  // stream. Failing startup over a stale key would break upgrades; a
+  // visible warning gives operators time to clean up.
+  warnLegacyConfigKeys(parsed);
 
   const result = ConfigSchema.safeParse(parsed);
   if (!result.success) {

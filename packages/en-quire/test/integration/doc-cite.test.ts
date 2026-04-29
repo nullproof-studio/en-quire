@@ -247,6 +247,35 @@ describe('doc_cite — RBAC', () => {
     expect(mainContent).not.toContain(result.formatted_reference);
   });
 
+  it('accepts a propose-only caller in a governed deployment (preflight matches actual append mode)', async () => {
+    mockAgent
+      .get('https://forbes.com')
+      .intercept({ path: '/x' })
+      .reply(200, '<html><body><p>quoted text here</p></body></html>', {
+        headers: { 'content-type': 'text/html' },
+      });
+
+    // Governed posture: caller has cite_web + propose but NOT write. The
+    // actual append for web cites under web_appends_propose:true uses
+    // propose mode, so the preflight must check `propose`, not `write`.
+    const ctx = buildContext(
+      [{ path: '**', permissions: ['read', 'propose', 'cite', 'cite_web'] }],
+      { web_appends_propose: true },
+    );
+
+    const result = await handleDocCite(
+      {
+        source: 'https://forbes.com/x',
+        quote: 'quoted text here',
+        target_file: 'docs/profile.md',
+      },
+      ctx,
+    );
+    expect(result.status).toBe('verified');
+    if (result.status !== 'verified') return;
+    expect(result.append?.mode).toBe('propose');
+  });
+
   it('still uses direct write for local cites even when web_appends_propose is true', async () => {
     writeFileSync(join(docsRoot, 'source.md'), 'a quoted phrase here');
     await g.add('source.md');
@@ -657,6 +686,37 @@ describe('doc_cite_reverify', () => {
     if (result.status === 'verified') {
       expect(result.hash_match).toBe(true);
     }
+  });
+
+  it('rejects reverify on a stored file:// citation when caller has no read on the resolved root path', async () => {
+    writeFileSync(join(docsRoot, 'restricted.md'), 'a quoted phrase here');
+    await g.add('restricted.md');
+    await g.commit('add restricted');
+
+    // High-priv caller seeds the citation via file://
+    const seed = buildContext([
+      { path: '**', permissions: ['read', 'write', 'cite'] },
+    ]);
+    const cite = await handleDocCite(
+      {
+        source: `file://${join(docsRoot, 'restricted.md')}`,
+        quote: 'a quoted phrase here',
+      },
+      seed,
+    );
+    if (cite.status !== 'verified') throw new Error('precondition');
+
+    // Lower-priv caller has cite (so they can call reverify), but no read
+    // on docs/restricted.md (read scoped to a sibling). Reverify must
+    // refuse — otherwise hash_match + text_still_present would leak
+    // observable state about the file's contents.
+    const lowPriv = buildContext([
+      { path: 'docs/elsewhere/**', permissions: ['read'] },
+      { path: '**', permissions: ['cite'] },
+    ]);
+    await expect(
+      handleDocCiteReverify({ citation_id: cite.citation_id }, lowPriv),
+    ).rejects.toThrow(PermissionDeniedError);
   });
 
   it('records each verify attempt to cite_audit_log', async () => {

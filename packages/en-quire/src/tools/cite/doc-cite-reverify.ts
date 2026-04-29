@@ -54,10 +54,19 @@ export async function handleDocCiteReverify(
   // low-privileged caller could enumerate sequential citation_ids and
   // trigger arbitrary outbound fetches to allowlisted hosts and re-read
   // en-quire-managed sources they should not see.
+  //
+  // Local sources also need `read` on the equivalent root-prefixed path —
+  // for both en-quire managed and file:// stored citations. Without the
+  // file:// check, hash_match and text_still_present leak observable
+  // state about a private file the caller can't read directly.
   const requiredPerm = requiredPermissionFor(stored);
   requirePermission(ctx.caller, requiredPerm, stored.target_file ?? '**');
   if (stored.source_scheme === 'enquire') {
     requirePermission(ctx.caller, 'read', stored.source_uri);
+  }
+  if (stored.source_scheme === 'file') {
+    const prefixed = filePathToPrefixed(stored.source_uri, ctx.config.document_roots);
+    if (prefixed) requirePermission(ctx.caller, 'read', prefixed);
   }
 
   const runtime =
@@ -132,4 +141,28 @@ function requiredPermissionFor(stored: CitationRecord): Permission {
   return stored.source_scheme === 'https' || stored.source_scheme === 'http'
     ? 'cite_web'
     : 'cite';
+}
+
+/**
+ * Mirror of the helper in doc-cite.ts: map a file:// URI to its
+ * equivalent root-prefixed en-quire path so caller `read` scopes apply
+ * identically to file:// and bare en-quire sources. Returns null when
+ * the absolute target lies outside every configured root (in which
+ * case fetchSource will reject it as source_blocked anyway, but we
+ * skip the read check rather than RBAC-test against an arbitrary
+ * absolute path).
+ */
+function filePathToPrefixed(
+  uri: string,
+  roots: Record<string, { path: string }>,
+): string | null {
+  const absolute = decodeURIComponent(uri.slice('file://'.length));
+  for (const [rootName, root] of Object.entries(roots)) {
+    const rootPath = root.path;
+    if (absolute === rootPath || absolute.startsWith(rootPath + '/')) {
+      const rel = absolute === rootPath ? '' : absolute.slice(rootPath.length + 1);
+      return rel ? `${rootName}/${rel}` : rootName;
+    }
+  }
+  return null;
 }

@@ -105,14 +105,22 @@ export async function handleDocCite(
     if (prefixed) requirePermission(ctx.caller, 'read', prefixed);
   }
 
-  // Preflight target_file write checks — happen BEFORE fetch / verify /
+  // Preflight target_file checks — happen BEFORE fetch / verify /
   // allocation. Without this, a caller with cite_web but no write could
   // trigger network egress and registry inserts that would never be
   // followed by a successful append. Stale if_match would also leave
   // orphan citation rows.
+  //
+  // The append mode is computed up front from scheme + per-root config
+  // (a web cite into a `web_appends_propose: true` root uses propose).
+  // The preflight checks the SAME mode the actual append will use, so a
+  // governed-posture caller granted `propose` (but not `write`) isn't
+  // wrongly rejected here.
+  const isWebSource = scheme === 'https' || scheme === 'http';
+  const intendedAppendMode: 'write' | 'propose' =
+    isWebSource && ctx.config.citation.web_appends_propose ? 'propose' : 'write';
   if (args.target_file) {
-    // Must have write or propose on target_file.
-    resolveWriteMode(ctx.caller, args.target_file, 'write');
+    resolveWriteMode(ctx.caller, args.target_file, intendedAppendMode);
     // Validate if_match against the target's current content (if the
     // file exists yet — it may not, in which case the load will fail
     // with NotFound and we surface that). Auto-create of target_file is
@@ -211,10 +219,9 @@ export async function handleDocCite(
   // read-after-cite expectation depends on the reference landing on main.
   let append: { mode: 'write' | 'propose'; commit?: string; etag?: string; branch?: string } | undefined;
   if (verify.status === 'verified' && args.target_file && cited.is_new) {
-    const isWeb = scheme === 'https' || scheme === 'http';
-    const appendMode: 'write' | 'propose' =
-      isWeb && ctx.config.citation.web_appends_propose ? 'propose' : 'write';
-
+    // intendedAppendMode was computed up front and used by the preflight
+    // permission check; reuse it here so preflight + actual write can't
+    // diverge.
     const { content, encoding } = loadDocument(ctx, args.target_file);
     const newContent = buildCitationAppend(
       content,
@@ -227,7 +234,7 @@ export async function handleDocCite(
         file: args.target_file,
         operation: 'doc_cite append',
         target: ctx.config.citation.section_heading,
-        mode: appendMode,
+        mode: intendedAppendMode,
         message: args.message ?? `cite: ${formatted_reference.slice(0, 80)}`,
         if_match: args.if_match,
       },
@@ -236,7 +243,7 @@ export async function handleDocCite(
       encoding,
     );
     append = {
-      mode: appendMode,
+      mode: intendedAppendMode,
       ...(writeResult.commit ? { commit: writeResult.commit } : {}),
       ...(writeResult.etag ? { etag: writeResult.etag } : {}),
       ...(writeResult.branch ? { branch: writeResult.branch } : {}),

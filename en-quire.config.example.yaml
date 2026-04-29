@@ -93,7 +93,14 @@ citation:
   enabled: false                          # Master switch — must be true to use doc_cite.
   section_heading: "Citations"            # Heading text for the auto-appended Citations section.
   section_position: "end"                 # Where the Citations section is created when absent.
-  web_appends_propose: false              # If true, auto-append goes through the proposal queue (per-root override).
+  # When true, the auto-append for HTTPS/HTTP source citations goes through
+  # the proposal queue. Scope is web-only by design: local + en-quire cites
+  # are always direct writes (their content is already inside the deployer's
+  # trust boundary, and routing them through propose would break the
+  # read-after-cite contract for the common authoring flow). If you need
+  # human review on every cite append regardless of source, that's a phase-2
+  # knob (citation.local_appends_propose) — not yet shipped.
+  web_appends_propose: false
 
   fetch:
     https_only: true                      # Reject plain http:// even if allowlisted.

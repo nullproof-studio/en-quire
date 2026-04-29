@@ -381,7 +381,8 @@ Three postures the design supports explicitly:
 | **Network egress** | Whatever the host reaches | Outbound proxy or firewall-restricted | Central egress gateway, allowlisted domains |
 | **Web citation** | Optional opt-in | Disabled by default; enable for specific hosts | Disabled unless explicitly enabled by admin policy |
 | **`cite_web` permission** | Granted to the operator caller | Per-caller, scoped to specific paths | Issued via central RBAC, audited |
-| **Append mode for web cites** | Direct write | Direct write or per-root proposal | `web_appends_propose: true` per governed root |
+| **Append mode for web cites** | Direct write | Direct write or per-deployment proposal | `web_appends_propose: true` |
+| **Append mode for local cites** | Direct write | Direct write | Direct write (local always direct in v1) |
 | **Audit trail** | `cite_audit_log` table | Same; tail to syslog if needed | Forward `cite_audit_log` rows to central SIEM |
 
 For SME and enterprise: run en-quire under a dedicated service identity, keep `citation.fetch.http_allowlist` empty by default, and grant `cite_web` only to callers that genuinely need it. Outbound HTTPS goes through whatever the host's network policy allows — if a corporate proxy is mandatory, configure it at the OS or container level (proxy-via-en-quire-config is deferred to phase 2).
