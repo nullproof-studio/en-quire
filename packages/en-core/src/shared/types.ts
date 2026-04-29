@@ -131,7 +131,19 @@ export interface EncodingInfo {
 }
 
 /** Permission types for RBAC */
-export type Permission = 'read' | 'write' | 'propose' | 'approve' | 'search' | 'exec';
+export type Permission =
+  | 'read'
+  | 'write'
+  | 'propose'
+  | 'approve'
+  | 'search'
+  | 'exec'
+  // Citation permissions. `cite` covers en-quire managed paths and file://
+  // sources. `cite_web` is required additionally for https?:// — the egress
+  // capability is gated separately so a deployer can grant local-only
+  // citation without enabling web fetch.
+  | 'cite'
+  | 'cite_web';
 
 /** Caller identity resolved from transport context */
 export interface CallerIdentity {

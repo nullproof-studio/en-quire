@@ -7,6 +7,10 @@ import { z } from 'zod';
 // restrictions, nothing happens), so it's been removed.
 const PermissionSchema = z.enum([
   'read', 'write', 'propose', 'approve', 'search', 'exec',
+  // Citation permissions. cite ⇒ local + en-quire managed sources; cite_web
+  // ⇒ additionally required for https?:// (network egress is gated
+  // independently so a deployer can grant local-only citation).
+  'cite', 'cite_web',
 ]);
 
 const CallerScopeSchema = z.object({
@@ -51,6 +55,48 @@ const LoggingSchema = z.object({
   dir: z.string().nullable().default(null),
 });
 
+// Citation feature config. The whole feature is opt-in: `enabled: false` is
+// the default. Web citation is independently gated — leaving
+// `fetch.http_allowlist` empty (the default) means no external host can be
+// cited even if `cite_web` is granted. See README §Citations for the full
+// security posture.
+const CitationFetchSchema = z.object({
+  https_only: z.boolean().default(true),
+  http_allowlist: z.array(z.string()).default([]),
+  block_private_ranges: z.boolean().default(true),
+  use_proxy_env: z.boolean().default(false),
+  allowed_content_types: z.array(z.string()).default([
+    'text/html',
+    'text/plain',
+    'text/markdown',
+    'application/json',
+    'application/xhtml+xml',
+  ]),
+  timeout_ms: z.number().int().positive().default(10_000),
+  max_bytes: z.number().int().positive().default(5_000_000),
+  max_redirects: z.number().int().nonnegative().default(3),
+  decompression_factor: z.number().int().positive().default(5),
+  strip_query: z.boolean().default(true),
+  strip_fragment: z.boolean().default(true),
+  allow_userinfo: z.boolean().default(false),
+  max_path_chars: z.number().int().positive().default(2048),
+  max_host_chars: z.number().int().positive().default(253),
+  secret_pattern_reject: z.boolean().default(true),
+});
+
+const CitationRateLimitSchema = z.object({
+  external_per_minute: z.number().int().nonnegative().default(30),
+});
+
+const CitationSchema = z.object({
+  enabled: z.boolean().default(false),
+  section_heading: z.string().default('Citations'),
+  section_position: z.string().default('end'),
+  web_appends_propose: z.boolean().default(false),
+  fetch: CitationFetchSchema.default({}),
+  rate_limit: CitationRateLimitSchema.default({}),
+});
+
 const RootGitSchema = z.object({
   enabled: z.boolean().nullable().default(null), // null = auto-detect
   auto_commit: z.boolean().default(true),
@@ -84,6 +130,7 @@ export const ConfigSchema = z.object({
   logging: LoggingSchema.default({}),
   callers: z.record(z.string(), CallerConfigSchema).default({}),
   require_read_before_write: z.boolean().default(true),
+  citation: CitationSchema.default({}),
 });
 
 export type RawConfig = z.input<typeof ConfigSchema>;
