@@ -135,6 +135,8 @@ export function loadConfig(configPath: string): ResolvedConfig {
         endpoint: validated.search.semantic.endpoint,
         model: validated.search.semantic.model,
         dimensions: validated.search.semantic.dimensions,
+        api_key: validated.search.semantic.api_key,
+        api_key_env: validated.search.semantic.api_key_env,
       },
     },
     logging: {

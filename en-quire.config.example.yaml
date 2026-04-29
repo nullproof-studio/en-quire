@@ -56,10 +56,20 @@ search:
   sync_on_start: blocking           # "blocking" (default) or "background" (use for 100k+ docs)
   batch_size: 500                   # Files per index transaction batch
   semantic:
-    enabled: false                  # Opt-in semantic vector search
-    endpoint: "http://localhost:11434/api/embeddings"  # e.g. Ollama
-    model: "nomic-embed-text"
-    dimensions: 768
+    enabled: false                  # Opt-in semantic vector search (sqlite-vec + OpenAI-compatible embeddings)
+    # Base URL of an OpenAI-compatible embeddings endpoint. The client
+    # appends "/embeddings". Examples:
+    #   OpenAI:           https://api.openai.com/v1
+    #   LM Studio:        http://localhost:1234/v1
+    #   Ollama (compat):  http://localhost:11434/v1
+    #   text-embeddings-inference:  http://localhost:8080
+    endpoint: "https://api.openai.com/v1"
+    model: "text-embedding-3-small" # 1536 dims hosted; nomic-embed-text (768) on local servers
+    dimensions: 1536
+    # Auth: prefer api_key_env so secrets stay out of committed config.
+    # If both are set, the env var wins.
+    api_key: null
+    api_key_env: null               # e.g. "OPENAI_API_KEY"
 
 # Logging
 logging:

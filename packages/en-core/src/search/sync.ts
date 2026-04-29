@@ -8,9 +8,16 @@ import { indexDocument, removeFromIndex } from './indexer.js';
 import { getLogger } from '../shared/logger.js';
 import type { SectionNode } from '../shared/types.js';
 import type { RawLink } from '../document/parser-registry.js';
+import type { EmbeddingsClient } from './embeddings.js';
+import { upsertEmbedding, removeEmbeddingsForFile } from './vector-store.js';
+import { flattenTree, getSectionPath } from '../document/section-tree.js';
 
 /** Default number of files to index per transaction batch. */
 const BATCH_SIZE = 500;
+/** Default number of section bodies sent per embeddings request. */
+const EMBED_BATCH_SIZE = 32;
+/** Skip empty / near-empty bodies for embeddings — they don't carry signal. */
+const MIN_BODY_CHARS_FOR_EMBED = 16;
 
 export interface SyncResult {
   indexed: number;
@@ -149,4 +156,152 @@ export function syncIndex(
 
   const elapsed_ms = Math.round(performance.now() - start);
   return { indexed, skipped, removed, elapsed_ms };
+}
+
+export interface EmbedSyncResult {
+  embedded: number;
+  skipped: number;
+  errors: number;
+  elapsed_ms: number;
+}
+
+/**
+ * Populate the sqlite-vec index for a document root. Run AFTER `syncIndex`
+ * has refreshed the FTS index — this function reads the same files,
+ * re-parses, and embeds each section that has enough body text to be
+ * worth indexing.
+ *
+ * Embedding requests are batched (default 32 inputs per request); the
+ * upserts themselves run inside a single SQLite transaction per file.
+ * Failures on individual batches are logged and counted but don't abort
+ * the run — half a populated index is more useful than none.
+ */
+export async function syncEmbeddings(
+  db: Database.Database,
+  rootName: string,
+  documentRoot: string,
+  embeddings: EmbeddingsClient,
+  embedBatchSize: number = EMBED_BATCH_SIZE,
+): Promise<EmbedSyncResult> {
+  const log = getLogger();
+  const start = performance.now();
+  const prefix = rootName + '/';
+
+  let files: string[];
+  try {
+    files = listDocumentFiles(documentRoot);
+  } catch (err) {
+    log.warn('Embedding sync skipped — cannot scan root', {
+      root: rootName,
+      path: documentRoot,
+      error: String(err),
+    });
+    return { embedded: 0, skipped: 0, errors: 0, elapsed_ms: Math.round(performance.now() - start) };
+  }
+
+  let embedded = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  // Drop stale embeddings for files that no longer exist on disk.
+  const onDisk = new Set(files.map((f) => prefix + f));
+  const knownEmbedded = db.prepare(
+    `SELECT DISTINCT file_path FROM vec_section_meta WHERE file_path LIKE ?`,
+  ).all(`${prefix}%`) as Array<{ file_path: string }>;
+  for (const { file_path } of knownEmbedded) {
+    if (!onDisk.has(file_path)) {
+      removeEmbeddingsForFile(db, file_path);
+    }
+  }
+
+  // Phase 1 — parse + collect every embeddable section across all files.
+  type Pending = {
+    prefixedPath: string;
+    sectionPath: string;
+    heading: string;
+    level: number;
+    line_start: number;
+    line_end: number;
+    body: string;
+  };
+  const pending: Pending[] = [];
+
+  for (const file of files) {
+    const prefixedPath = prefix + file;
+    let content: string;
+    try {
+      const result = readDocument(documentRoot, file);
+      content = result.content;
+    } catch {
+      skipped++;
+      continue;
+    }
+    let tree: SectionNode[];
+    try {
+      const parser = parserRegistry.getParser(file);
+      tree = parser.parse(content);
+    } catch {
+      skipped++;
+      continue;
+    }
+    const flat = flattenTree(tree);
+    for (const node of flat) {
+      const body = content.slice(node.bodyStartOffset, node.bodyEndOffset).trim();
+      if (body.length < MIN_BODY_CHARS_FOR_EMBED) {
+        skipped++;
+        continue;
+      }
+      pending.push({
+        prefixedPath,
+        sectionPath: getSectionPath(node),
+        heading: node.heading.text,
+        level: node.heading.level,
+        line_start: node.heading.position?.start.line ?? 0,
+        line_end: content.slice(0, node.sectionEndOffset).split('\n').length,
+        body,
+      });
+    }
+  }
+
+  // Phase 2 — embed in batches, upsert results.
+  for (let i = 0; i < pending.length; i += embedBatchSize) {
+    const batch = pending.slice(i, i + embedBatchSize);
+    let vectors: Float32Array[];
+    try {
+      vectors = await embeddings.embedBatch(batch.map((p) => p.body));
+    } catch (err) {
+      log.warn('Embedding batch failed — skipping batch', {
+        root: rootName,
+        batch_index: i,
+        size: batch.length,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      errors += batch.length;
+      continue;
+    }
+    if (vectors.length !== batch.length) {
+      log.warn('Embedding batch returned wrong count — skipping', {
+        expected: batch.length, got: vectors.length,
+      });
+      errors += batch.length;
+      continue;
+    }
+    const runUpsert = db.transaction(() => {
+      for (let j = 0; j < batch.length; j++) {
+        const p = batch[j];
+        upsertEmbedding(db, {
+          file_path: p.prefixedPath,
+          section_path: p.sectionPath,
+          section_heading: p.heading,
+          section_level: p.level,
+          line_start: p.line_start,
+          line_end: p.line_end,
+        }, vectors[j]);
+        embedded++;
+      }
+    });
+    runUpsert();
+  }
+
+  return { embedded, skipped, errors, elapsed_ms: Math.round(performance.now() - start) };
 }

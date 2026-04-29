@@ -21,9 +21,17 @@ const CallerConfigSchema = z.object({
 
 const SemanticSearchSchema = z.object({
   enabled: z.boolean().default(false),
+  // Base URL of an OpenAI-compatible embeddings server (e.g.
+  // "https://api.openai.com/v1", "http://localhost:1234/v1"). The client
+  // appends "/embeddings" — do not include the trailing path.
   endpoint: z.string().optional(),
   model: z.string().optional(),
   dimensions: z.number().int().positive().optional(),
+  // Authorisation: literal API key or env var name to read at startup.
+  // Prefer api_key_env so secrets don't sit in committed config. When
+  // both are set, the env var wins.
+  api_key: z.string().nullable().default(null),
+  api_key_env: z.string().nullable().default(null),
 });
 
 const SearchSchema = z.object({

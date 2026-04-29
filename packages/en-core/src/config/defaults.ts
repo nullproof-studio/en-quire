@@ -11,6 +11,8 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'document_roots' | 'database'>
     batch_size: 500,
     semantic: {
       enabled: false,
+      api_key: null,
+      api_key_env: null,
     },
   },
   logging: {

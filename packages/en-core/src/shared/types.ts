@@ -180,6 +180,8 @@ export interface ResolvedConfig {
       endpoint?: string;
       model?: string;
       dimensions?: number;
+      api_key?: string | null;
+      api_key_env?: string | null;
     };
   };
   logging: {
