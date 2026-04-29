@@ -29,13 +29,20 @@ export function wrapHandler<T>(
       const durationMs = Math.round(performance.now() - start);
       const error = err instanceof EnquireError
         ? (() => {
-            const errExtras = err as unknown as { current_etag?: string; candidates?: unknown };
+            const errExtras = err as unknown as {
+              current_etag?: string;
+              candidates?: unknown;
+              actual_count?: unknown;
+              expected_count?: unknown;
+            };
             return {
               error: err.code,
               message: err.message,
               ...(typeof errExtras.current_etag === 'string' && { current_etag: errExtras.current_etag }),
               ...(Array.isArray(errExtras.candidates) && errExtras.candidates.length > 0
                 && { candidates: errExtras.candidates as string[] }),
+              ...(typeof errExtras.actual_count === 'number' && { actual_count: errExtras.actual_count }),
+              ...(typeof errExtras.expected_count === 'number' && { expected_count: errExtras.expected_count }),
             };
           })()
         : { error: 'internal_error', message: String(err) };

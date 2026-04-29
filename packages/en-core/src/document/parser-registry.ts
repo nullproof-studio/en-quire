@@ -51,6 +51,15 @@ class ParserRegistry {
   supportedExtensions(): string[] {
     return [...this.extensionMap.keys()];
   }
+
+  /** Return extensions whose parser declares the given capability. */
+  extensionsSupporting(capability: keyof ParserCapabilities): string[] {
+    const result: string[] = [];
+    for (const [ext, parser] of this.extensionMap) {
+      if (parser.capabilities[capability]) result.push(ext);
+    }
+    return result;
+  }
 }
 
 export const parserRegistry = new ParserRegistry();

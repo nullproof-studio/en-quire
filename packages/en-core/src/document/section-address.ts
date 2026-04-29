@@ -2,6 +2,7 @@
 import micromatch from 'micromatch';
 import type { SectionNode, SectionAddress } from '../shared/types.js';
 import { AddressResolutionError } from '../shared/errors.js';
+import { rankByLevenshtein } from '../shared/levenshtein.js';
 import { flattenTree } from './section-tree.js';
 
 /**
@@ -164,11 +165,9 @@ function addressToString(address: SectionAddress): string {
 }
 
 /**
- * Find closest matching heading texts for error messages.
+ * Find closest matching heading texts for error messages, ranked by
+ * Levenshtein distance (closest first). Tie-broken lexically.
  */
 function findClosestMatches(query: string, headings: string[], limit = 3): string[] {
-  const lower = query.toLowerCase();
-  return headings
-    .filter((h) => h.toLowerCase().includes(lower) || lower.includes(h.toLowerCase()))
-    .slice(0, limit);
+  return rankByLevenshtein(query, headings, limit);
 }

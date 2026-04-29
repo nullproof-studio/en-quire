@@ -233,6 +233,28 @@ describe('resolveSingleSection', () => {
     expect(err.candidates!.every((c) => /\[\s*\d/.test(c))).toBe(true);
   });
 
+  it('ranks not-found candidates by Levenshtein distance, closest first', () => {
+    // Headings with various edit distances to the query "Foo".
+    const md = '# Doc\n\n## Foe\n\nx.\n\n## Foobar\n\ny.\n\n## Bar\n\nz.\n\n## Fop\n\nq.\n';
+    const ast = parseMarkdown(md);
+    const tree = buildSectionTree(ast, md);
+    let caught: unknown;
+    try {
+      resolveSingleSection(tree, { type: 'text', text: 'Foo' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AddressResolutionError);
+    const err = caught as AddressResolutionError;
+    expect(err.candidates).toBeDefined();
+    // Closest matches by edit distance: Foe (1), Fop (1), then Foobar (3).
+    // Substring-only matching put Foobar first historically because it contained "Foo".
+    // Levenshtein-ranked output should put the distance-1 matches first.
+    expect(err.candidates![0]).toMatch(/^(Foe|Fop)$/);
+    expect(err.candidates![1]).toMatch(/^(Foe|Fop)$/);
+    expect(err.candidates!.slice(0, 2)).not.toContain('Foobar');
+  });
+
   it('emits distinguishable candidates for nested duplicate-named sections', () => {
     // Two "Foo" sections under different parents — same heading text, different paths.
     const md = '# Doc\n\n## Section A\n\n### Foo\n\nA-foo.\n\n## Section B\n\n### Foo\n\nB-foo.\n';
