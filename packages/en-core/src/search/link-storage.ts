@@ -118,16 +118,19 @@ export function removeLinks(db: Database.Database, sourcePath: string): void {
 }
 
 /**
- * Re-resolve `?`-prefixed (unresolved) rows for sources matching the given
- * root prefix. Runs at the end of `syncIndex` so that files newly added
- * in this sync get picked up by stale links from sources whose mtime
- * skipped them this round.
+ * Re-resolve `?`-prefixed (unresolved) rows globally — across every
+ * source root, not just the one currently syncing. Cross-root links
+ * are common (a skill in `agents/` references an SOP in `docs/`), and
+ * filtering by source root would leave the docs-side row stale until
+ * docs is itself re-synced. The scan is cheap (rows tagged `?` are
+ * the only candidates and most are indexed by an inequality already)
+ * and idempotent, so re-running per-root is a no-op once everything
+ * resolves.
  *
- * This is the second half of the order-dependence fix: deferred link
- * storage handles within-sync ordering, this handles between-sync
- * ordering (target file added in sync N+1, source mtime-skipped).
+ * Returns the count of rows successfully promoted from `?<target>` to
+ * a resolved path.
  */
-export function resolveStaleLinks(db: Database.Database, rootPrefix: string): number {
+export function resolveStaleLinks(db: Database.Database): number {
   let resolved = 0;
   const indexed = db.prepare('SELECT file_path FROM index_metadata').all() as Array<{ file_path: string }>;
   const indexedSet = new Set(indexed.map((r) => r.file_path));
@@ -135,8 +138,8 @@ export function resolveStaleLinks(db: Database.Database, rootPrefix: string): nu
   // Path-shaped unresolved rows — target after `?` contains `/`.
   const pathRows = db.prepare(
     `SELECT id, target_file FROM doc_links
-     WHERE source_file GLOB ? AND target_file LIKE '?%' AND target_file LIKE '%/%'`,
-  ).all(`${rootPrefix}*`) as Array<{ id: number; target_file: string }>;
+     WHERE target_file LIKE '?%' AND target_file LIKE '%/%'`,
+  ).all() as Array<{ id: number; target_file: string }>;
   const updateStmt = db.prepare('UPDATE doc_links SET target_file = ? WHERE id = ?');
   for (const row of pathRows) {
     const path = row.target_file.slice(1);
@@ -149,8 +152,8 @@ export function resolveStaleLinks(db: Database.Database, rootPrefix: string): nu
   // Wiki-shaped unresolved rows — bare basename, no `/` after `?`.
   const wikiRows = db.prepare(
     `SELECT id, target_file FROM doc_links
-     WHERE source_file GLOB ? AND target_file LIKE '?%' AND target_file NOT LIKE '%/%'`,
-  ).all(`${rootPrefix}*`) as Array<{ id: number; target_file: string }>;
+     WHERE target_file LIKE '?%' AND target_file NOT LIKE '%/%'`,
+  ).all() as Array<{ id: number; target_file: string }>;
   if (wikiRows.length > 0) {
     const indexedList = [...indexedSet];
     for (const row of wikiRows) {

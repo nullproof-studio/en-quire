@@ -117,4 +117,34 @@ describe('syncIndex link resolution — across syncs', () => {
 
     expect(listLinks('docs/skills/triage.md')).toEqual(['docs/sops/runbook.md']);
   });
+
+  it('re-resolves cross-root stale `?` rows when the target lives in a different root', () => {
+    // Two roots: `docs` and `agents`. A skill in agents/ links to an SOP
+    // in docs/. If agents syncs first, the link stores as
+    // `?docs/sops/runbook.md`. When docs then syncs, the agents-side
+    // row stays stale unless resolveStaleLinks scans globally rather
+    // than per-root.
+    const agentsRoot = join(workRoot, 'agents');
+    mkdirSync(join(agentsRoot, 'skills'), { recursive: true });
+    writeFileSync(
+      join(agentsRoot, 'skills', 'michelle.md'),
+      '# Michelle\n\nUse [the runbook](../../docs/sops/runbook.md) for triage.\n',
+    );
+
+    // Sync agents FIRST — target lives in a root that hasn't been
+    // indexed yet, so the link must store as `?`.
+    syncIndex(db, 'agents', agentsRoot);
+    expect(listLinks('agents/skills/michelle.md')).toEqual(['?docs/sops/runbook.md']);
+
+    // Now sync docs (the target's root). The agents source is in a
+    // DIFFERENT root and is untouched — only a global resolveStaleLinks
+    // pass fixes the `?` row.
+    writeFileSync(
+      join(docsRoot, 'sops', 'runbook.md'),
+      '# Runbook\n\nProcedure body.\n',
+    );
+    syncIndex(db, 'docs', docsRoot);
+
+    expect(listLinks('agents/skills/michelle.md')).toEqual(['docs/sops/runbook.md']);
+  });
 });

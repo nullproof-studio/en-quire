@@ -203,10 +203,26 @@ export interface VectorSearchResult {
   distance: number;
 }
 
+/** Hard ceiling on the kNN candidate window when expanding under a narrow
+ *  scope. Past this we'd rather return what we have than scan the whole
+ *  vec index — pathological scopes (matching almost nothing) shouldn't
+ *  amount to a full table scan disguised as an ANN query. */
+const VECTOR_MAX_K = 10_000;
+
 /**
  * Run a kNN query against the vec0 index. Lower `distance` is closer.
- * `scope` is an optional file_path GLOB applied as a post-filter so we
- * don't have to wedge it into the vec0 MATCH expression.
+ *
+ * Scope semantics match the fulltext path's `file_path GLOB ?` (see
+ * `compileSqliteGlob` above). The filter is applied post-query, so when
+ * a narrow scope eliminates most of the global top-k candidates, we
+ * iteratively double the kNN window until we have enough scoped hits or
+ * either (a) the index is exhausted or (b) we hit `VECTOR_MAX_K`.
+ *
+ * Without expansion, a tight scope on a large index can return empty
+ * results even when many in-scope vectors exist — they just sit outside
+ * the global top-k window. The trade-off is more work per query when
+ * the scope is selective, which is correct: the caller asked for hits
+ * within a narrow slice, so we have to look harder.
  */
 export function vectorSearch(
   db: Database.Database,
@@ -216,18 +232,15 @@ export function vectorSearch(
 ): VectorSearchResult[] {
   const queryBlob = Buffer.from(query.buffer, query.byteOffset, query.byteLength);
 
-  // Overshoot the kNN limit if a scope filter applies, since post-filter
-  // may eliminate hits. 3x is a reasonable cushion; bigger only when the
-  // scope is narrow, but we don't know that here.
-  const knnLimit = scope ? limit * 3 : limit;
-
-  const rows = db.prepare(
+  const knnStmt = db.prepare(
     `SELECT v.rowid, v.distance, m.file_path, m.section_path, m.section_heading,
             m.section_level, m.line_start, m.line_end
      FROM vec_sections v
      JOIN vec_section_meta m ON m.rowid = v.rowid
      WHERE v.embedding MATCH ? AND k = ?`,
-  ).all(queryBlob, knnLimit) as Array<{
+  );
+
+  type Row = {
     distance: number;
     file_path: string;
     section_path: string;
@@ -235,16 +248,28 @@ export function vectorSearch(
     section_level: number;
     line_start: number;
     line_end: number;
-  }>;
+  };
 
-  // Match the FTS path's `file_path GLOB ?` semantics exactly: a scope
-  // without a wildcard is treated as a path prefix (auto-suffixed `*`);
-  // a scope WITH wildcards is honoured as-written, with `*` matching
-  // any sequence including `/` (SQLite GLOB, not POSIX glob).
-  let filtered = rows;
-  if (scope) {
-    const re = compileSqliteGlob(scope.includes('*') ? scope : `${scope}*`);
-    filtered = rows.filter((r) => re.test(r.file_path));
+  const scopeRegex = scope
+    ? compileSqliteGlob(scope.includes('*') ? scope : `${scope}*`)
+    : null;
+
+  let k = scopeRegex ? Math.max(limit * 3, 50) : limit;
+  if (k > VECTOR_MAX_K) k = VECTOR_MAX_K;
+
+  let filtered: Row[] = [];
+
+  // Expand `k` until we have enough scoped hits, or the index returns
+  // fewer rows than asked (exhausted), or we hit the safety cap.
+  for (;;) {
+    const rows = knnStmt.all(queryBlob, k) as Row[];
+    filtered = scopeRegex ? rows.filter((r) => scopeRegex.test(r.file_path)) : rows;
+
+    if (filtered.length >= limit) break;
+    if (rows.length < k) break; // index is smaller than the candidate window
+    if (k >= VECTOR_MAX_K) break;
+
+    k = Math.min(k * 2, VECTOR_MAX_K);
   }
 
   return filtered.slice(0, limit).map((r) => ({

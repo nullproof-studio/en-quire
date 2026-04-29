@@ -167,6 +167,35 @@ describe('vector store CRUD (sqlite-vec required)', () => {
     expect(trailing).toHaveLength(0); // no file matches; just verifies no throw
   });
 
+  it('vectorSearch expands k when a narrow scope filters out the global top-k window', async () => {
+    if (!vectorOk) return;
+
+    // 200 vectors in `docs/noise/` clustered very close to [1, 0, 0, 0]
+    // (would dominate any reasonable top-k), and 1 vector in
+    // `docs/sops/` further away. With a small static k, scope-filtered
+    // results would be empty — the in-scope vector sits past the global
+    // top-k window. Iterative expansion should still find it.
+    for (let i = 0; i < 200; i++) {
+      upsertEmbedding(db, {
+        file_path: `docs/noise/n${i}.md`,
+        section_path: 'X', section_heading: 'X', section_level: 1, line_start: 1, line_end: 1,
+      }, unitVec([1, 0.001 * i, 0, 0]));
+    }
+    upsertEmbedding(db, {
+      file_path: 'docs/sops/runbook.md',
+      section_path: 'Procedure', section_heading: 'Procedure',
+      section_level: 1, line_start: 1, line_end: 1,
+    }, unitVec([0, 1, 0, 0]));
+
+    // Query is closest to the noise cluster. With limit=5 and a fixed
+    // k=15 (5*3), all top-15 hits would be from docs/noise — the
+    // sops result would be invisible without expansion.
+    const results = vectorSearch(db, unitVec([1, 0.001, 0, 0]), 5, 'docs/sops/');
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results.every((r) => r.file_path.startsWith('docs/sops/'))).toBe(true);
+    expect(results[0].file_path).toBe('docs/sops/runbook.md');
+  });
+
   it('vectorSearch honours scope as a file_path prefix filter', async () => {
     if (!vectorOk) return;
     upsertEmbedding(db, {

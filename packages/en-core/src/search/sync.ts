@@ -163,13 +163,14 @@ export function syncIndex(
     runLinks();
   }
 
-  // Phase 3.5 — re-resolve `?`-tagged rows for sources we did NOT touch
-  // this run. A target file added to the index this sync may already be
-  // referenced by mtime-skipped sources whose stored target_file still
-  // carries the `?` prefix. Without this pass, those references would
-  // stay broken until the source itself is edited.
+  // Phase 3.5 — re-resolve `?`-tagged rows GLOBALLY (across every source
+  // root). Cross-root references are common — a skill in `agents/` links
+  // to an SOP in `docs/` — so a per-root scan would leave the docs-side
+  // row stale when only the agents root is the one being synced. The
+  // scan is idempotent and cheap; running it on every per-root sync is
+  // a no-op once everything resolves.
   const runResolveStale = db.transaction(() => {
-    resolveStaleLinks(db, prefix);
+    resolveStaleLinks(db);
   });
   runResolveStale();
 
