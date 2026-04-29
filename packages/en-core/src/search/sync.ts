@@ -148,6 +148,38 @@ export function syncIndex(
     runBatch();
   }
 
+  // Phase 2.5 — remove files no longer on disk BEFORE link operations.
+  // Order matters: if a target file was deleted, every doc_links row
+  // pointing at it should be downgraded to `?<path>` so doc_references
+  // / doc_referenced_by / doc_context_bundle report a broken link
+  // instead of a resolved-looking path that doesn't exist. Doing the
+  // removal after Phase 3 would leave incoming rows looking valid
+  // until the next sync — too long a window of "looks fine, isn't".
+  const toRemove: string[] = [];
+  for (const [filePath] of indexedMtimes) {
+    if (!prefixedFileSet.has(filePath)) {
+      toRemove.push(filePath);
+    }
+  }
+  if (toRemove.length > 0) {
+    const runRemove = db.transaction(() => {
+      for (const filePath of toRemove) {
+        // Downgrade incoming-reference rows to `?<filePath>` first —
+        // outgoing rows are dropped wholesale by removeFromIndex's
+        // delete-by-source clause, which is correct (the source no
+        // longer exists), but incoming rows are sourced from OTHER
+        // files that ARE still around and need their target_file
+        // re-tagged.
+        db.prepare(
+          `UPDATE doc_links SET target_file = '?' || target_file WHERE target_file = ?`,
+        ).run(filePath);
+        removeFromIndex(db, filePath);
+        removed++;
+      }
+    });
+    runRemove();
+  }
+
   // Phase 3 — deferred link storage. Every file processed this run is
   // now in `index_metadata`, and every file present from a previous sync
   // (mtime-skipped above) is also in `index_metadata`. resolveTarget
@@ -173,25 +205,6 @@ export function syncIndex(
     resolveStaleLinks(db);
   });
   runResolveStale();
-
-  // Remove files from index that no longer exist on disk (for this root)
-  const toRemove: string[] = [];
-  for (const [filePath] of indexedMtimes) {
-    if (!prefixedFileSet.has(filePath)) {
-      toRemove.push(filePath);
-    }
-  }
-
-  if (toRemove.length > 0) {
-    const runRemove = db.transaction(() => {
-      for (const filePath of toRemove) {
-        removeFromIndex(db, filePath);
-        removed++;
-      }
-    });
-
-    runRemove();
-  }
 
   const elapsed_ms = Math.round(performance.now() - start);
   return { indexed, skipped, removed, elapsed_ms };

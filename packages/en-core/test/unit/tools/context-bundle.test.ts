@@ -172,4 +172,78 @@ describe('handleContextBundle', () => {
     ) as { sections: unknown[] };
     expect(result.sections).toEqual([]);
   });
+
+  it('resolves slug-form URL fragments to actual heading text', async () => {
+    // Wipe the default link seed so deployment.md is reached ONLY via
+    // the slug-form link from observability.md; the search query
+    // ("observability") doesn't hit deployment directly.
+    db.prepare('DELETE FROM doc_links').run();
+    storeLinks(db, 'docs/skills/observability.md', [{
+      source_section: 'Observability',
+      target_path: '../sops/deployment.md',
+      target_section: 'metrics', // ← slug form, NOT 'Metrics'
+      relationship: 'references',
+      context: '[link](../sops/deployment.md#metrics)',
+    }]);
+
+    const ctx = buildContext(readAll);
+    const result = await handleContextBundle(
+      { query: 'observability', max_depth: 1, max_sections: 5 },
+      ctx,
+    ) as { sections: Array<{ file: string; section_path: string; content: string }> };
+
+    const linked = result.sections.find(
+      (s) => s.file === 'docs/sops/deployment.md' && s.section_path === 'metrics',
+    );
+    expect(linked).toBeDefined();
+    // Content is the actual "Metrics" section body, found via slug fallback.
+    expect(linked!.content).toContain('p99 latency');
+  });
+
+  it('traverses document-level links via the file\'s first section', async () => {
+    // Replace the section-targeted link with a whole-document one
+    // (target_section: null). Without representative-section expansion,
+    // this edge would be skipped by the BFS and the linked file would
+    // not appear in the bundle at depth>=1.
+    db.prepare('DELETE FROM doc_links').run();
+    storeLinks(db, 'docs/skills/observability.md', [{
+      source_section: 'Observability',
+      target_path: '../sops/deployment.md',
+      target_section: null,
+      relationship: 'references',
+      context: '[runbook](../sops/deployment.md)',
+    }]);
+
+    const ctx = buildContext(readAll);
+    const result = await handleContextBundle(
+      { query: 'metrics', max_depth: 1, max_sections: 50 },
+      ctx,
+    ) as { sections: Array<{ file: string; hop_distance: number }> };
+
+    // observability.md should appear via the document-level link.
+    expect(result.sections.some((s) => s.file === 'docs/skills/observability.md' && s.hop_distance === 1)).toBe(true);
+  });
+
+  it('does not let unreadable high-ranked candidates consume the cap', async () => {
+    // Caller has search on **, but read only on docs/sops/**.
+    // observability.md is in skills/ and is one of the candidates
+    // (graph neighbour of deployment.md). The old behaviour was
+    // cap-first-then-filter, which could leave observability
+    // occupying the cap and produce fewer than `max_sections`
+    // readable results. New behaviour walks the ranked list until N
+    // readable sections are collected.
+    const ctx = buildContext([
+      { path: '**', permissions: ['search'] },
+      { path: 'docs/sops/**', permissions: ['read'] },
+    ]);
+    const result = await handleContextBundle(
+      { query: 'metrics', max_depth: 1, max_sections: 2 },
+      ctx,
+    ) as { sections: Array<{ file: string }> };
+
+    expect(result.sections.length).toBe(2);
+    for (const s of result.sections) {
+      expect(s.file.startsWith('docs/sops/')).toBe(true);
+    }
+  });
 });

@@ -118,6 +118,33 @@ describe('syncIndex link resolution — across syncs', () => {
     expect(listLinks('docs/skills/triage.md')).toEqual(['docs/sops/runbook.md']);
   });
 
+  it('downgrades incoming-reference rows when the target file is deleted', () => {
+    // skills/triage.md links to sops/runbook.md. Both indexed.
+    writeFileSync(
+      join(docsRoot, 'skills', 'triage.md'),
+      '# Triage\n\nSee [the runbook](../sops/runbook.md) for context.\n',
+    );
+    writeFileSync(
+      join(docsRoot, 'sops', 'runbook.md'),
+      '# Runbook\n\nProcedure body.\n',
+    );
+    syncIndex(db, 'docs', docsRoot);
+    expect(listLinks('docs/skills/triage.md')).toEqual(['docs/sops/runbook.md']);
+
+    // Pin source mtime so triage.md is mtime-skipped on the next sync —
+    // the source is unchanged; only the TARGET disappears. The fix
+    // must downgrade the incoming row even though the source isn't
+    // re-extracted.
+    setOldMtime(join(docsRoot, 'skills', 'triage.md'));
+
+    rmSync(join(docsRoot, 'sops', 'runbook.md'));
+    syncIndex(db, 'docs', docsRoot);
+
+    // The link is now broken — must be re-tagged to `?` so consumers
+    // know it points at a missing file rather than appearing valid.
+    expect(listLinks('docs/skills/triage.md')).toEqual(['?docs/sops/runbook.md']);
+  });
+
   it('re-resolves cross-root stale `?` rows when the target lives in a different root', () => {
     // Two roots: `docs` and `agents`. A skill in agents/ links to an SOP
     // in docs/. If agents syncs first, the link stores as

@@ -59,7 +59,22 @@ function resolveTarget(
   const target = link.target_path;
   const indexed = listIndexedPaths(db);
 
-  // Relative or root-anchored path — has a `/` or a leading `.`
+  // Root-anchored path — leading `/` denotes "from the workspace root".
+  // The index stores paths root-prefixed (e.g. `docs/sops/runbook.md`),
+  // so strip the leading `/` and treat the remainder as already
+  // root-prefixed. posix.join with a leading-slash second argument does
+  // NOT treat it as absolute — it concatenates and produces the wrong
+  // path (`docs/skills/docs/sops/runbook.md`), which is why this case
+  // needs to short-circuit before the relative-path branch.
+  if (target.startsWith('/')) {
+    const stripped = target.slice(1);
+    if (indexed.includes(stripped)) {
+      return { target_file: stripped, target_section: link.target_section };
+    }
+    return { target_file: `?${stripped}`, target_section: link.target_section };
+  }
+
+  // Relative path — contains `/` or starts with `.`
   if (target.includes('/') || target.startsWith('.')) {
     const sourceDir = posix.dirname(sourcePath);
     const resolved = posix.normalize(posix.join(sourceDir, target));

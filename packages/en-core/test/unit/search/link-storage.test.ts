@@ -61,6 +61,34 @@ describe('storeLinks resolution', () => {
     expect(rows[0].source_section).toBe('Tool Selection');
   });
 
+  it('treats a leading `/` as root-anchored, not as relative-to-source', () => {
+    indexFakeFile('docs/sops/runbook.md');
+    indexFakeFile('docs/skills/triage.md');
+
+    storeLinks(db, 'docs/skills/triage.md', [{
+      source_section: null,
+      target_path: '/docs/sops/runbook.md',
+      target_section: null,
+      relationship: 'references',
+      context: null,
+    }]);
+
+    const rows = listLinks('docs/skills/triage.md');
+    expect(rows[0].target_file).toBe('docs/sops/runbook.md');
+  });
+
+  it('marks an unindexed root-anchored target with `?<stripped>`', () => {
+    indexFakeFile('docs/sops/runbook.md');
+    storeLinks(db, 'docs/skills/triage.md', [{
+      source_section: null,
+      target_path: '/docs/sops/missing.md',
+      target_section: null,
+      relationship: 'references',
+      context: null,
+    }]);
+    expect(listLinks('docs/skills/triage.md')[0].target_file).toBe('?docs/sops/missing.md');
+  });
+
   it('marks an unindexed path-shaped target with `?`', () => {
     indexFakeFile('docs/sops/runbook.md');
     storeLinks(db, 'docs/skills/triage.md', [{

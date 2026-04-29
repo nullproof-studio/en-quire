@@ -7,7 +7,34 @@ import { resolveFilePath } from '../config/roots.js';
 import { readDocument } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { readSection } from '../document/section-ops-core.js';
+import { flattenTree } from '../document/section-tree.js';
+import { AddressResolutionError } from '../shared/errors.js';
 import { getLogger } from '../shared/logger.js';
+import type { SectionNode, SectionAddress } from '../shared/types.js';
+
+/**
+ * Convert heading text to a GitHub-flavour markdown slug. Used as the
+ * fallback resolution path when a stored target_section is a slugified
+ * URL fragment (`#tool-selection`) rather than the actual heading text
+ * ("Tool Selection") — markdown links use slugs, our addresses use
+ * heading text, so the consumer has to bridge.
+ */
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+/** Find a section whose slugified heading text matches `slug`. */
+function findHeadingBySlug(tree: SectionNode[], slug: string): SectionNode | null {
+  for (const node of flattenTree(tree)) {
+    if (slugify(node.heading.text) === slug) return node;
+  }
+  return null;
+}
 
 /**
  * Build a context bundle for a topic by composing search + the cross-document
@@ -102,6 +129,25 @@ export async function handleContextBundle(
     `SELECT source_file, source_section, target_file, target_section
      FROM doc_links WHERE target_file = ?`,
   );
+  // Document-level links (markdown `[text](file.md)` with no fragment,
+  // and frontmatter relationship arrays) carry a null section. Without
+  // a representative section we'd skip them entirely, missing the
+  // common cross-document pattern. Look up the file's first indexed
+  // section as the entry point — cached because the same file can
+  // appear on many edges.
+  const firstSectionStmt = ctx.db.prepare(
+    `SELECT section_path FROM sections_fts
+     WHERE file_path = ? AND section_path != ''
+     ORDER BY line_start LIMIT 1`,
+  );
+  const fileEntryCache = new Map<string, string | null>();
+  const entrySectionFor = (file: string): string | null => {
+    if (fileEntryCache.has(file)) return fileEntryCache.get(file) ?? null;
+    const row = firstSectionStmt.get(file) as { section_path: string } | undefined;
+    const section = row?.section_path ?? null;
+    fileEntryCache.set(file, section);
+    return section;
+  };
 
   let frontier: NodeKey[] = hits.map((h) => ({ file: h.file, section: h.section_path }));
   for (let d = 1; d <= max_depth; d++) {
@@ -109,18 +155,20 @@ export async function handleContextBundle(
     for (const node of frontier) {
       // Outgoing edges sourced anywhere in this file
       for (const row of outgoingStmt.all(node.file) as LinkRow[]) {
-        if (!row.target_section) continue;
         // Skip unresolved targets (rows tagged with `?` prefix)
         if (row.target_file.startsWith('?')) continue;
-        const child: NodeKey = { file: row.target_file, section: row.target_section };
+        const childSection = row.target_section ?? entrySectionFor(row.target_file);
+        if (!childSection) continue; // target file has no indexable sections
+        const child: NodeKey = { file: row.target_file, section: childSection };
         if (visited.has(keyOf(child))) continue;
         visited.set(keyOf(child), { hop_distance: d, search_score: 0 });
         next.push(child);
       }
       // Incoming edges targeted anywhere in this file
       for (const row of incomingStmt.all(node.file) as LinkRow[]) {
-        if (!row.source_section) continue;
-        const child: NodeKey = { file: row.source_file, section: row.source_section };
+        const childSection = row.source_section ?? entrySectionFor(row.source_file);
+        if (!childSection) continue;
+        const child: NodeKey = { file: row.source_file, section: childSection };
         if (visited.has(keyOf(child))) continue;
         visited.set(keyOf(child), { hop_distance: d, search_score: 0 });
         next.push(child);
@@ -145,22 +193,42 @@ export async function handleContextBundle(
   });
   ranked.sort((a, b) => b.relevance_score - a.relevance_score);
 
-  // Phase 4 — cap, then permission-filter + read content.
-  const capped = ranked.slice(0, max_sections);
+  // Phase 4 — walk the ranked list, accumulating up to `max_sections`
+  // entries that the caller can READ and we can actually load. Sections
+  // that fail permission OR fail the section-read step (stale heading,
+  // missing file, etc.) are skipped without consuming a bundle slot, so
+  // a mixed-permission deployment doesn't end up with the cap consumed
+  // by unreadable high-ranked candidates.
   const sections: ContextBundleSection[] = [];
-  for (const node of capped) {
+  for (const node of ranked) {
+    if (sections.length >= max_sections) break;
     if (!checkPermission(caller, 'read', node.file).allowed) continue;
     try {
       const resolved = resolveFilePath(ctx.config.document_roots, node.file);
       const { content: fileContent } = readDocument(resolved.root.path, resolved.relativePath);
       const parser = parserRegistry.getParser(resolved.relativePath);
       const tree = parser.parse(fileContent);
-      const address = parser.parseAddress(node.section);
-      const { content } = readSection(fileContent, tree, address, true);
+
+      // Try the stored section as-is. Markdown link fragments
+      // (`#tool-selection`) are stored verbatim by the extractor and
+      // won't resolve via parseAddress against heading text ("Tool
+      // Selection"). On AddressResolutionError, try slug-matching
+      // against the file's actual headings before giving up.
+      let result: ReturnType<typeof readSection>;
+      try {
+        const address = parser.parseAddress(node.section);
+        result = readSection(fileContent, tree, address, true);
+      } catch (parseErr) {
+        if (!(parseErr instanceof AddressResolutionError)) throw parseErr;
+        const slugMatch = findHeadingBySlug(tree, node.section);
+        if (!slugMatch) throw parseErr;
+        const address: SectionAddress = { type: 'text', text: slugMatch.heading.text };
+        result = readSection(fileContent, tree, address, true);
+      }
       sections.push({
         file: node.file,
         section_path: node.section,
-        content,
+        content: result.content,
         relevance_score: node.relevance_score,
         hop_distance: node.hop_distance,
       });
