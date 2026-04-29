@@ -22,6 +22,21 @@ const scopedCaller: CallerIdentity = {
   ],
 };
 
+const citeCaller: CallerIdentity = {
+  id: 'researcher',
+  scopes: [
+    // Local-only citation: cite granted, cite_web not.
+    { path: 'docs/**', permissions: ['read', 'cite'] },
+  ],
+};
+
+const webCiteCaller: CallerIdentity = {
+  id: 'web-researcher',
+  scopes: [
+    { path: 'docs/**', permissions: ['read', 'cite', 'cite_web'] },
+  ],
+};
+
 describe('checkPermission', () => {
   it('allows admin full access', () => {
     expect(checkPermission(adminCaller, 'write', 'any/file.md').allowed).toBe(true);
@@ -42,6 +57,21 @@ describe('checkPermission', () => {
 
   it('denies access for unmatched paths', () => {
     expect(checkPermission(scopedCaller, 'read', 'memory/notes.md').allowed).toBe(false);
+  });
+
+  it('grants cite without cite_web for a local-only researcher', () => {
+    expect(checkPermission(citeCaller, 'cite', 'docs/profile.md').allowed).toBe(true);
+    expect(checkPermission(citeCaller, 'cite_web', 'docs/profile.md').allowed).toBe(false);
+  });
+
+  it('grants both cite and cite_web for a web-enabled researcher', () => {
+    expect(checkPermission(webCiteCaller, 'cite', 'docs/profile.md').allowed).toBe(true);
+    expect(checkPermission(webCiteCaller, 'cite_web', 'docs/profile.md').allowed).toBe(true);
+  });
+
+  it('does not grant cite by default for callers without it', () => {
+    expect(checkPermission(readOnlyCaller, 'cite', 'docs/x.md').allowed).toBe(false);
+    expect(checkPermission(adminCaller, 'cite', 'docs/x.md').allowed).toBe(false);
   });
 });
 

@@ -70,6 +70,62 @@ search:
     api_key: null
     api_key_env: null               # e.g. "OPENAI_API_KEY"
 
+# Citation feature (doc_cite + doc_cite_reverify). Off by default — opt in
+# explicitly. The whole subsystem is verbatim source-span attestation, NOT
+# semantic truth verification: the agent submits a quote, the tool re-fetches
+# the source independently and confirms or denies a verbatim match.
+#
+# Web citation is a governed network-egress capability — strictly:
+#   * `cite_web` permission must be granted to the caller (see callers below).
+#   * `fetch.http_allowlist` MUST list explicit hosts/globs; an empty list
+#     blocks all external fetches even when the caller has cite_web.
+#   * Auto-append is content-free: only "(N) <canonical-URL> [hash:sha256:HEX]"
+#     lands in the document — no fetched titles, no surrounding context.
+#   * Every cite attempt (success or denied) is recorded to cite_audit_log.
+#
+# Known limitation: the HTTPS fetcher is a plain Node `undici` GET + cheerio
+# HTML parse — NO JavaScript execution. Pages that build content client-side
+# (single-page apps, paywalled / Cloudflare-challenged / lazy-loaded
+# content) will return mostly-empty HTML and the agent's quote will fail to
+# verify even when a human in a browser sees it. v1 surfaces this as
+# `not_found`; we do not pretend to be a browser.
+citation:
+  enabled: false                          # Master switch — must be true to use doc_cite.
+  section_heading: "Citations"            # Heading text for the auto-appended Citations section.
+  section_position: "end"                 # Where the Citations section is created when absent.
+  # When true, the auto-append for HTTPS/HTTP source citations goes through
+  # the proposal queue. Scope is web-only by design: local + en-quire cites
+  # are always direct writes (their content is already inside the deployer's
+  # trust boundary, and routing them through propose would break the
+  # read-after-cite contract for the common authoring flow). If you need
+  # human review on every cite append regardless of source, that's a phase-2
+  # knob (citation.local_appends_propose) — not yet shipped.
+  web_appends_propose: false
+
+  fetch:
+    https_only: true                      # Reject plain http:// even if allowlisted.
+    http_allowlist: []                    # Empty = no external fetches. Globs allowed (e.g. "*.forbes.com").
+    block_private_ranges: true            # Reject DNS-resolved private/loopback/link-local/cloud-metadata IPs.
+    allowed_content_types:
+      - text/html
+      - text/plain
+      - text/markdown
+      - application/json
+      - application/xhtml+xml
+    timeout_ms: 10000
+    max_bytes: 5000000                    # 5 MB raw body cap.
+    max_redirects: 3                      # v1 refuses to follow redirects entirely; reserved for phase 2.
+    decompression_factor: 5               # Decompression-bomb guard: cap = max_bytes * factor.
+    strip_query: true                     # Drop ?... from cited URL before fetch + before persistence.
+    strip_fragment: true                  # Drop #... likewise.
+    allow_userinfo: false                 # Reject user:pass@host outright.
+    max_path_chars: 2048
+    max_host_chars: 253
+    secret_pattern_reject: true           # Defence-in-depth: reject sk-/ghp_/JWT/etc patterns in URL.
+
+  rate_limit:
+    external_per_minute: 30               # Per-caller cap on external citation attempts.
+
 # Logging
 logging:
   level: info                         # error | warn | info | debug
@@ -120,3 +176,23 @@ callers:
   #       permissions: [read, propose, search]
   #     - path: "memory/**"
   #       permissions: [read, write, search]
+
+  # Example: research caller with local-only citation (cite, no cite_web).
+  # Can verify quotes against en-quire managed sources and write Citations
+  # into docs/, but cannot fetch external URLs even if `citation.enabled` is
+  # true.
+  # researcher:
+  #   key: "sk-researcher-..."
+  #   scopes:
+  #     - path: "docs/**"
+  #       permissions: [read, search, cite]
+
+  # Example: web-enabled research caller (cite + cite_web).
+  # Can verify against external https URLs subject to the `http_allowlist`
+  # under `citation.fetch`. cite_web is the governed-egress permission —
+  # treat it like network-fetch elsewhere in the deployment.
+  # web-researcher:
+  #   key: "sk-web-researcher-..."
+  #   scopes:
+  #     - path: "docs/**"
+  #       permissions: [read, search, cite, cite_web]
