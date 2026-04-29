@@ -6,6 +6,10 @@ import { DocOutlineSchema, handleDocOutline } from './tools/read/doc-outline.js'
 import { DocReadSectionSchema, handleDocReadSection } from './tools/read/doc-read-section.js';
 import { DocReadSchema, handleDocRead } from './tools/read/doc-read.js';
 import { DocListSchema, handleDocList } from './tools/read/doc-list.js';
+import {
+  DocReferencesSchema, handleDocReferences,
+  DocReferencedBySchema, handleDocReferencedBy,
+} from './tools/read/doc-references.js';
 
 // Write tools
 import { DocReplaceSectionSchema, handleDocReplaceSection } from './tools/write/doc-replace-section.js';
@@ -51,6 +55,8 @@ export function registerEnQuireTools(registry: ToolRegistry): void {
   registry.register({ name: 'doc_read_section', description: 'Read a specific section by heading text or path. Works for markdown headings, YAML keys (dot-path or "services > api > port"), and JSONL records (by index, e.g. "[5]", or by pattern like "*user*"). By default returns the section body AND all children. Set include_children=false to read only the body text (before the first child heading). Use doc_outline first to find the correct section address. Returns an etag for use with write operations.', schema: DocReadSectionSchema.shape, handler: handleDocReadSection });
   registry.register({ name: 'doc_read', description: 'Read a document with line-based pagination. Works on any format en-quire supports (markdown, YAML, JSONL). Returns content, page number, total pages, and total lines. Use for reading raw document content or large documents that exceed context limits. Returns an etag for use with write operations.', schema: DocReadSchema.shape, handler: handleDocRead });
   registry.register({ name: 'doc_list', description: 'List documents across all roots or within a scope. Covers every en-quire-supported format: .md, .mdx, .yaml, .yml, .jsonl, .ndjson. Returns file path, root, size, and modification date. Set include_outline=true to also get each document\'s section structure.', schema: DocListSchema.shape, handler: handleDocList });
+  registry.register({ name: 'doc_references', description: 'List the cross-document references that originate in a file (or a specific section of it). Returns the resolved target_file, target_section, relationship (references / implements / supersedes / see_also), and a short context snippet for each link. target_file may be prefixed with "?" when the link could not be resolved against the current index — that is the signal to fix the source link rather than chase the target.', schema: DocReferencesSchema.shape, handler: handleDocReferences });
+  registry.register({ name: 'doc_referenced_by', description: 'List the cross-document references that point AT a file (or a specific section of it) — the inverse of doc_references. Use this for impact analysis: before modifying a shared SOP section, ask which skills and runbooks reference it.', schema: DocReferencedBySchema.shape, handler: handleDocReferencedBy });
 
   // Write tools
   registry.register({ name: 'doc_replace_section', description: 'Replace a section\'s content. The heading is preserved automatically — do NOT include it in content. IMPORTANT: if content contains subsection headings (e.g. ### child), the body AND all existing children are replaced with the new content. If content is plain text (no subsection headings), only the body is replaced and children are preserved. WARNING: replacing a top-level (h1) section with subsection headings replaces the entire document body beneath that heading — use doc_outline to check structure first. For correcting specific text within a section, prefer doc_find_replace — it is more precise and avoids unintended formatting changes. When replace_heading is true, content must include the full heading line (e.g. "## New Title\\nBody"). Pass if_match (from a prior read) to prevent stale writes.', schema: DocReplaceSectionSchema.shape, handler: handleDocReplaceSection });
