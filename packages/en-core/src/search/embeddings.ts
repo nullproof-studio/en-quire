@@ -41,7 +41,15 @@ export class EmbeddingsClient {
   private readonly timeout_ms: number;
 
   constructor(opts: EmbeddingsClientOptions) {
-    this.endpoint = opts.endpoint.replace(/\/+$/, '');
+    // Trim trailing slashes via a single linear scan rather than a
+    // /\/+$/ regex. The regex form is polynomial in the worst case (the
+    // engine can probe O(n) starting positions, each requiring O(n)
+    // suffix work) and CodeQL flags it on uncontrolled inputs. The
+    // endpoint comes from config in normal use, but we'd rather not
+    // bake a ReDoS surface in.
+    let cut = opts.endpoint.length;
+    while (cut > 0 && opts.endpoint.charCodeAt(cut - 1) === 0x2f /* '/' */) cut--;
+    this.endpoint = opts.endpoint.slice(0, cut);
     this.model = opts.model;
     this.api_key = opts.api_key ?? null;
     this.api_key_env = opts.api_key_env ?? null;

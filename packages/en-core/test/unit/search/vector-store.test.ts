@@ -135,6 +135,38 @@ describe('vector store CRUD (sqlite-vec required)', () => {
     expect(remaining[0].file_path).toBe('docs/b.md');
   });
 
+  it('vectorSearch scope semantics match FTS file_path GLOB (incl. cross-directory * and **)', async () => {
+    if (!vectorOk) return;
+    upsertEmbedding(db, {
+      file_path: 'docs/sops/a.md',
+      section_path: 'X', section_heading: 'X', section_level: 1, line_start: 1, line_end: 1,
+    }, unitVec([1, 0, 0, 0]));
+    upsertEmbedding(db, {
+      file_path: 'docs/sops/sub/b.md',
+      section_path: 'Y', section_heading: 'Y', section_level: 1, line_start: 1, line_end: 1,
+    }, unitVec([1, 0, 0, 0]));
+    upsertEmbedding(db, {
+      file_path: 'docs/skills/c.md',
+      section_path: 'Z', section_heading: 'Z', section_level: 1, line_start: 1, line_end: 1,
+    }, unitVec([1, 0, 0, 0]));
+
+    // Bare prefix → auto-suffixed `*`, matches anything starting with the prefix
+    const prefix = vectorSearch(db, unitVec([1, 0, 0, 0]), 10, 'docs/sops/');
+    expect(prefix.map((r) => r.file_path).sort()).toEqual([
+      'docs/sops/a.md', 'docs/sops/sub/b.md',
+    ]);
+
+    // SQLite-flavour `*` crosses `/` — `docs/sops/*` matches subdir files too
+    const star = vectorSearch(db, unitVec([1, 0, 0, 0]), 10, 'docs/sops/*');
+    expect(star.map((r) => r.file_path).sort()).toEqual([
+      'docs/sops/a.md', 'docs/sops/sub/b.md',
+    ]);
+
+    // Cross-root match via leading `*`
+    const trailing = vectorSearch(db, unitVec([1, 0, 0, 0]), 10, '*runbook.md');
+    expect(trailing).toHaveLength(0); // no file matches; just verifies no throw
+  });
+
   it('vectorSearch honours scope as a file_path prefix filter', async () => {
     if (!vectorOk) return;
     upsertEmbedding(db, {

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { listDocumentFiles, readDocument } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { indexDocument, removeFromIndex } from './indexer.js';
+import { storeLinks, resolveStaleLinks } from './link-storage.js';
 import { getLogger } from '../shared/logger.js';
 import type { SectionNode } from '../shared/types.js';
 import type { RawLink } from '../document/parser-registry.js';
@@ -101,6 +102,15 @@ export function syncIndex(
   // Critical: read + parse OUTSIDE the transaction so the WAL write lock is
   // only held while the actual SQL inserts run. Holding the lock during disk
   // I/O starves other writers (see #49).
+  //
+  // Link storage is DEFERRED to a second pass after every batch finishes:
+  // resolveTarget needs to see every file in the root (in `index_metadata`)
+  // before it can correctly resolve cross-file references. Resolving
+  // per-file inline produces order-dependent `?`-tagged unresolved rows
+  // that, because the next sync skips unchanged sources by mtime, never
+  // get re-resolved.
+  const linkBacklog: Array<{ prefixedPath: string; links: RawLink[] }> = [];
+
   for (let i = 0; i < toIndex.length; i += batchSize) {
     const batch = toIndex.slice(i, i + batchSize);
 
@@ -125,15 +135,43 @@ export function syncIndex(
       }
     }
 
-    // Phase 2 — SQL inserts only (lock held briefly)
+    // Phase 2 — SQL inserts only (lock held briefly).
+    // Pass `links: undefined` so indexDocument doesn't touch doc_links;
+    // we collect them for the deferred Phase 3 below.
     const runBatch = db.transaction(() => {
       for (const p of prepared) {
-        indexDocument(db, p.prefixedPath, p.tree, p.content, p.mtime, p.links);
+        indexDocument(db, p.prefixedPath, p.tree, p.content, p.mtime, undefined);
+        linkBacklog.push({ prefixedPath: p.prefixedPath, links: p.links });
         indexed++;
       }
     });
     runBatch();
   }
+
+  // Phase 3 — deferred link storage. Every file processed this run is
+  // now in `index_metadata`, and every file present from a previous sync
+  // (mtime-skipped above) is also in `index_metadata`. resolveTarget
+  // therefore sees the complete file set for the root and produces
+  // resolved targets where the per-file inline path produced `?`-tagged
+  // unresolved rows.
+  if (linkBacklog.length > 0) {
+    const runLinks = db.transaction(() => {
+      for (const entry of linkBacklog) {
+        storeLinks(db, entry.prefixedPath, entry.links);
+      }
+    });
+    runLinks();
+  }
+
+  // Phase 3.5 — re-resolve `?`-tagged rows for sources we did NOT touch
+  // this run. A target file added to the index this sync may already be
+  // referenced by mtime-skipped sources whose stored target_file still
+  // carries the `?` prefix. Without this pass, those references would
+  // stay broken until the source itself is edited.
+  const runResolveStale = db.transaction(() => {
+    resolveStaleLinks(db, prefix);
+  });
+  runResolveStale();
 
   // Remove files from index that no longer exist on disk (for this root)
   const toRemove: string[] = [];

@@ -116,3 +116,55 @@ export function storeLinks(
 export function removeLinks(db: Database.Database, sourcePath: string): void {
   db.prepare('DELETE FROM doc_links WHERE source_file = ?').run(sourcePath);
 }
+
+/**
+ * Re-resolve `?`-prefixed (unresolved) rows for sources matching the given
+ * root prefix. Runs at the end of `syncIndex` so that files newly added
+ * in this sync get picked up by stale links from sources whose mtime
+ * skipped them this round.
+ *
+ * This is the second half of the order-dependence fix: deferred link
+ * storage handles within-sync ordering, this handles between-sync
+ * ordering (target file added in sync N+1, source mtime-skipped).
+ */
+export function resolveStaleLinks(db: Database.Database, rootPrefix: string): number {
+  let resolved = 0;
+  const indexed = db.prepare('SELECT file_path FROM index_metadata').all() as Array<{ file_path: string }>;
+  const indexedSet = new Set(indexed.map((r) => r.file_path));
+
+  // Path-shaped unresolved rows — target after `?` contains `/`.
+  const pathRows = db.prepare(
+    `SELECT id, target_file FROM doc_links
+     WHERE source_file GLOB ? AND target_file LIKE '?%' AND target_file LIKE '%/%'`,
+  ).all(`${rootPrefix}*`) as Array<{ id: number; target_file: string }>;
+  const updateStmt = db.prepare('UPDATE doc_links SET target_file = ? WHERE id = ?');
+  for (const row of pathRows) {
+    const path = row.target_file.slice(1);
+    if (indexedSet.has(path)) {
+      updateStmt.run(path, row.id);
+      resolved++;
+    }
+  }
+
+  // Wiki-shaped unresolved rows — bare basename, no `/` after `?`.
+  const wikiRows = db.prepare(
+    `SELECT id, target_file FROM doc_links
+     WHERE source_file GLOB ? AND target_file LIKE '?%' AND target_file NOT LIKE '%/%'`,
+  ).all(`${rootPrefix}*`) as Array<{ id: number; target_file: string }>;
+  if (wikiRows.length > 0) {
+    const indexedList = [...indexedSet];
+    for (const row of wikiRows) {
+      const wanted = row.target_file.slice(1).toLowerCase().replace(/\.(md|mdx)$/, '');
+      const matches = indexedList.filter((path) => {
+        const base = posix.basename(path).toLowerCase().replace(/\.(md|mdx)$/, '');
+        return base === wanted;
+      });
+      if (matches.length === 1) {
+        updateStmt.run(matches[0], row.id);
+        resolved++;
+      }
+    }
+  }
+
+  return resolved;
+}

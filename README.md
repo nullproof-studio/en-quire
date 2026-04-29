@@ -268,10 +268,15 @@ search:
   sync_on_start: blocking           # "blocking" or "background" (use background for 100k+ docs)
   batch_size: 500                   # Files per index transaction batch
   semantic:
-    enabled: false                  # Opt-in
-    endpoint: "http://localhost:11434/api/embeddings"
-    model: "nomic-embed-text"
-    dimensions: 768
+    enabled: false                  # Opt-in (sqlite-vec + OpenAI-compatible embeddings)
+    # Base URL of an OpenAI-compatible embeddings server. The client
+    # appends "/embeddings" — do not include the trailing path. Works
+    # against OpenAI, LM Studio, vLLM, llama.cpp --api,
+    # text-embeddings-inference, and Ollama via its /v1 compat shim.
+    endpoint: "https://api.openai.com/v1"
+    model: "text-embedding-3-small"
+    dimensions: 1536
+    api_key_env: "OPENAI_API_KEY"   # preferred over a literal `api_key`
 
 # Logging
 logging:

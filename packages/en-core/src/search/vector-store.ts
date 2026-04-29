@@ -3,6 +3,44 @@ import type Database from 'better-sqlite3';
 import { getLogger } from '../shared/logger.js';
 
 /**
+ * Compile a SQLite-flavour GLOB pattern to a RegExp. Used for post-query
+ * scope filtering on vector hits so the semantics match the fulltext
+ * path's `file_path GLOB ?` exactly:
+ *   - `*` matches zero or more characters of ANY kind, including `/`
+ *   - `?` matches exactly one character
+ *   - `[abc]` is a character class
+ * Anchored. Cached per process — patterns are short and few.
+ */
+const _globCache = new Map<string, RegExp>();
+function compileSqliteGlob(pattern: string): RegExp {
+  const cached = _globCache.get(pattern);
+  if (cached) return cached;
+  let regex = '^';
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '*') regex += '.*';
+    else if (c === '?') regex += '.';
+    else if (c === '[') {
+      const end = pattern.indexOf(']', i + 1);
+      if (end === -1) {
+        regex += '\\[';
+      } else {
+        regex += pattern.slice(i, end + 1);
+        i = end;
+      }
+    } else if (/[.+^${}()|\\]/.test(c)) {
+      regex += `\\${c}`;
+    } else {
+      regex += c;
+    }
+  }
+  regex += '$';
+  const compiled = new RegExp(regex);
+  _globCache.set(pattern, compiled);
+  return compiled;
+}
+
+/**
  * Optional sqlite-vec wrapper.
  *
  * sqlite-vec is shipped as an `optionalDependencies` entry and a SQLite
@@ -137,8 +175,16 @@ export function upsertEmbedding(
   return rowid;
 }
 
-/** Remove every vector + meta row for a given file path. */
+/** Remove every vector + meta row for a given file path. No-op when the
+ *  vec_section_meta table doesn't exist (semantic disabled — sqlite-vec
+ *  was never loaded and `initVectorSchema` was never called). This lets
+ *  generic write/index cleanup paths call it unconditionally. */
 export function removeEmbeddingsForFile(db: Database.Database, file_path: string): void {
+  const exists = db.prepare(
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'vec_section_meta'`,
+  ).get();
+  if (!exists) return;
+
   const rows = db.prepare(`SELECT rowid FROM vec_section_meta WHERE file_path = ?`).all(file_path) as Array<{ rowid: number }>;
   if (rows.length === 0) return;
   const placeholders = rows.map(() => '?').join(',');
@@ -191,10 +237,14 @@ export function vectorSearch(
     line_end: number;
   }>;
 
+  // Match the FTS path's `file_path GLOB ?` semantics exactly: a scope
+  // without a wildcard is treated as a path prefix (auto-suffixed `*`);
+  // a scope WITH wildcards is honoured as-written, with `*` matching
+  // any sequence including `/` (SQLite GLOB, not POSIX glob).
   let filtered = rows;
   if (scope) {
-    const prefix = scope.includes('*') ? scope.replace(/\*+/g, '') : scope;
-    filtered = rows.filter((r) => r.file_path.startsWith(prefix));
+    const re = compileSqliteGlob(scope.includes('*') ? scope : `${scope}*`);
+    filtered = rows.filter((r) => re.test(r.file_path));
   }
 
   return filtered.slice(0, limit).map((r) => ({

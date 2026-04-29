@@ -4,14 +4,21 @@ import type { SectionNode } from '../shared/types.js';
 import { flattenTree, getSectionPath } from '../document/section-tree.js';
 import type { RawLink } from '../document/parser-registry.js';
 import { storeLinks, removeLinks } from './link-storage.js';
+import { removeEmbeddingsForFile } from './vector-store.js';
 
 /**
  * Index all sections of a document into the FTS5 table.
  * Deletes existing entries for the file first (full re-index per file).
  *
- * Optional `links` are stored in the cross-document reference index
- * (`doc_links`) in the same transaction so the two indexes never drift.
- * Pass an empty array (or omit) for parsers that don't extract links.
+ * `links` semantics — three-way:
+ *   - `undefined`: doc_links rows for this file are LEFT ALONE. Use this
+ *     when the caller intends to update links separately (e.g. syncIndex
+ *     defers link storage until all index_metadata is populated so
+ *     resolution sees the complete file set).
+ *   - `[]`: existing rows are CLEARED, no new rows inserted.
+ *   - `RawLink[]`: existing rows are cleared and replaced with the
+ *     extracted set; the result is in lockstep with FTS in the same
+ *     transaction.
  */
 export function indexDocument(
   db: Database.Database,
@@ -64,19 +71,24 @@ export function indexDocument(
 
     metaStmt.run(filePath, mtimeMs ?? Date.now(), new Date().toISOString());
 
-    storeLinks(db, filePath, links ?? []);
+    if (links !== undefined) {
+      storeLinks(db, filePath, links);
+    }
   });
 
   runIndex();
 }
 
 /**
- * Remove a document from the search index (FTS5, metadata, link index).
+ * Remove a document from every index — FTS5, metadata, link index, and
+ * the optional sqlite-vec vector index. The vec call is a no-op when
+ * semantic search is disabled or the extension wasn't loaded.
  */
 export function removeFromIndex(db: Database.Database, filePath: string): void {
   db.prepare('DELETE FROM sections_fts WHERE file_path = ?').run(filePath);
   db.prepare('DELETE FROM index_metadata WHERE file_path = ?').run(filePath);
   removeLinks(db, filePath);
+  removeEmbeddingsForFile(db, filePath);
 }
 
 /**
