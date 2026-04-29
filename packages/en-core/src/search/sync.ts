@@ -164,15 +164,10 @@ export function syncIndex(
   if (toRemove.length > 0) {
     const runRemove = db.transaction(() => {
       for (const filePath of toRemove) {
-        // Downgrade incoming-reference rows to `?<filePath>` first —
-        // outgoing rows are dropped wholesale by removeFromIndex's
-        // delete-by-source clause, which is correct (the source no
-        // longer exists), but incoming rows are sourced from OTHER
-        // files that ARE still around and need their target_file
-        // re-tagged.
-        db.prepare(
-          `UPDATE doc_links SET target_file = '?' || target_file WHERE target_file = ?`,
-        ).run(filePath);
+        // removeFromIndex handles the incoming-link downgrade itself —
+        // any caller that removes a file (sync vanish, doc_rename,
+        // doc_delete) gets the same target_file → ?target_file behaviour
+        // without each path having to remember.
         removeFromIndex(db, filePath);
         removed++;
       }

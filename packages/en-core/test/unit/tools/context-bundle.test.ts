@@ -224,6 +224,96 @@ describe('handleContextBundle', () => {
     expect(result.sections.some((s) => s.file === 'docs/skills/observability.md' && s.hop_distance === 1)).toBe(true);
   });
 
+  it('resolves URL-encoded fragments via the slug fallback', async () => {
+    db.prepare('DELETE FROM doc_links').run();
+    storeLinks(db, 'docs/skills/observability.md', [{
+      source_section: 'Observability',
+      target_path: '../sops/deployment.md',
+      target_section: 'Tool%20Selection', // not in this fixture, but exercises the encoding path
+      relationship: 'references',
+      context: '[link](../sops/deployment.md#Tool%20Selection)',
+    }, {
+      source_section: 'Observability',
+      target_path: '../sops/deployment.md',
+      target_section: 'metrics', // slug that DOES exist as 'Metrics'
+      relationship: 'references',
+      context: null,
+    }]);
+
+    const ctx = buildContext(readAll);
+    const result = await handleContextBundle(
+      { query: 'observability', max_depth: 1, max_sections: 5 },
+      ctx,
+    ) as { sections: Array<{ section_path: string }> };
+
+    // The URL-encoded fragment doesn't match any heading in the fixture
+    // and is silently dropped; the slug-form `metrics` resolves to the
+    // canonical "Deployment > Metrics".
+    const paths = result.sections.map((s) => s.section_path);
+    expect(paths).toContain('Deployment > Metrics');
+  });
+
+  it('resolves space-form section fragments (Obsidian-style wiki) via the slug fallback', async () => {
+    // Set up a file with a heading "Tool Selection" so the space-form
+    // fragment normalisation can be exercised.
+    writeFileSync(join(docsRoot, 'sops', 'deployment.md'),
+      '# Deployment\n\n## Tool Selection\n\nNotes on chosen tooling.\n');
+    db.close();
+    db = new Database(':memory:');
+    initSearchSchema(db);
+    syncIndex(db, 'docs', docsRoot);
+    storeLinks(db, 'docs/skills/observability.md', [{
+      source_section: 'Observability',
+      target_path: '../sops/deployment.md',
+      target_section: 'tool selection', // space-form, not slug-form
+      relationship: 'references',
+      context: null,
+    }]);
+
+    const ctx = buildContext(readAll);
+    const result = await handleContextBundle(
+      { query: 'observability', max_depth: 1, max_sections: 5 },
+      ctx,
+    ) as { sections: Array<{ file: string; section_path: string }> };
+
+    const linked = result.sections.find((s) => s.file === 'docs/sops/deployment.md');
+    expect(linked).toBeDefined();
+    expect(linked!.section_path).toBe('Deployment > Tool Selection');
+  });
+
+  it('skips __preamble when picking a representative section for whole-doc links', async () => {
+    // Replace deployment.md with one that has frontmatter, then a
+    // heading. The synthetic __preamble is at line 1; a naive
+    // first-by-line_start lookup would land on it. Whole-document
+    // links should expand to the real heading instead.
+    writeFileSync(join(docsRoot, 'sops', 'deployment.md'),
+      '---\ntitle: Deployment SOP\n---\n\n# Deployment\n\nReal content.\n');
+    db.close();
+    db = new Database(':memory:');
+    initSearchSchema(db);
+    syncIndex(db, 'docs', docsRoot);
+
+    db.prepare('DELETE FROM doc_links').run();
+    storeLinks(db, 'docs/skills/observability.md', [{
+      source_section: 'Observability',
+      target_path: '../sops/deployment.md',
+      target_section: null, // whole-document link
+      relationship: 'references',
+      context: null,
+    }]);
+
+    const ctx = buildContext(readAll);
+    const result = await handleContextBundle(
+      { query: 'observability', max_depth: 1, max_sections: 5 },
+      ctx,
+    ) as { sections: Array<{ file: string; section_path: string }> };
+
+    const linked = result.sections.find((s) => s.file === 'docs/sops/deployment.md');
+    expect(linked).toBeDefined();
+    expect(linked!.section_path).toBe('Deployment');
+    expect(linked!.section_path).not.toContain('__preamble');
+  });
+
   it('does not let unreadable high-ranked candidates consume the cap', async () => {
     // Caller has search on **, but read only on docs/sops/**.
     // observability.md is in skills/ and is one of the candidates

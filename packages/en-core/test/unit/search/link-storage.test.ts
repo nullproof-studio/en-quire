@@ -5,6 +5,7 @@ import {
   initSearchSchema,
   storeLinks,
   removeLinks,
+  removeFromIndex,
 } from '@nullproof-studio/en-core';
 
 let db: Database.Database;
@@ -211,5 +212,31 @@ describe('storeLinks resolution', () => {
 
     expect(listLinks('docs/a.md')).toHaveLength(0);
     expect(listLinks('docs/b.md')).toHaveLength(1);
+  });
+});
+
+describe('removeFromIndex centralises the incoming-link downgrade', () => {
+  it('downgrades incoming references when a target file is removed (rename / delete path)', () => {
+    indexFakeFile('docs/a.md');
+    indexFakeFile('docs/b.md');
+
+    // a.md → b.md
+    storeLinks(db, 'docs/a.md', [{
+      source_section: null,
+      target_path: 'docs/b.md',
+      target_section: null,
+      relationship: 'references',
+      context: null,
+      prefixed: true,
+    }]);
+    expect(listLinks('docs/a.md')[0].target_file).toBe('docs/b.md');
+
+    // Removing b directly via removeFromIndex (the call-site used by
+    // doc_rename and doc_delete) must downgrade a.md's incoming row to
+    // `?docs/b.md` — without this, the rename/delete tools leave the
+    // incoming reference looking valid.
+    removeFromIndex(db, 'docs/b.md');
+
+    expect(listLinks('docs/a.md')[0].target_file).toBe('?docs/b.md');
   });
 });

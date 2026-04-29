@@ -81,10 +81,26 @@ export function indexDocument(
 
 /**
  * Remove a document from every index — FTS5, metadata, link index, and
- * the optional sqlite-vec vector index. The vec call is a no-op when
- * semantic search is disabled or the extension wasn't loaded.
+ * the optional sqlite-vec vector index. Also downgrades incoming
+ * `doc_links` rows that pointed AT this file: their `target_file` is
+ * tagged with the unresolved `?` prefix so consumers (doc_references,
+ * doc_referenced_by, doc_context_bundle) report a broken link instead
+ * of one that looks resolved but points at nothing. The vec call is a
+ * no-op when semantic search is disabled or the extension wasn't loaded.
+ *
+ * Centralising the downgrade here means every removal path — sync's
+ * vanished-on-disk pass, doc_rename, doc_delete — gets the same
+ * incoming-link cleanup without each having to remember it.
  */
 export function removeFromIndex(db: Database.Database, filePath: string): void {
+  // Downgrade incoming references first, while target_file still equals
+  // the un-prefixed path. Doing it after the FTS / metadata deletes
+  // would still work (doc_links is not joined to either), but pulling
+  // the order forward keeps the function trivially safe to reorder.
+  db.prepare(
+    `UPDATE doc_links SET target_file = '?' || target_file WHERE target_file = ?`,
+  ).run(filePath);
+
   db.prepare('DELETE FROM sections_fts WHERE file_path = ?').run(filePath);
   db.prepare('DELETE FROM index_metadata WHERE file_path = ?').run(filePath);
   removeLinks(db, filePath);

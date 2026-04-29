@@ -28,10 +28,28 @@ function slugify(text: string): string {
     .replace(/\s+/g, '-');
 }
 
-/** Find a section whose slugified heading text matches `slug`. */
-function findHeadingBySlug(tree: SectionNode[], slug: string): SectionNode | null {
+/**
+ * Find a section whose slugified heading text matches the input
+ * fragment. The input is normalised first so all the link syntaxes the
+ * extractor supports collapse to the same key:
+ *   - `tool-selection`        — markdown anchor, already a slug
+ *   - `Tool%20Selection`      — URL-encoded fragment
+ *   - `tool selection`        — Obsidian-style wiki section name (space)
+ *   - `Tool Selection`        — heading-text addressing
+ * Each is decoded and re-slugified so the comparison is between
+ * canonical slugs on both sides.
+ */
+function findHeadingBySlug(tree: SectionNode[], fragment: string): SectionNode | null {
+  let decoded = fragment;
+  try {
+    decoded = decodeURIComponent(fragment);
+  } catch {
+    // Malformed percent escape — fall through with the raw value rather
+    // than throw, so callers always get a deterministic null/match.
+  }
+  const targetSlug = slugify(decoded);
   for (const node of flattenTree(tree)) {
-    if (slugify(node.heading.text) === slug) return node;
+    if (slugify(node.heading.text) === targetSlug) return node;
   }
   return null;
 }
@@ -132,10 +150,22 @@ export async function handleContextBundle(
   // Document-level links (markdown `[text](file.md)` with no fragment,
   // and frontmatter relationship arrays) carry a null section. Without
   // a representative section we'd skip them entirely, missing the
-  // common cross-document pattern. Look up the file's first indexed
-  // section as the entry point — cached because the same file can
-  // appear on many edges.
-  const firstSectionStmt = ctx.db.prepare(
+  // common cross-document pattern. Look up the file's first non-preamble
+  // indexed section as the entry point.
+  //
+  // Preamble is the synthetic section the markdown parser injects for
+  // content before the first heading (frontmatter, JSX imports). It
+  // sits at line 1, so a naive ORDER BY line_start would always land
+  // there for any file with frontmatter — turning a whole-document link
+  // into a metadata pointer rather than a content pointer. Filter
+  // `__preamble` out, and fall back to it ONLY when the file has no
+  // real headings (a headingless document where preamble IS the body).
+  const firstHeadingStmt = ctx.db.prepare(
+    `SELECT section_path FROM sections_fts
+     WHERE file_path = ? AND section_path != '' AND section_heading != '__preamble'
+     ORDER BY line_start LIMIT 1`,
+  );
+  const preambleStmt = ctx.db.prepare(
     `SELECT section_path FROM sections_fts
      WHERE file_path = ? AND section_path != ''
      ORDER BY line_start LIMIT 1`,
@@ -143,8 +173,13 @@ export async function handleContextBundle(
   const fileEntryCache = new Map<string, string | null>();
   const entrySectionFor = (file: string): string | null => {
     if (fileEntryCache.has(file)) return fileEntryCache.get(file) ?? null;
-    const row = firstSectionStmt.get(file) as { section_path: string } | undefined;
-    const section = row?.section_path ?? null;
+    const heading = firstHeadingStmt.get(file) as { section_path: string } | undefined;
+    if (heading) {
+      fileEntryCache.set(file, heading.section_path);
+      return heading.section_path;
+    }
+    const fallback = preambleStmt.get(file) as { section_path: string } | undefined;
+    const section = fallback?.section_path ?? null;
     fileEntryCache.set(file, section);
     return section;
   };
