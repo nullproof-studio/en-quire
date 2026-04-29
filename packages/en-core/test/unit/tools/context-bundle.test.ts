@@ -1,0 +1,175 @@
+// Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import Database from 'better-sqlite3';
+import {
+  handleContextBundle,
+  ContextBundleSchema,
+  initSearchSchema,
+  syncIndex,
+  storeLinks,
+} from '@nullproof-studio/en-core';
+import type { ToolContext, ResolvedConfig, CallerIdentity } from '@nullproof-studio/en-core';
+import type { z } from 'zod';
+import '../../../../en-quire/src/parsers/markdown-parser.js';
+
+let workRoot: string;
+let docsRoot: string;
+let db: Database.Database;
+
+function buildContext(scopes: CallerIdentity['scopes']): ToolContext {
+  const config: ResolvedConfig = {
+    document_roots: {
+      docs: { name: 'docs', path: docsRoot, git: {
+        enabled: false, auto_commit: false, remote: null, pr_hook: null,
+        pr_hook_secret: null, default_branch: null, push_proposals: false,
+      }},
+    },
+    database: ':memory:',
+    transport: 'stdio',
+    port: 3100,
+    listen_host: '127.0.0.1',
+    search: {
+      fulltext: true,
+      sync_on_start: 'blocking',
+      batch_size: 500,
+      semantic: { enabled: false },
+    },
+    logging: { level: 'error', dir: null },
+    callers: {},
+    require_read_before_write: true,
+  };
+  return {
+    config,
+    roots: { docs: { root: config.document_roots.docs, git: null } },
+    caller: { id: 'tester', scopes },
+    db,
+  };
+}
+
+beforeEach(() => {
+  workRoot = mkdtempSync(join(tmpdir(), 'context-bundle-'));
+  docsRoot = join(workRoot, 'docs');
+  mkdirSync(docsRoot, { recursive: true });
+  mkdirSync(join(docsRoot, 'sops'), { recursive: true });
+  mkdirSync(join(docsRoot, 'skills'), { recursive: true });
+
+  // Three files. "metrics" appears in two; one is linked to via a third.
+  writeFileSync(join(docsRoot, 'sops', 'deployment.md'),
+    '# Deployment\n\n## Metrics\n\nWe track p99 latency and error rate.\n');
+  writeFileSync(join(docsRoot, 'sops', 'incidents.md'),
+    '# Incidents\n\n## Metrics\n\nMetrics during incidents are noisy.\n');
+  // Body deliberately avoids the search term "metrics" (including in link
+  // text and URL fragment) so this file is reachable only via the link
+  // graph, not as a direct search hit.
+  writeFileSync(join(docsRoot, 'skills', 'observability.md'),
+    '# Observability\n\nFollow [the deployment runbook](../sops/deployment.md) for the latest baselines.\n');
+
+  db = new Database(':memory:');
+  initSearchSchema(db);
+  syncIndex(db, 'docs', docsRoot);
+
+  // Manually seed a link from skills/observability.md → sops/deployment.md.
+  // (syncIndex above already does this through the markdown extractor; this
+  // belt-and-braces step keeps the test independent of extractor coverage.)
+  storeLinks(db, 'docs/skills/observability.md', [{
+    source_section: 'Observability',
+    target_path: '../sops/deployment.md',
+    target_section: 'Metrics',
+    relationship: 'references',
+    context: '[the deployment metrics](../sops/deployment.md#metrics)',
+  }]);
+});
+
+afterEach(() => {
+  db.close();
+  rmSync(workRoot, { recursive: true, force: true });
+});
+
+describe('handleContextBundle', () => {
+  const readAll: CallerIdentity['scopes'] = [{ path: '**', permissions: ['read', 'search'] }];
+
+  it('returns search hits with hop_distance: 0 when max_depth is 0', async () => {
+    const ctx = buildContext(readAll);
+    const args: z.infer<typeof ContextBundleSchema> = {
+      query: 'metrics',
+      max_depth: 0,
+      max_sections: 10,
+    };
+    const result = await handleContextBundle(args, ctx) as {
+      sections: Array<{ file: string; section_path: string; hop_distance: number; relevance_score: number }>;
+    };
+    expect(result.sections.length).toBeGreaterThan(0);
+    for (const s of result.sections) {
+      expect(s.hop_distance).toBe(0);
+      expect(s.relevance_score).toBeGreaterThan(0);
+    }
+  });
+
+  it('expands the bundle with link-graph neighbours when max_depth >= 1', async () => {
+    const ctx = buildContext(readAll);
+    const result0 = await handleContextBundle(
+      { query: 'metrics', max_depth: 0, max_sections: 50 },
+      ctx,
+    ) as { sections: Array<{ file: string }> };
+    const result1 = await handleContextBundle(
+      { query: 'metrics', max_depth: 1, max_sections: 50 },
+      ctx,
+    ) as { sections: Array<{ file: string; hop_distance: number }> };
+
+    // observability.md is NOT a search hit for "metrics" but IS linked to a hit
+    expect(result0.sections.some((s) => s.file === 'docs/skills/observability.md')).toBe(false);
+    expect(result1.sections.some((s) => s.file === 'docs/skills/observability.md' && s.hop_distance === 1)).toBe(true);
+  });
+
+  it('caps results at max_sections', async () => {
+    const ctx = buildContext(readAll);
+    const args: z.infer<typeof ContextBundleSchema> = {
+      query: 'metrics',
+      max_depth: 1,
+      max_sections: 2,
+    };
+    const result = await handleContextBundle(args, ctx) as { sections: unknown[] };
+    expect(result.sections).toHaveLength(2);
+  });
+
+  it('returns content for each section in the bundle', async () => {
+    const ctx = buildContext(readAll);
+    const args: z.infer<typeof ContextBundleSchema> = {
+      query: 'metrics',
+      max_depth: 0,
+      max_sections: 5,
+    };
+    const result = await handleContextBundle(args, ctx) as {
+      sections: Array<{ content: string }>;
+    };
+    for (const s of result.sections) {
+      expect(s.content.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('filters out sections the caller cannot read', async () => {
+    // Caller can only read sops/**, so observability.md (in skills/) is hidden
+    const ctx = buildContext([
+      { path: 'docs/sops/**', permissions: ['read', 'search'] },
+    ]);
+    const result = await handleContextBundle(
+      { query: 'metrics', max_depth: 1, max_sections: 50 },
+      ctx,
+    ) as { sections: Array<{ file: string }> };
+    for (const s of result.sections) {
+      expect(s.file.startsWith('docs/sops/')).toBe(true);
+    }
+  });
+
+  it('does not throw when no sections match the query', async () => {
+    const ctx = buildContext(readAll);
+    const result = await handleContextBundle(
+      { query: 'kjhdfgkjsdhfg-impossible-token', max_depth: 1, max_sections: 5 },
+      ctx,
+    ) as { sections: unknown[] };
+    expect(result.sections).toEqual([]);
+  });
+});
