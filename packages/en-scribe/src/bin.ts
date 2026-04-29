@@ -36,7 +36,7 @@ interface ServerDependencies {
 function createServer(deps: ServerDependencies): McpServer {
   const server = new McpServer({
     name: 'en-scribe',
-    version: '0.1.0',
+    version: '0.2.0',
   });
 
   const ctx: ToolContext = {
@@ -72,7 +72,14 @@ async function main() {
 
   const roots: Record<string, RootContext> = {};
   for (const [name, root] of Object.entries(config.document_roots)) {
-    const git = new GitOperations(root.path, root.git.enabled);
+    const git = new GitOperations(
+      root.path,
+      root.git.enabled,
+      root.git.default_branch,
+      root.git.remote,
+      root.git.push_proposals,
+      root.git.pr_hook,
+    );
     roots[name] = { root, git };
     log.info('Root configured', {
       name,
@@ -80,6 +87,24 @@ async function main() {
       git: git.available,
       description: root.description,
     });
+  }
+
+  // Startup sync: fetch+prune per git-enabled root so `text_proposals_list`
+  // is current from the first call. Graceful offline — a fetch failure
+  // logs a warning but does not halt startup.
+  for (const [name, rootCtx] of Object.entries(roots)) {
+    const git = rootCtx.git;
+    if (!git?.available) continue;
+    try {
+      const result = await git.fetchAndPrune();
+      if (result.ok) {
+        log.info('Proposal sync on startup', { root: name });
+      } else if (result.warning) {
+        log.warn('Proposal sync on startup failed', { root: name, warning: result.warning });
+      }
+    } catch (err) {
+      log.warn('Proposal sync on startup errored', { root: name, error: String(err) });
+    }
   }
 
   // Plaintext index sync — a single FTS row per file via the whole-file

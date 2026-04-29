@@ -6,6 +6,7 @@ import { safePath, readDocument } from '@nullproof-studio/en-core';
 import { computeEtag, validateEtag } from '@nullproof-studio/en-core';
 import { removeFromIndex } from '@nullproof-studio/en-core';
 import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
+import { runPostProposeHooks, getLogger } from '@nullproof-studio/en-core';
 import { requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
 import { NotFoundError, ValidationError, GitRequiredError } from '@nullproof-studio/en-core';
 import { resolveFilePath } from '@nullproof-studio/en-core';
@@ -65,6 +66,7 @@ export async function handleDocRename(
 
   let branch: string | undefined;
   const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
+  const renameWarnings: string[] = [];
 
   try {
     if (mode === 'propose' && git?.available) {
@@ -88,12 +90,29 @@ export async function handleDocRename(
         [srcResolved.relativePath, destResolved.relativePath],
         commitMsg,
       );
+
+      if (mode === 'propose' && branch) {
+        renameWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.destination, caller: ctx.caller.id },
+          getLogger(),
+        ));
+      }
     }
 
     // Update search index (remove old prefixed path)
     removeFromIndex(ctx.db, srcResolved.prefixedPath);
 
-    return { success: true, source: args.source, destination: args.destination, mode, branch, commit, etag: sourceEtag };
+    return {
+      success: true,
+      source: args.source,
+      destination: args.destination,
+      mode,
+      branch,
+      commit,
+      etag: sourceEtag,
+      ...(renameWarnings.length > 0 && { warnings: renameWarnings }),
+    };
   } finally {
     if (mode === 'propose' && originalBranch && git?.available) {
       await git.switchBranch(originalBranch);

@@ -2,6 +2,7 @@
 import micromatch from 'micromatch';
 import type { SectionNode, SectionAddress } from '../shared/types.js';
 import { AddressResolutionError } from '../shared/errors.js';
+import { rankByLevenshtein } from '../shared/levenshtein.js';
 import { flattenTree } from './section-tree.js';
 
 /**
@@ -49,11 +50,28 @@ export function resolveSingleSection(
   if (matches.length > 1) {
     throw new AddressResolutionError(
       addressToString(address),
-      `Ambiguous: ${matches.length} sections match. Use a more specific address (e.g., path or index)`,
-      matches.map((m) => m.heading.text),
+      `Ambiguous: ${matches.length} sections match. Retry with one of the disambiguated paths or indices below`,
+      matches.map(describeMatchForDisambiguation),
     );
   }
   return matches[0];
+}
+
+/**
+ * Build a disambiguating description of a matched section: its full path
+ * from root joined by " > ", plus the index path that uniquely identifies
+ * it (always works, even when sibling paths are textually identical).
+ */
+function describeMatchForDisambiguation(node: SectionNode): string {
+  const pathSegments: string[] = [];
+  const indexPath: number[] = [];
+  let curr: SectionNode | null = node;
+  while (curr) {
+    pathSegments.unshift(curr.heading.text);
+    indexPath.unshift(curr.index);
+    curr = curr.parent;
+  }
+  return `"${pathSegments.join(' > ')}" (index ${JSON.stringify(indexPath)})`;
 }
 
 function resolveTextAddress(tree: SectionNode[], text: string): SectionNode[] {
@@ -147,11 +165,9 @@ function addressToString(address: SectionAddress): string {
 }
 
 /**
- * Find closest matching heading texts for error messages.
+ * Find closest matching heading texts for error messages, ranked by
+ * Levenshtein distance (closest first). Tie-broken lexically.
  */
 function findClosestMatches(query: string, headings: string[], limit = 3): string[] {
-  const lower = query.toLowerCase();
-  return headings
-    .filter((h) => h.toLowerCase().includes(lower) || lower.includes(h.toLowerCase()))
-    .slice(0, limit);
+  return rankByLevenshtein(query, headings, limit);
 }

@@ -1,6 +1,6 @@
 {
   "name": "@nullproof-studio/en-core",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Reliability primitives shared by the en-quire and en-scribe MCP servers: etag, proposals, diff, file-utils, git, RBAC, parser registry.",
   "type": "module",
   "main": "dist/index.js",

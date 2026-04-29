@@ -1,6 +1,6 @@
 {
   "name": "@nullproof-studio/en-scribe",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reliable plain-text editing for agent systems. A sibling MCP to en-quire: literal range + anchor ops, no structural interpretation.",
   "type": "module",
   "main": "dist/bin.js",
@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "@nullproof-studio/en-core": "0.1.5",
+    "@nullproof-studio/en-core": "0.2.0",
     "zod": "^3.24.4"
   },
   "devDependencies": {

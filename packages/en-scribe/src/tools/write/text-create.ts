@@ -11,6 +11,8 @@ import {
   indexDocument,
   buildCommitMessage,
   buildProposalBranch,
+  runPostProposeHooks,
+  getLogger,
   requirePermission,
   resolveWriteMode,
   GitRequiredError,
@@ -61,6 +63,7 @@ export async function handleTextCreate(
     writeDocument(resolved.root.path, resolved.relativePath, args.content);
 
     let commit: string | undefined;
+    const pushWarnings: string[] = [];
     if (git?.available) {
       const commitMsg = buildCommitMessage({
         operation: 'Create text file',
@@ -71,6 +74,14 @@ export async function handleTextCreate(
         userMessage: args.message,
       });
       commit = await git.commitFile(resolved.relativePath, commitMsg);
+
+      if (mode === 'propose' && branch) {
+        pushWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.file, caller: ctx.caller.id },
+          getLogger(),
+        ));
+      }
     }
 
     try {
@@ -88,6 +99,7 @@ export async function handleTextCreate(
       branch,
       commit,
       etag: computeEtag(args.content),
+      ...(pushWarnings.length > 0 && { warnings: pushWarnings }),
     };
   } finally {
     if (mode === 'propose' && originalBranch && git?.available) {

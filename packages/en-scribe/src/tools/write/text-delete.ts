@@ -10,6 +10,8 @@ import {
   removeFromIndex,
   buildCommitMessage,
   buildProposalBranch,
+  runPostProposeHooks,
+  getLogger,
   requirePermission,
   resolveWriteMode,
   NotFoundError,
@@ -60,6 +62,7 @@ export async function handleTextDelete(
     unlinkSync(absolutePath);
 
     let commit: string | undefined;
+    const pushWarnings: string[] = [];
     if (git?.available) {
       const commitMsg = buildCommitMessage({
         operation: 'Delete text file',
@@ -70,11 +73,26 @@ export async function handleTextDelete(
         userMessage: args.message,
       });
       commit = await git.commitFile(resolved.relativePath, commitMsg);
+
+      if (mode === 'propose' && branch) {
+        pushWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.file, caller: ctx.caller.id },
+          getLogger(),
+        ));
+      }
     }
 
     removeFromIndex(ctx.db, resolved.prefixedPath);
 
-    return { success: true, file: args.file, mode, branch, commit };
+    return {
+      success: true,
+      file: args.file,
+      mode,
+      branch,
+      commit,
+      ...(pushWarnings.length > 0 && { warnings: pushWarnings }),
+    };
   } finally {
     if (mode === 'propose' && originalBranch && git?.available) {
       await git.switchBranch(originalBranch);

@@ -40,6 +40,15 @@ describe('ParserRegistry', () => {
   it('is case-insensitive for extensions', () => {
     expect(() => parserRegistry.getParser('CONFIG.YAML')).not.toThrow();
   });
+
+  it('lists extensions supporting a capability (generateToc)', () => {
+    const exts = parserRegistry.extensionsSupporting('generateToc');
+    // Markdown declares generateToc: true; YAML does not.
+    expect(exts).toContain('.md');
+    expect(exts).toContain('.mdx');
+    expect(exts).not.toContain('.yaml');
+    expect(exts).not.toContain('.yml');
+  });
 });
 
 describe('DocumentParser — validate', () => {

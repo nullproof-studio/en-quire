@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ToolContext } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { ValidationError } from '@nullproof-studio/en-core';
-import { loadDocument, executeWrite } from '@nullproof-studio/en-core';
+import { loadDocument, executeWrite, parserRegistry } from '@nullproof-studio/en-core';
 
 export const DocGenerateTocSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md"). Markdown only — not supported for YAML.'),
@@ -24,8 +24,10 @@ export async function handleDocGenerateToc(
   const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
 
   if (!parser.capabilities.generateToc || !parser.ops.generateToc) {
+    const supported = parserRegistry.extensionsSupporting('generateToc');
     throw new ValidationError(
-      'Table of contents generation is not supported for this file format.',
+      `Table of contents generation is not supported for this file format. ` +
+      `Supported: ${supported.join(', ')}.`,
     );
   }
 

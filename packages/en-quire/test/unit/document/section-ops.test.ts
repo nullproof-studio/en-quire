@@ -403,6 +403,24 @@ describe('findReplace', () => {
     ).toThrow('Expected 2 matches but found 3');
   });
 
+  it('expected_count mismatch throws a typed ValidationError with actual_count and a preview hint', async () => {
+    const { ValidationError } = await import('@nullproof-studio/en-core');
+    const md = '# Doc\n\nHello Hello Hello\n';
+    const tree = parse(md);
+    let caught: unknown;
+    try {
+      findReplace(md, tree, 'Hello', 'Hi', { expected_count: 2 });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ValidationError);
+    const err = caught as Error & { actual_count?: number; expected_count?: number };
+    expect(err.actual_count).toBe(3);
+    expect(err.expected_count).toBe(2);
+    // Message should suggest preview: true so the agent can inspect matches before retrying.
+    expect(err.message).toMatch(/preview/i);
+  });
+
   it('applies only selected matches', () => {
     const md = '# Doc\n\nA B A B A\n';
     const tree = parse(md);

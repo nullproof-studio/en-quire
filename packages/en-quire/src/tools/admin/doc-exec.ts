@@ -6,6 +6,8 @@ import type { ToolContext } from '@nullproof-studio/en-core';
 import { safePath } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { logExecAudit } from '@nullproof-studio/en-core';
+import { tokeniseCommand } from '@nullproof-studio/en-core';
+import { NotFoundError, rankByLevenshtein } from '@nullproof-studio/en-core';
 
 const execFileAsync = promisify(execFile);
 
@@ -16,61 +18,8 @@ export const DocExecSchema = z.object({
   root: z.string().optional().describe('Root name to use as working directory. If omitted, uses the first configured root.'),
 });
 
-/**
- * Tokenise a shell-style command string into [program, ...args].
- * Handles single quotes, double quotes, and escaped characters.
- * Does NOT process shell expansions, redirections, or pipes.
- */
-export function tokeniseCommand(command: string): string[] {
-  const tokens: string[] = [];
-  let current = '';
-  let inSingle = false;
-  let inDouble = false;
-  let escaped = false;
-  let hasQuoted = false; // Track whether current token contains quoted content
-
-  for (const ch of command) {
-    if (escaped) {
-      current += ch;
-      escaped = false;
-      continue;
-    }
-
-    if (ch === '\\' && !inSingle) {
-      escaped = true;
-      continue;
-    }
-
-    if (ch === "'" && !inDouble) {
-      inSingle = !inSingle;
-      hasQuoted = true;
-      continue;
-    }
-
-    if (ch === '"' && !inSingle) {
-      inDouble = !inDouble;
-      hasQuoted = true;
-      continue;
-    }
-
-    if (/\s/.test(ch) && !inSingle && !inDouble) {
-      if (current.length > 0 || hasQuoted) {
-        tokens.push(current);
-        current = '';
-        hasQuoted = false;
-      }
-      continue;
-    }
-
-    current += ch;
-  }
-
-  if (current.length > 0 || hasQuoted) {
-    tokens.push(current);
-  }
-
-  return tokens;
-}
+// Re-export for test suites still importing from this module
+export { tokeniseCommand };
 
 export async function handleDocExec(
   args: z.infer<typeof DocExecSchema>,
@@ -82,7 +31,13 @@ export async function handleDocExec(
   const rootName = args.root ?? Object.keys(ctx.config.document_roots)[0];
   const root = ctx.config.document_roots[rootName];
   if (!root) {
-    throw new Error(`Unknown root "${rootName}". Available: ${Object.keys(ctx.config.document_roots).join(', ')}`);
+    const candidates = rankByLevenshtein(rootName ?? '', Object.keys(ctx.config.document_roots), 20);
+    throw new NotFoundError(
+      'root',
+      rootName ?? '',
+      candidates,
+      'Set the `root` parameter to a configured root name.',
+    );
   }
   const workDir = args.working_dir
     ? safePath(root.path, args.working_dir)

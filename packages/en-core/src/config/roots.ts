@@ -1,6 +1,11 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type { ResolvedRoot } from '../shared/types.js';
 import { NotFoundError, ValidationError } from '../shared/errors.js';
+import { rankByLevenshtein } from '../shared/levenshtein.js';
+
+const ROOT_CANDIDATE_LIMIT = 20;
+const ROOT_FORMAT_HINT =
+  'With multiple roots, prefix the path with a root name (e.g. "rootname/path/to/file.md").';
 
 export interface ResolvedFile {
   rootName: string;
@@ -53,10 +58,9 @@ export function resolveFilePath(
     };
   }
 
-  throw new NotFoundError(
-    'root',
-    `Cannot resolve root for "${filePath}". With multiple roots, prefix the path with a root name: ${rootNames.join(', ')}`,
-  );
+  const wouldBeRoot = filePath.split('/')[0] || filePath;
+  const candidates = rankByLevenshtein(wouldBeRoot, rootNames, ROOT_CANDIDATE_LIMIT);
+  throw new NotFoundError('root', filePath, candidates, ROOT_FORMAT_HINT);
 }
 
 /**

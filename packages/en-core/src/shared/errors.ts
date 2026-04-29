@@ -15,11 +15,13 @@ export class NotFoundError extends EnquireError {
     public readonly resource: 'file' | 'section' | 'root',
     public readonly target: string,
     public readonly candidates?: string[],
+    formatHint?: string,
   ) {
+    const fmt = formatHint ? ` ${formatHint}` : '';
     const hint = candidates?.length
       ? ` Did you mean: ${candidates.join(', ')}?`
       : '';
-    super('not_found', `${resource} not found: "${target}".${hint}`);
+    super('not_found', `${resource} not found: "${target}".${fmt}${hint}`);
     this.name = 'NotFoundError';
   }
 }

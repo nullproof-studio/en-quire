@@ -553,9 +553,14 @@ export function findReplace(
 
   // Safety check
   if (expected_count !== undefined && apply_matches === undefined && matches.length !== expected_count) {
-    throw new Error(
-      `Expected ${expected_count} matches but found ${matches.length}. Use preview mode to inspect matches.`,
-    );
+    const err = new ValidationError(
+      `Expected ${expected_count} matches but found ${matches.length}. ` +
+      `Retry with preview: true to inspect matches and their applyIds, then either correct expected_count ` +
+      `or pass apply_matches: [<applyId>, ...] to target a subset.`,
+    ) as ValidationError & { expected_count: number; actual_count: number };
+    err.expected_count = expected_count;
+    err.actual_count = matches.length;
+    throw err;
   }
 
   // Apply replacements

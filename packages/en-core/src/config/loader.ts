@@ -108,6 +108,8 @@ export function loadConfig(configPath: string): ResolvedConfig {
         auto_commit: root.git.auto_commit,
         remote: root.git.remote,
         pr_hook: root.git.pr_hook,
+        default_branch: root.git.default_branch,
+        push_proposals: root.git.push_proposals,
       },
     };
   }

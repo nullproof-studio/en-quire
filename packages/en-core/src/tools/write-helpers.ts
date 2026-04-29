@@ -6,6 +6,7 @@ import { parserRegistry } from '../document/parser-registry.js';
 import type { DocumentParser } from '../document/parser-registry.js';
 import { indexDocument } from '../search/indexer.js';
 import { buildCommitMessage, buildProposalBranch } from '../git/commit-message.js';
+import { runPostProposeHooks } from '../git/post-propose.js';
 import { generateDiff } from '../shared/diff.js';
 import { resolveWriteMode } from '../rbac/permissions.js';
 import { GitRequiredError, ValidationError } from '../shared/errors.js';
@@ -108,6 +109,14 @@ export async function executeWrite(
       });
       commit = await git.commitFile(resolved.relativePath, commitMsg);
       logger.debug('write:git-committed', { file: params.file, commit });
+
+      if (mode === 'propose' && branch) {
+        warnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: params.file, caller: ctx.caller.id },
+          logger,
+        ));
+      }
     }
 
     // Update search index (use prefixed path for index key)

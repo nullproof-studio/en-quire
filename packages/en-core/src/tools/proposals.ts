@@ -4,16 +4,17 @@ import type { ToolContext } from './context.js';
 import { requirePermission } from '../rbac/permissions.js';
 import { GitRequiredError, ValidationError } from '../shared/errors.js';
 import { getProductName } from '../shared/logger.js';
+import { parseProposalBranch, parseCommitMessage } from '../git/commit-message.js';
 import type { GitOperations } from '../git/operations.js';
+import { getLogger } from '../shared/logger.js';
 
 /**
  * Format-agnostic proposal governance handlers.
  *
  * Shared by en-quire (registered as doc_proposals_*) and en-scribe
- * (registered as text_proposals_*). Branch reconstruction no longer
- * assumes a markdown extension — buildProposalBranch preserves the
- * original file extension, so parsing a branch back gives the exact
- * path regardless of the binary that created it.
+ * (registered as text_proposals_*). Branch names encode paths with
+ * literal `/` separators so the branch → file round-trip is lossless
+ * regardless of the binary that created the proposal.
  */
 
 function findGitRoot(ctx: ToolContext, rootName?: string): { name: string; git: GitOperations } {
@@ -34,16 +35,6 @@ function findGitRoot(ctx: ToolContext, rootName?: string): { name: string; git: 
   throw new GitRequiredError('Proposals (no git-enabled roots)');
 }
 
-/** Reconstruct a file path from a propose/ branch name. Format: propose/{caller}/{path-with-dashes}/{timestamp}. */
-function parseProposalBranch(branch: string, root: string): { caller: string; file: string; timestamp: string } {
-  const parts = branch.replace('propose/', '').split('/');
-  const caller = parts[0];
-  const timestamp = parts[parts.length - 1];
-  const fileParts = parts.slice(1, -1);
-  const file = `${root}/${fileParts.join('/')}`;
-  return { caller, file, timestamp };
-}
-
 async function collectProposals(ctx: ToolContext) {
   const allProposals: Array<{
     branch: string;
@@ -57,22 +48,48 @@ async function collectProposals(ctx: ToolContext) {
     diff_summary: string;
   }> = [];
 
+  const log = getLogger();
+
   for (const [name, rootCtx] of Object.entries(ctx.roots)) {
     if (!rootCtx.git?.available) continue;
 
     const branches = await rootCtx.git.listBranches('propose/');
     for (const branch of branches) {
       const { caller, file, timestamp } = parseProposalBranch(branch, name);
+
+      let section = '';
+      let operation = '';
+      let message = '';
+      let created = timestamp;
+      let diff_summary = '';
+
+      try {
+        const tip = await rootCtx.git.getProposalTipCommit(branch);
+        created = tip.authorDate;
+        diff_summary = tip.diffSummary;
+
+        const meta = parseCommitMessage(tip.message);
+        if (meta) {
+          section = meta.target;
+          operation = meta.operation;
+          message = meta.userMessage ?? '';
+        }
+      } catch (err) {
+        // Branch exists but tip inspection failed (e.g. shallow clone,
+        // missing ref). Fall back to branch-name-derived fields.
+        log.warn('proposals:tip-inspection-failed', { branch, error: String(err) });
+      }
+
       allProposals.push({
         branch,
         caller,
         file,
         root: name,
-        section: '',
-        operation: '',
-        message: '',
-        created: timestamp,
-        diff_summary: '',
+        section,
+        operation,
+        message,
+        created,
+        diff_summary,
       });
     }
   }
@@ -121,7 +138,15 @@ export async function handleProposalDiff(
 
   const diff = await git.getDiff(args.branch);
 
-  return { diff, file, caller, message: '' };
+  let message = '';
+  try {
+    const tip = await git.getProposalTipCommit(args.branch);
+    message = parseCommitMessage(tip.message)?.userMessage ?? '';
+  } catch {
+    // Leave message empty if tip inspection fails.
+  }
+
+  return { diff, file, caller, message };
 }
 
 // --- proposal_approve ---
@@ -146,12 +171,11 @@ export async function handleProposalApprove(
   requirePermission(ctx.caller, 'approve', file);
 
   const mergeMessage = args.message ?? `[${getProductName()}] Approve proposal: ${args.branch}`;
-  await git.mergeBranch(args.branch, mergeMessage);
-  await git.deleteBranch(args.branch);
+  const { merge_commit } = await git.approveProposal(args.branch, mergeMessage);
 
   return {
     success: true,
-    merge_commit: '',
+    merge_commit,
     file,
     branch: args.branch,
   };

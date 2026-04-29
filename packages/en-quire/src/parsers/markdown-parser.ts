@@ -232,22 +232,29 @@ function findSetextHeadings(ast: Root, content: string): string[] {
 
 /**
  * Walk the section tree and find duplicate sibling headings
- * (same heading text under the same parent).
+ * (same heading text under the same parent). Each warning includes the
+ * duplicate's index path so the agent can target it via index addressing.
  */
 function findDuplicateSiblings(nodes: SectionNode[], parentPath?: string): string[] {
   const warnings: string[] = [];
-  const seen = new Set<string>();
+  const seen = new Map<string, SectionNode>();
 
   for (const node of nodes) {
     // Skip preamble — it's synthetic and always unique
     if (node.heading.text === '__preamble') continue;
 
     const key = node.heading.text;
-    if (seen.has(key)) {
+    const firstSeen = seen.get(key);
+    if (firstSeen) {
       const context = parentPath ? ` under "${parentPath}"` : ' at top level';
-      warnings.push(`Duplicate sibling heading "${key}"${context} — this will cause ambiguous section addressing.`);
+      const firstIdx = JSON.stringify(buildIndexPath(firstSeen));
+      const dupIdx = JSON.stringify(buildIndexPath(node));
+      warnings.push(
+        `Duplicate sibling heading "${key}"${context} — index ${firstIdx} and ${dupIdx} both match. ` +
+        `Address one by index (e.g. {"type":"index","indices":${dupIdx}}) or rename one of them.`,
+      );
     } else {
-      seen.add(key);
+      seen.set(key, node);
     }
 
     // Recurse into children
@@ -257,6 +264,17 @@ function findDuplicateSiblings(nodes: SectionNode[], parentPath?: string): strin
   }
 
   return warnings;
+}
+
+/** Walk parents to produce the index path that uniquely identifies this node. */
+function buildIndexPath(node: SectionNode): number[] {
+  const path: number[] = [];
+  let curr: SectionNode | null = node;
+  while (curr) {
+    path.unshift(curr.index);
+    curr = curr.parent;
+  }
+  return path;
 }
 
 /**

@@ -211,4 +211,65 @@ describe('resolveSingleSection', () => {
       resolveSingleSection(tree, { type: 'pattern', pattern: 'Section*' }),
     ).toThrow(AddressResolutionError);
   });
+
+  it('emits distinguishable candidates when duplicate-named siblings collide', () => {
+    // Two top-level "Reinforcement Rules" siblings — text-address resolution is ambiguous.
+    const md = '# Doc\n\n## Reinforcement Rules\n\nA.\n\n## Other\n\nx.\n\n## Reinforcement Rules\n\nB.\n';
+    const ast = parseMarkdown(md);
+    const tree = buildSectionTree(ast, md);
+    let caught: unknown;
+    try {
+      resolveSingleSection(tree, { type: 'text', text: 'Reinforcement Rules' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AddressResolutionError);
+    const err = caught as AddressResolutionError;
+    expect(err.candidates).toBeDefined();
+    expect(err.candidates!.length).toBe(2);
+    // Candidates must be distinguishable — listing the same string twice is useless.
+    expect(err.candidates![0]).not.toBe(err.candidates![1]);
+    // At least one form of actionable disambiguator should appear (index path).
+    expect(err.candidates!.every((c) => /\[\s*\d/.test(c))).toBe(true);
+  });
+
+  it('ranks not-found candidates by Levenshtein distance, closest first', () => {
+    // Headings with various edit distances to the query "Foo".
+    const md = '# Doc\n\n## Foe\n\nx.\n\n## Foobar\n\ny.\n\n## Bar\n\nz.\n\n## Fop\n\nq.\n';
+    const ast = parseMarkdown(md);
+    const tree = buildSectionTree(ast, md);
+    let caught: unknown;
+    try {
+      resolveSingleSection(tree, { type: 'text', text: 'Foo' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AddressResolutionError);
+    const err = caught as AddressResolutionError;
+    expect(err.candidates).toBeDefined();
+    // Closest matches by edit distance: Foe (1), Fop (1), then Foobar (3).
+    // Substring-only matching put Foobar first historically because it contained "Foo".
+    // Levenshtein-ranked output should put the distance-1 matches first.
+    expect(err.candidates![0]).toMatch(/^(Foe|Fop)$/);
+    expect(err.candidates![1]).toMatch(/^(Foe|Fop)$/);
+    expect(err.candidates!.slice(0, 2)).not.toContain('Foobar');
+  });
+
+  it('emits distinguishable candidates for nested duplicate-named sections', () => {
+    // Two "Foo" sections under different parents — same heading text, different paths.
+    const md = '# Doc\n\n## Section A\n\n### Foo\n\nA-foo.\n\n## Section B\n\n### Foo\n\nB-foo.\n';
+    const ast = parseMarkdown(md);
+    const tree = buildSectionTree(ast, md);
+    let caught: unknown;
+    try {
+      resolveSingleSection(tree, { type: 'text', text: 'Foo' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AddressResolutionError);
+    const err = caught as AddressResolutionError;
+    // Each candidate should mention its parent path so the agent can disambiguate by path.
+    expect(err.candidates!.some((c) => c.includes('Section A'))).toBe(true);
+    expect(err.candidates!.some((c) => c.includes('Section B'))).toBe(true);
+  });
 });

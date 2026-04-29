@@ -26,4 +26,26 @@ Two primitives — `text_find`, `text_replace_range` — can express any edit. T
 
 No regex. The positioning is *predictable, no hidden semantics*; agents wanting pattern power reach for `grep` or en-quire.
 
+## Governance workflow
+
+Proposals can become real pull requests on GitHub/GitLab. Configure the remote, the push flag, and a `pr_hook` on a root:
+
+```yaml
+document_roots:
+  notes:
+    path: /data/notes
+    git:
+      remote: origin
+      push_proposals: true
+      pr_hook: "gh pr create --head {branch} --title 'Proposal: {file}' --base main"
+```
+
+Every `mode: "propose"` write then runs the full pipeline:
+
+1. Commits to a `propose/<caller>/<path>/<timestamp>` branch locally
+2. Pushes to the remote
+3. Fires `pr_hook` with `{branch}` / `{file}` / `{caller}` substitution (via `execFile` — no shell)
+
+Approvals happen via `text_proposal_approve` (merges locally after verifying the remote branch still exists — fails closed if it was merged upstream already) or via the PR UI on your host. Server startup runs `git fetch --prune` per git-enabled root so `text_proposals_list` stays current across sessions.
+
 See the [repo README](https://github.com/nullproof-studio/en-quire#readme) for configuration and the full spec.

@@ -10,6 +10,8 @@ import {
   removeFromIndex,
   buildCommitMessage,
   buildProposalBranch,
+  runPostProposeHooks,
+  getLogger,
   requirePermission,
   resolveWriteMode,
   NotFoundError,
@@ -71,6 +73,7 @@ export async function handleTextRename(
 
   let branch: string | undefined;
   const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
+  const pushWarnings: string[] = [];
 
   try {
     if (mode === 'propose' && git?.available) {
@@ -94,6 +97,14 @@ export async function handleTextRename(
         [srcResolved.relativePath, destResolved.relativePath],
         commitMsg,
       );
+
+      if (mode === 'propose' && branch) {
+        pushWarnings.push(...await runPostProposeHooks(
+          git,
+          { branch, file: args.destination, caller: ctx.caller.id },
+          getLogger(),
+        ));
+      }
     }
 
     removeFromIndex(ctx.db, srcResolved.prefixedPath);
@@ -106,6 +117,7 @@ export async function handleTextRename(
       branch,
       commit,
       etag: sourceEtag,
+      ...(pushWarnings.length > 0 && { warnings: pushWarnings }),
     };
   } finally {
     if (mode === 'propose' && originalBranch && git?.available) {
