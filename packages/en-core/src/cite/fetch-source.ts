@@ -152,21 +152,24 @@ async function fetchHttp(uri: string, ctx: FetchSourceContext): Promise<FetchSou
     }
   }
 
-  // Issue the HTTP request.
-  const reqOpts: Parameters<typeof request>[1] = {
+  // Issue the HTTP request. v1 refuses to follow redirects: per-hop
+  // revalidation (re-running URL policy + DNS on the redirect target) is a
+  // security requirement, and `request()` doesn't expose hooks for that.
+  // 30x responses are surfaced as source_blocked. Redirect-aware fetching
+  // is a phase-2 enhancement.
+  const reqOpts: NonNullable<Parameters<typeof request>[1]> = {
     method: 'GET',
     headersTimeout: ctx.config.timeout_ms,
     bodyTimeout: ctx.config.timeout_ms,
-    maxRedirections: ctx.config.max_redirects,
     headers: {
-      // Identify ourselves clearly; refuse compression accept-encoding fancy
-      // forms to keep decompression-bomb surface predictable.
+      // Identify ourselves clearly; refuse content-coding so the
+      // decompression-bomb surface is bounded by max_bytes alone.
       'user-agent': 'en-quire-doc-cite/0.3 (+https://github.com/nullproof-studio/en-quire)',
       accept: ctx.config.allowed_content_types.join(', '),
       'accept-encoding': 'identity',
     },
+    ...(ctx.dispatcher ? { dispatcher: ctx.dispatcher } : {}),
   };
-  if (ctx.dispatcher) reqOpts.dispatcher = ctx.dispatcher;
 
   let res: Awaited<ReturnType<typeof request>>;
   try {
@@ -182,6 +185,14 @@ async function fetchHttp(uri: string, ctx: FetchSourceContext): Promise<FetchSou
   if (res.statusCode === 404) {
     await drainBody(res.body);
     return blocked('source_not_found', policy, `http_${res.statusCode}`);
+  }
+  if (res.statusCode >= 300 && res.statusCode < 400) {
+    await drainBody(res.body);
+    return blocked(
+      'source_blocked',
+      policy,
+      `redirect_disallowed:http_${res.statusCode}`,
+    );
   }
   if (res.statusCode >= 400) {
     await drainBody(res.body);

@@ -51,6 +51,7 @@ export * from './document/section-tree.js';
 export * from './document/text-find.js';
 
 // Cite (verbatim source-span attestation)
+export * from './cite/append-citation.js';
 export * from './cite/fetch-source.js';
 export * from './cite/format.js';
 export * from './cite/normalise.js';

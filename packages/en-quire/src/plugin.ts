@@ -40,6 +40,10 @@ import {
   DocProposalRejectSchema, handleDocProposalReject,
 } from './tools/governance/doc-proposals.js';
 
+// Cite (verbatim source-span attestation)
+import { DocCiteSchema, handleDocCite } from './tools/cite/doc-cite.js';
+import { DocCiteVerifySchema, handleDocCiteVerify } from './tools/cite/doc-cite-verify.js';
+
 // Admin
 import { DocExecSchema, handleDocExec } from './tools/admin/doc-exec.js';
 import { DocAuditLogSchema, handleDocAuditLog } from './tools/admin/doc-audit-log.js';
@@ -86,6 +90,22 @@ export function registerEnQuireTools(registry: ToolRegistry): void {
   registry.register({ name: 'doc_proposal_diff', description: 'View the diff of a proposal', schema: DocProposalDiffSchema.shape, handler: handleDocProposalDiff });
   registry.register({ name: 'doc_proposal_approve', description: 'Approve and merge a proposal', schema: DocProposalApproveSchema.shape, handler: handleDocProposalApprove });
   registry.register({ name: 'doc_proposal_reject', description: 'Reject and delete a proposal', schema: DocProposalRejectSchema.shape, handler: handleDocProposalReject });
+
+  // Cite (verbatim source-span attestation). Both tools are no-ops unless
+  // `citation.enabled: true` in config. doc_cite verifies that an
+  // agent-supplied quote appears verbatim in an independently re-fetched
+  // source, hashes the canonical text, and (if target_file is supplied and
+  // the verify succeeds) auto-appends a content-free reference line of the
+  // form "(N) <canonical-URL> [hash:sha256:HEX]" to the target's Citations
+  // section. By design no fetched content (titles, body fragments) is ever
+  // returned to the agent, persisted to the registry, or written into a
+  // governed document — that closes the stored / return-channel
+  // prompt-injection surface. Web sources additionally require the
+  // `cite_web` permission and pass through HTTPS-only / allowlist /
+  // private-IP / secret-pattern / per-caller-rate-limit gates, with
+  // every attempt — successful or denied — recorded to cite_audit_log.
+  registry.register({ name: 'doc_cite', description: 'Verify that a verbatim quote appears in a source and (optionally) auto-append a content-free reference line to a Citations section. The agent submits the proposed quote; the tool re-fetches the source independently and confirms or denies. Verbatim source-span attestation only — NOT semantic truth verification. Supports https:// (requires cite_web permission and the deployer\'s host allowlist), file:// (must lie inside a configured root), bare en-quire managed paths, and pdf:// (deferred). Auto-append is content-free: only "(N) <canonical-URL> [hash:sha256:HEX]" — no fetched titles, no surrounding context.', schema: DocCiteSchema.shape, handler: handleDocCite });
+  registry.register({ name: 'doc_cite_verify', description: 'Re-fetch a previously cited source and report whether the SHA-256 hash and quote text are still intact. Returns hash_match and text_still_present. Updates last_verified_at / last_verified_hash on the registry row.', schema: DocCiteVerifySchema.shape, handler: handleDocCiteVerify });
 
   // Admin
   registry.register({ name: 'doc_exec', description: 'Execute a command in a document root (admin)', schema: DocExecSchema.shape, handler: handleDocExec });

@@ -49,15 +49,18 @@ const NULL_TARGET_SENTINEL = '__null__';
  * under the sqlite write lock so concurrent calls don't collide on MAX(...).
  *
  * Dedupe: if a row already exists for the same (target_file, source_hash,
- * quote_text) and force is not set, the existing row is returned and no new
- * number is allocated. target_file null bypasses dedupe (the partial unique
- * index excludes null targets).
+ * quote_text) and force is not set, the existing row is returned with
+ * `is_new: false` and no new number is allocated. target_file null bypasses
+ * dedupe (the partial unique index excludes null targets).
+ *
+ * Callers that must skip side effects on dedupe-hit (e.g. avoid re-appending
+ * the reference line to the document) check the `is_new` flag.
  */
 export function allocateAndInsertCitation(
   db: Database.Database,
   args: AllocateCitationArgs,
-): CitationRecord {
-  const tx = db.transaction((): CitationRecord => {
+): CitationRecord & { is_new: boolean } {
+  const tx = db.transaction((): CitationRecord & { is_new: boolean } => {
     if (!args.force && args.target_file !== null) {
       const existing = getCitationByDedupeUnsafe(
         db,
@@ -65,7 +68,7 @@ export function allocateAndInsertCitation(
         args.source_hash,
         args.quote_text,
       );
-      if (existing) return existing;
+      if (existing) return { ...existing, is_new: false };
     }
 
     const numberingTarget = args.target_file ?? NULL_TARGET_SENTINEL;
@@ -124,6 +127,7 @@ export function allocateAndInsertCitation(
       created_at,
       last_verified_at: null,
       last_verified_hash: null,
+      is_new: true,
     };
   });
   return tx.immediate();

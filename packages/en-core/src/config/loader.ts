@@ -144,5 +144,31 @@ export function loadConfig(configPath: string): ResolvedConfig {
     },
     callers: validated.callers,
     require_read_before_write: validated.require_read_before_write,
+    citation: {
+      enabled: validated.citation.enabled,
+      section_heading: validated.citation.section_heading,
+      section_position: validated.citation.section_position,
+      web_appends_propose: validated.citation.web_appends_propose,
+      fetch: {
+        https_only: validated.citation.fetch.https_only,
+        http_allowlist: validated.citation.fetch.http_allowlist,
+        block_private_ranges: validated.citation.fetch.block_private_ranges,
+        use_proxy_env: validated.citation.fetch.use_proxy_env,
+        allowed_content_types: validated.citation.fetch.allowed_content_types,
+        timeout_ms: validated.citation.fetch.timeout_ms,
+        max_bytes: validated.citation.fetch.max_bytes,
+        max_redirects: validated.citation.fetch.max_redirects,
+        decompression_factor: validated.citation.fetch.decompression_factor,
+        strip_query: validated.citation.fetch.strip_query,
+        strip_fragment: validated.citation.fetch.strip_fragment,
+        allow_userinfo: validated.citation.fetch.allow_userinfo,
+        max_path_chars: validated.citation.fetch.max_path_chars,
+        max_host_chars: validated.citation.fetch.max_host_chars,
+        secret_pattern_reject: validated.citation.fetch.secret_pattern_reject,
+      },
+      rate_limit: {
+        external_per_minute: validated.citation.rate_limit.external_per_minute,
+      },
+    },
   };
 }

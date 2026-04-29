@@ -201,6 +201,40 @@ export interface ResolvedConfig {
   };
   callers: Record<string, CallerConfig>;
   require_read_before_write: boolean;
+  citation: ResolvedCitationConfig;
+}
+
+/**
+ * Citation feature config — opt-in. With `enabled: false` (default) the
+ * doc_cite and doc_cite_verify tools refuse to run. Web citation is also
+ * gated by an empty `fetch.http_allowlist` (no-op default) and the
+ * `cite_web` permission, both of which must be explicitly granted.
+ */
+export interface ResolvedCitationConfig {
+  enabled: boolean;
+  section_heading: string;
+  section_position: string;
+  web_appends_propose: boolean;
+  fetch: {
+    https_only: boolean;
+    http_allowlist: string[];
+    block_private_ranges: boolean;
+    use_proxy_env: boolean;
+    allowed_content_types: string[];
+    timeout_ms: number;
+    max_bytes: number;
+    max_redirects: number;
+    decompression_factor: number;
+    strip_query: boolean;
+    strip_fragment: boolean;
+    allow_userinfo: boolean;
+    max_path_chars: number;
+    max_host_chars: number;
+    secret_pattern_reject: boolean;
+  };
+  rate_limit: {
+    external_per_minute: number;
+  };
 }
 
 /** Caller configuration from config file */

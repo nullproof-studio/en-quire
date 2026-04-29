@@ -18,6 +18,7 @@ import {
   EmbeddingsClient,
   loadVectorExtension,
   initVectorSchema,
+  CiteRateLimiter,
 } from '@nullproof-studio/en-core';
 import type {
   ResolvedConfig,
@@ -46,12 +47,25 @@ function createServer(deps: ServerDependencies): McpServer {
     version: '0.2.0',
   });
 
+  // Cite runtime — process-wide. The rate limiter must be shared across all
+  // doc_cite calls so the per-caller window is enforced consistently. Only
+  // initialise when the feature is enabled to avoid allocating state for
+  // deployments that don't use citation.
+  const cite = deps.config.citation.enabled
+    ? {
+        rateLimiter: new CiteRateLimiter({
+          perMinute: deps.config.citation.rate_limit.external_per_minute,
+        }),
+      }
+    : undefined;
+
   const ctx: ToolContext = {
     config: deps.config,
     roots: deps.roots,
     caller: deps.caller,
     db: deps.db,
     embeddings: deps.embeddings,
+    ...(cite ? { cite } : {}),
   };
 
   const registry = new ToolRegistry();
