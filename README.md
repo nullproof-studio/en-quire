@@ -61,7 +61,7 @@ en-quire fills this gap: a server that understands document structure, supports 
 `doc_proposals_list` · `doc_proposal_diff` (returns `can_merge` + `conflicts[]`) · `doc_proposal_approve` (refuses on conflict) · `doc_proposal_reject`
 
 ### Citations
-`doc_cite` · `doc_cite_verify` — opt-in verbatim source-span attestation (see [Citations](#citations) below).
+`doc_cite` · `doc_cite_reverify` — opt-in verbatim source-span attestation (see [Citations](#citations) below).
 
 ### Admin
 `doc_exec` · `doc_audit_log` — escape hatch for feature discovery, with full audit logging and on-demand audit-log queries.
@@ -367,7 +367,7 @@ Controls layered into the cite path:
 - **Secret-pattern rejection.** OpenAI/Anthropic keys (`sk-…`), GitHub PATs (`ghp_…`), Slack tokens (`xox[abprs]-…`), JWT-shaped triples, and high-entropy 64+ char path segments are rejected before fetch. The matched segment is **redacted** in the audit log (`/api/[secret-pattern:openai-key]`) so the audit trail doesn't itself become a database of exfiltrated secrets.
 - **Per-caller rate limit.** `citation.rate_limit.external_per_minute` (default 30) caps external citation attempts per caller in a 60-second window. Local cites are not rate-limited.
 - **Dedicated audit log.** Every cite attempt — successful or denied, including rate-limited probes — is recorded to the `cite_audit_log` table (queryable independently of `doc_exec`'s audit trail). Querystrings are redacted from logged URLs.
-- **No ambient credentials.** No cookie jar, no `Authorization` header inheritance, no `HTTPS_PROXY`/`HTTP_PROXY` inheritance unless explicitly opted into.
+- **No ambient credentials.** No cookie jar, no `Authorization` header inheritance.
 
 #### Deployment postures
 
@@ -384,14 +384,14 @@ Three postures the design supports explicitly:
 | **Append mode for web cites** | Direct write | Direct write or per-root proposal | `web_appends_propose: true` per governed root |
 | **Audit trail** | `cite_audit_log` table | Same; tail to syslog if needed | Forward `cite_audit_log` rows to central SIEM |
 
-For SME and enterprise: run en-quire under a dedicated service identity, keep `citation.fetch.http_allowlist` empty by default, and grant `cite_web` only to callers that genuinely need it. Set `citation.fetch.use_proxy_env: true` to honour `HTTPS_PROXY` / `HTTP_PROXY` when a corporate proxy is mandatory.
+For SME and enterprise: run en-quire under a dedicated service identity, keep `citation.fetch.http_allowlist` empty by default, and grant `cite_web` only to callers that genuinely need it. Outbound HTTPS goes through whatever the host's network policy allows — if a corporate proxy is mandatory, configure it at the OS or container level (proxy-via-en-quire-config is deferred to phase 2).
 
-#### `doc_cite_verify`
+#### `doc_cite_reverify`
 
-Pass a `citation_id` from a prior `doc_cite` call to re-fetch the source and check both whether the source has changed (`hash_match`) and whether the cited quote is still present (`text_still_present`). Useful for detecting source drift and link rot without re-running the full cite flow.
+Pass a `citation_id` from a prior `doc_cite` call to **reverify** an existing citation — re-fetch its stored source URI and check both whether the source has changed (`hash_match`) and whether the cited quote is still present (`text_still_present`). Useful for detecting source drift and link rot without re-running the full cite flow. Does not create new citations; the `re-` prefix signals "operates on prior state."
 
 ```js
-doc_cite_verify({ citation_id: "cite-001" })
+doc_cite_reverify({ citation_id: "cite-001" })
 // → { hash_match: true, text_still_present: true, verified_at: "2026-04-29T..." }
 ```
 

@@ -21,7 +21,7 @@ import type {
 } from '@nullproof-studio/en-core';
 import {
   handleDocCite,
-  handleDocCiteVerify,
+  handleDocCiteReverify,
 } from '../../src/tools/cite/index.js';
 import '../../src/parsers/markdown-parser.js';
 
@@ -166,6 +166,135 @@ describe('doc_cite — RBAC', () => {
         ctx,
       ),
     ).rejects.toThrow(PermissionDeniedError);
+  });
+
+  it('rejects a file:// cite when caller has no read permission for the resolved root path', async () => {
+    writeFileSync(join(docsRoot, 'restricted.md'), 'a quoted phrase here');
+    await g.add('restricted.md');
+    await g.commit('add restricted');
+
+    // Caller has cite for docs/** but no read on docs/restricted.md
+    // (read scoped to a sibling path only).
+    const ctx = buildContext([
+      { path: 'docs/elsewhere/**', permissions: ['read'] },
+      { path: '**', permissions: ['cite'] },
+    ]);
+    await expect(
+      handleDocCite(
+        { source: `file://${join(docsRoot, 'restricted.md')}`, quote: 'a quoted phrase here' },
+        ctx,
+      ),
+    ).rejects.toThrow(PermissionDeniedError);
+  });
+
+  it('preflight: rejects before fetch when caller lacks write on target_file', async () => {
+    const ctx = buildContext([
+      // cite_web yes; write no.
+      { path: 'docs/**', permissions: ['read', 'cite', 'cite_web'] },
+    ]);
+
+    let intercepted = false;
+    mockAgent
+      .get('https://forbes.com')
+      .intercept({ path: '/x' })
+      .reply(() => {
+        intercepted = true;
+        return { statusCode: 200, data: '<p>ok</p>', responseOptions: { headers: { 'content-type': 'text/html' } } };
+      });
+
+    await expect(
+      handleDocCite(
+        { source: 'https://forbes.com/x', quote: 'ok', target_file: 'docs/profile.md' },
+        ctx,
+      ),
+    ).rejects.toThrow(PermissionDeniedError);
+
+    // No fetch happened, no registry row was allocated.
+    expect(intercepted).toBe(false);
+    const count = (db.prepare('SELECT COUNT(*) AS n FROM citations').get() as { n: number }).n;
+    expect(count).toBe(0);
+  });
+
+  it('routes web cites through propose mode when web_appends_propose is set', async () => {
+    mockAgent
+      .get('https://forbes.com')
+      .intercept({ path: '/x' })
+      .reply(200, '<html><body><p>quote that we will cite</p></body></html>', {
+        headers: { 'content-type': 'text/html' },
+      });
+
+    const ctx = buildContext(
+      [{ path: '**', permissions: ['read', 'write', 'propose', 'cite', 'cite_web'] }],
+      { web_appends_propose: true },
+    );
+
+    const result = await handleDocCite(
+      {
+        source: 'https://forbes.com/x',
+        quote: 'quote that we will cite',
+        target_file: 'docs/profile.md',
+      },
+      ctx,
+    );
+    expect(result.status).toBe('verified');
+    if (result.status !== 'verified') return;
+    // Append happened in propose mode — branch on the side, main untouched.
+    expect(result.append?.mode).toBe('propose');
+
+    // Read main directly: profile.md should NOT contain the citation.
+    const mainContent = readFileSync(join(docsRoot, 'profile.md'), 'utf8');
+    expect(mainContent).not.toContain('## Citations');
+    expect(mainContent).not.toContain(result.formatted_reference);
+  });
+
+  it('still uses direct write for local cites even when web_appends_propose is true', async () => {
+    writeFileSync(join(docsRoot, 'source.md'), 'a quoted phrase here');
+    await g.add('source.md');
+    await g.commit('add source');
+
+    const ctx = buildContext(
+      [{ path: '**', permissions: ['read', 'write', 'propose', 'cite'] }],
+      { web_appends_propose: true },
+    );
+
+    const result = await handleDocCite(
+      {
+        source: 'docs/source.md',
+        quote: 'a quoted phrase here',
+        target_file: 'docs/profile.md',
+      },
+      ctx,
+    );
+    if (result.status !== 'verified') throw new Error('precondition');
+    expect(result.append?.mode).toBe('write');
+  });
+
+  it('preflight: rejects on stale if_match before fetch / allocation', async () => {
+    writeFileSync(join(docsRoot, 'source.md'), 'a quoted phrase here');
+    await g.add('source.md');
+    await g.commit('add source');
+
+    const ctx = buildContext([{ path: '**', permissions: ['read', 'write', 'cite'] }], {
+      // override config so require_read_before_write triggers
+    });
+    // Force require_read_before_write on
+    ctx.config.require_read_before_write = true;
+
+    await expect(
+      handleDocCite(
+        {
+          source: 'docs/source.md',
+          quote: 'a quoted phrase here',
+          target_file: 'docs/profile.md',
+          if_match: 'sha256:wrong-etag-for-this-file',
+        },
+        ctx,
+      ),
+    ).rejects.toThrow();
+
+    // No registry row allocated (the verify + insert step never ran).
+    const count = (db.prepare('SELECT COUNT(*) AS n FROM citations').get() as { n: number }).n;
+    expect(count).toBe(0);
   });
 
   it('refuses to run when citation.enabled is false', async () => {
@@ -392,7 +521,7 @@ describe('doc_cite — cite audit log', () => {
   });
 });
 
-describe('doc_cite_verify', () => {
+describe('doc_cite_reverify', () => {
   it('reports hash_match and text_still_present after no source change', async () => {
     writeFileSync(join(docsRoot, 'source.md'), 'a verbatim quote here');
     await g.add('source.md');
@@ -405,7 +534,7 @@ describe('doc_cite_verify', () => {
     );
     if (cite.status !== 'verified') throw new Error('precondition');
 
-    const verify = await handleDocCiteVerify({ citation_id: cite.citation_id }, ctx);
+    const verify = await handleDocCiteReverify({ citation_id: cite.citation_id }, ctx);
     expect(verify.hash_match).toBe(true);
     expect(verify.text_still_present).toBe(true);
   });
@@ -425,7 +554,7 @@ describe('doc_cite_verify', () => {
     // Mutate the source — quote still present but hash changes
     writeFileSync(join(docsRoot, 'source.md'), 'a verbatim quote here AND MORE');
 
-    const verify = await handleDocCiteVerify({ citation_id: cite.citation_id }, ctx);
+    const verify = await handleDocCiteReverify({ citation_id: cite.citation_id }, ctx);
     expect(verify.hash_match).toBe(false);
     expect(verify.text_still_present).toBe(true);
   });
@@ -444,14 +573,112 @@ describe('doc_cite_verify', () => {
 
     writeFileSync(join(docsRoot, 'source.md'), 'completely different content now');
 
-    const verify = await handleDocCiteVerify({ citation_id: cite.citation_id }, ctx);
+    const verify = await handleDocCiteReverify({ citation_id: cite.citation_id }, ctx);
     expect(verify.hash_match).toBe(false);
     expect(verify.text_still_present).toBe(false);
   });
 
   it('returns not_found for an unknown citation_id', async () => {
     const ctx = buildContext([{ path: '**', permissions: ['read', 'write', 'cite'] }]);
-    const verify = await handleDocCiteVerify({ citation_id: 'cite-nonexistent' }, ctx);
+    const verify = await handleDocCiteReverify({ citation_id: 'cite-nonexistent' }, ctx);
     expect(verify.status).toBe('not_found');
+  });
+
+  it('rejects a caller without cite_web for a stored https citation', async () => {
+    // Seed: a high-privilege caller creates an https citation
+    mockAgent
+      .get('https://forbes.com')
+      .intercept({ path: '/x' })
+      .reply(200, '<html><body><p>cited prose here</p></body></html>', {
+        headers: { 'content-type': 'text/html' },
+      });
+    const seed = buildContext([
+      { path: '**', permissions: ['read', 'write', 'cite', 'cite_web'] },
+    ]);
+    const cite = await handleDocCite(
+      { source: 'https://forbes.com/x', quote: 'cited prose here' },
+      seed,
+    );
+    if (cite.status !== 'verified') throw new Error('precondition');
+
+    // A caller with cite (local) but NOT cite_web must not be able to
+    // verify the https-backed citation — that would let them trigger
+    // outbound fetches to allowlisted hosts via citation_id enumeration.
+    const lowPriv = buildContext([{ path: '**', permissions: ['read', 'cite'] }]);
+    await expect(
+      handleDocCiteReverify({ citation_id: cite.citation_id }, lowPriv),
+    ).rejects.toThrow(PermissionDeniedError);
+  });
+
+  it('rejects a caller without cite for a stored en-quire citation', async () => {
+    writeFileSync(join(docsRoot, 'source.md'), 'a quoted phrase here');
+    await g.add('source.md');
+    await g.commit('add source');
+
+    const seed = buildContext([{ path: '**', permissions: ['read', 'write', 'cite'] }]);
+    const cite = await handleDocCite(
+      { source: 'docs/source.md', quote: 'a quoted phrase here' },
+      seed,
+    );
+    if (cite.status !== 'verified') throw new Error('precondition');
+
+    // A read-only caller must not be able to verify (which would trigger
+    // a re-read of the source via enquire path — bypassing cite gating).
+    const readOnly = buildContext([{ path: '**', permissions: ['read'] }]);
+    await expect(
+      handleDocCiteReverify({ citation_id: cite.citation_id }, readOnly),
+    ).rejects.toThrow(PermissionDeniedError);
+  });
+
+  it('ignores any source override and uses the stored URI', async () => {
+    writeFileSync(join(docsRoot, 'source.md'), 'a quoted phrase here');
+    await g.add('source.md');
+    await g.commit('add source');
+
+    const ctx = buildContext([
+      { path: '**', permissions: ['read', 'write', 'cite', 'cite_web'] },
+    ]);
+    const cite = await handleDocCite(
+      { source: 'docs/source.md', quote: 'a quoted phrase here' },
+      ctx,
+    );
+    if (cite.status !== 'verified') throw new Error('precondition');
+
+    // A caller can no longer pass a `source` override. The verify path
+    // uses the stored source_uri only — laundering one URI through
+    // another is structurally impossible.
+    const result = await handleDocCiteReverify(
+      // Cast — `source` is intentionally not part of the schema. Tests
+      // that pass it should still resolve to the stored URI.
+      { citation_id: cite.citation_id, source: 'https://attacker.test/x' } as { citation_id: string },
+      ctx,
+    );
+    expect(result.status).toBe('verified');
+    if (result.status === 'verified') {
+      expect(result.hash_match).toBe(true);
+    }
+  });
+
+  it('records each verify attempt to cite_audit_log', async () => {
+    writeFileSync(join(docsRoot, 'source.md'), 'a quoted phrase here');
+    await g.add('source.md');
+    await g.commit('add source');
+
+    const ctx = buildContext([{ path: '**', permissions: ['read', 'write', 'cite'] }]);
+    const cite = await handleDocCite(
+      { source: 'docs/source.md', quote: 'a quoted phrase here' },
+      ctx,
+    );
+    if (cite.status !== 'verified') throw new Error('precondition');
+
+    // Clear cite-side audit rows to isolate verify
+    db.prepare('DELETE FROM cite_audit_log').run();
+
+    await handleDocCiteReverify({ citation_id: cite.citation_id }, ctx);
+
+    const rows = queryCiteAudit(db, { caller_id: 'tester', limit: 10 });
+    expect(rows.length).toBe(1);
+    expect(rows[0].status).toBe('verified');
+    expect(rows[0].citation_id).toBe(cite.citation_id);
   });
 });

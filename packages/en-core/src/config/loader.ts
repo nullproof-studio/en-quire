@@ -153,7 +153,6 @@ export function loadConfig(configPath: string): ResolvedConfig {
         https_only: validated.citation.fetch.https_only,
         http_allowlist: validated.citation.fetch.http_allowlist,
         block_private_ranges: validated.citation.fetch.block_private_ranges,
-        use_proxy_env: validated.citation.fetch.use_proxy_env,
         allowed_content_types: validated.citation.fetch.allowed_content_types,
         timeout_ms: validated.citation.fetch.timeout_ms,
         max_bytes: validated.citation.fetch.max_bytes,

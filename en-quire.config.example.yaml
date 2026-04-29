@@ -70,7 +70,7 @@ search:
     api_key: null
     api_key_env: null               # e.g. "OPENAI_API_KEY"
 
-# Citation feature (doc_cite + doc_cite_verify). Off by default — opt in
+# Citation feature (doc_cite + doc_cite_reverify). Off by default — opt in
 # explicitly. The whole subsystem is verbatim source-span attestation, NOT
 # semantic truth verification: the agent submits a quote, the tool re-fetches
 # the source independently and confirms or denies a verbatim match.
@@ -99,7 +99,6 @@ citation:
     https_only: true                      # Reject plain http:// even if allowlisted.
     http_allowlist: []                    # Empty = no external fetches. Globs allowed (e.g. "*.forbes.com").
     block_private_ranges: true            # Reject DNS-resolved private/loopback/link-local/cloud-metadata IPs.
-    use_proxy_env: false                  # Honour HTTPS_PROXY / HTTP_PROXY env vars (default off — explicit only).
     allowed_content_types:
       - text/html
       - text/plain

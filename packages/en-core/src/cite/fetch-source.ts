@@ -1,10 +1,13 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { readFile } from 'node:fs/promises';
-import { resolve, isAbsolute, sep } from 'node:path';
+import { isIPv6 } from 'node:net';
+import { resolve, isAbsolute, relative, sep } from 'node:path';
 import * as cheerio from 'cheerio';
 import type { Dispatcher } from 'undici';
-import { request } from 'undici';
+import { Agent, request } from 'undici';
 import type { CiteRateLimiter } from './rate-limit.js';
+import { safePath } from '../shared/file-utils.js';
+import { PathTraversalError } from '../shared/errors.js';
 import {
   evaluateUrlPolicy,
   isPrivateIpv4,
@@ -55,7 +58,6 @@ export type FetchSourceResult = { ok: true; source: FetchedSource } | FetchFailu
 export interface FetchSourceContext {
   caller_id: string;
   config: UrlPolicyConfig & {
-    use_proxy_env?: boolean;
     allowed_content_types: string[];
     timeout_ms: number;
     max_bytes: number;
@@ -138,7 +140,14 @@ async function fetchHttp(uri: string, ctx: FetchSourceContext): Promise<FetchSou
   // gives us a hostname; if it's already an IP literal the URL-policy guard
   // has covered private IPs. For real hostnames we still resolve to catch
   // public-host-resolves-to-private-IP attacks.
+  //
+  // We capture the resolved IPs up-front and then PIN them onto the actual
+  // connection via an Agent.connect.lookup callback below. Without pinning,
+  // undici resolves DNS again at connection time and the TOCTOU window
+  // between our check and undici's resolve allows a DNS-rebinding attacker
+  // to swap the answer for a private IP.
   const dnsHost = stripBrackets(policy.canonical_host);
+  let pinnedIps: string[] | null = null;
   if (!isIpLiteral(dnsHost)) {
     const resolveDns = ctx.resolveDns ?? defaultResolveDns;
     const records = await resolveDns(dnsHost);
@@ -150,6 +159,7 @@ async function fetchHttp(uri: string, ctx: FetchSourceContext): Promise<FetchSou
         return blocked('source_blocked', policy, 'dns_resolved_to_private_ip');
       }
     }
+    pinnedIps = records;
   }
 
   // Issue the HTTP request. v1 refuses to follow redirects: per-hop
@@ -157,18 +167,27 @@ async function fetchHttp(uri: string, ctx: FetchSourceContext): Promise<FetchSou
   // security requirement, and `request()` doesn't expose hooks for that.
   // 30x responses are surfaced as source_blocked. Redirect-aware fetching
   // is a phase-2 enhancement.
+  //
+  // Tests inject a MockAgent via ctx.dispatcher — that path bypasses the
+  // pinning Agent (the mock dispatcher answers the request itself).
+  // Production has no injected dispatcher and uses the pinning Agent so
+  // the connection goes to the IPs we just validated.
+  const dispatcher = ctx.dispatcher ?? (pinnedIps ? buildPinnedAgent(pinnedIps) : undefined);
   const reqOpts: NonNullable<Parameters<typeof request>[1]> = {
     method: 'GET',
     headersTimeout: ctx.config.timeout_ms,
     bodyTimeout: ctx.config.timeout_ms,
     headers: {
       // Identify ourselves clearly; refuse content-coding so the
-      // decompression-bomb surface is bounded by max_bytes alone.
+      // decompression-bomb surface is bounded by max_bytes alone. We do
+      // not forward Authorization or Cookie — there's no caller-provided
+      // header surface in this code path, so ambient credentials cannot
+      // leak by accident.
       'user-agent': 'en-quire-doc-cite/0.3 (+https://github.com/nullproof-studio/en-quire)',
       accept: ctx.config.allowed_content_types.join(', '),
       'accept-encoding': 'identity',
     },
-    ...(ctx.dispatcher ? { dispatcher: ctx.dispatcher } : {}),
+    ...(dispatcher ? { dispatcher } : {}),
   };
 
   let res: Awaited<ReturnType<typeof request>>;
@@ -285,6 +304,42 @@ function isAddressPrivate(ip: string): boolean {
   return isPrivateIpv4(parts as [number, number, number, number]);
 }
 
+/**
+ * Build an undici Agent whose connect step uses ONLY the IPs we already
+ * validated. This closes the DNS-rebinding TOCTOU window: at the moment
+ * we made the connection, the kernel resolves the hostname through our
+ * lookup callback and gets back a pre-validated IP — not whatever the
+ * system resolver returns on its second lookup.
+ *
+ * The callback follows Node's `dns.lookup` contract: when called with
+ * options.all === true, return an array of {address, family} records;
+ * otherwise return (err, address, family). undici v8 calls with all=true
+ * for parallel-connect; older paths call with all=false.
+ */
+function buildPinnedAgent(pinnedIps: readonly string[]): Agent {
+  const ips = [...pinnedIps];
+  let cursor = 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lookup = (_hostname: string, opts: any, callback: any): void => {
+    if (opts && opts.all) {
+      const records = ips.map((address) => ({
+        address,
+        family: (isIPv6(address) ? 6 : 4) as 4 | 6,
+      }));
+      callback(null, records);
+      return;
+    }
+    const ip = ips[cursor++ % ips.length];
+    callback(null, ip, isIPv6(ip) ? 6 : 4);
+  };
+  // The undici Agent type's connect option accepts a Node lookup function
+  // here even though the public type doesn't expose `lookup` explicitly —
+  // it's forwarded straight to net.connect / tls.connect. We keep the
+  // outer cast minimal to avoid loosening the rest of the type checking.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return new Agent({ connect: { lookup } as any });
+}
+
 async function defaultResolveDns(host: string): Promise<string[]> {
   const dns = await import('node:dns/promises');
   try {
@@ -347,7 +402,26 @@ async function fetchEnquireManaged(
       detail: `unknown_root:${rootName}`,
     };
   }
-  return readLocalFile(resolve(rootPath, relPath), rootPath, uri, 'enquire', ctx);
+  // Use safePath to get realpath-checked containment — catches symlinks
+  // inside the root that point outside (the prefix-only check we used
+  // before bypassed this and let symlinked sources be cited).
+  let absolute: string;
+  try {
+    absolute = safePath(rootPath, relPath);
+  } catch (err) {
+    if (err instanceof PathTraversalError) {
+      return {
+        ok: false,
+        reason: 'source_blocked',
+        canonical_host: null,
+        canonical_path: uri,
+        source_scheme: 'enquire',
+        detail: 'path_traversal_or_symlink_escape',
+      };
+    }
+    throw err;
+  }
+  return readLocalFile(absolute, rootPath, uri, 'enquire', ctx);
 }
 
 async function fetchFile(
@@ -366,27 +440,42 @@ async function fetchFile(
       detail: 'file:// requires an absolute path',
     };
   }
-  // Confirm the file lives inside SOME configured root.
-  let containingRoot: string | null = null;
-  for (const root of Object.values(ctx.documentRoots)) {
+  // Locate the containing root by name + relative path, then run safePath
+  // for realpath-checked containment. The two-pass approach catches
+  // symlinks inside the root that point outside, which a prefix-only
+  // check would miss.
+  for (const [_rootName, root] of Object.entries(ctx.documentRoots)) {
     const rootResolved = resolve(root);
     const target = resolve(decoded);
     if (target === rootResolved || target.startsWith(rootResolved + sep)) {
-      containingRoot = rootResolved;
-      break;
+      const relPath = relative(rootResolved, target);
+      let absolute: string;
+      try {
+        absolute = safePath(rootResolved, relPath);
+      } catch (err) {
+        if (err instanceof PathTraversalError) {
+          return {
+            ok: false,
+            reason: 'source_blocked',
+            canonical_host: null,
+            canonical_path: decoded,
+            source_scheme: scheme,
+            detail: 'path_traversal_or_symlink_escape',
+          };
+        }
+        throw err;
+      }
+      return readLocalFile(absolute, rootResolved, `file://${decoded}`, scheme, ctx);
     }
   }
-  if (!containingRoot) {
-    return {
-      ok: false,
-      reason: 'source_blocked',
-      canonical_host: null,
-      canonical_path: decoded,
-      source_scheme: scheme,
-      detail: 'file_outside_any_root',
-    };
-  }
-  return readLocalFile(decoded, containingRoot, `file://${decoded}`, scheme, ctx);
+  return {
+    ok: false,
+    reason: 'source_blocked',
+    canonical_host: null,
+    canonical_path: decoded,
+    source_scheme: scheme,
+    detail: 'file_outside_any_root',
+  };
 }
 
 async function readLocalFile(

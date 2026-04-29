@@ -29,7 +29,6 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'document_roots' | 'database'>
       https_only: true,
       http_allowlist: [],
       block_private_ranges: true,
-      use_proxy_env: false,
       allowed_content_types: [
         'text/html',
         'text/plain',

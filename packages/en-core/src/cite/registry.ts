@@ -82,7 +82,7 @@ export function allocateAndInsertCitation(
     // citation_id is globally unique across all target_files — derived from
     // sqlite's monotonic rowid sequence. citation_number is the per-target
     // value that appears in the reference line; citation_id is the opaque
-    // handle used by doc_cite_verify and the registry.
+    // handle used by doc_cite_reverify and the registry.
     const globalSeq = (db.prepare(
       `SELECT COALESCE(MAX(rowid), 0) + 1 AS n FROM citations`,
     ).get() as { n: number }).n;

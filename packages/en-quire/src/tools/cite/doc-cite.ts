@@ -13,6 +13,7 @@ import {
   appendToSection as _appendToSection,
   buildCitationAppend,
   CiteRateLimiter,
+  computeEtag,
   executeWrite,
   fetchSource,
   formatInline,
@@ -20,6 +21,8 @@ import {
   loadDocument,
   logCiteAudit,
   requirePermission,
+  resolveWriteMode,
+  validateEtag,
   verifyQuote,
 } from '@nullproof-studio/en-core';
 
@@ -51,7 +54,7 @@ export type DocCiteResult =
       source_hash: string;
       formatted_inline: string;
       formatted_reference: string;
-      append?: { mode: 'write'; commit?: string; etag?: string };
+      append?: { mode: 'write' | 'propose'; commit?: string; etag?: string; branch?: string };
     }
   | {
       status: 'warning';
@@ -92,6 +95,35 @@ export async function handleDocCite(
   // En-quire managed sources additionally need read on the source path.
   if (scheme === 'enquire') {
     requirePermission(ctx.caller, 'read', args.source);
+  }
+  // file:// sources also need read — derive the equivalent root-prefixed
+  // path so the caller's existing read scopes apply identically. Without
+  // this check a caller could cite a file inside a root they have no
+  // read permission for, just by spelling it as file://<absolute-path>.
+  if (scheme === 'file') {
+    const prefixed = filePathToPrefixed(args.source, ctx.config.document_roots);
+    if (prefixed) requirePermission(ctx.caller, 'read', prefixed);
+  }
+
+  // Preflight target_file write checks — happen BEFORE fetch / verify /
+  // allocation. Without this, a caller with cite_web but no write could
+  // trigger network egress and registry inserts that would never be
+  // followed by a successful append. Stale if_match would also leave
+  // orphan citation rows.
+  if (args.target_file) {
+    // Must have write or propose on target_file.
+    resolveWriteMode(ctx.caller, args.target_file, 'write');
+    // Validate if_match against the target's current content (if the
+    // file exists yet — it may not, in which case the load will fail
+    // with NotFound and we surface that). Auto-create of target_file is
+    // not supported: if you want a new doc, use doc_create first.
+    const { content } = loadDocument(ctx, args.target_file);
+    validateEtag(
+      args.if_match,
+      computeEtag(content),
+      args.target_file,
+      ctx.config.require_read_before_write,
+    );
   }
 
   // Resolve cite runtime — production servers wire it once at startup; the
@@ -173,8 +205,16 @@ export async function handleDocCite(
 
   // 6. Auto-append (only when verified and target_file is set, and only on
   // a fresh insert — re-cites that hit dedupe shouldn't re-write the doc).
-  let append: { mode: 'write'; commit?: string; etag?: string } | undefined;
+  // Web cites in governed deployments may be routed through proposal mode
+  // by setting `citation.web_appends_propose: true`; local cites always
+  // write directly because (a) they aren't egress and (b) the agent's
+  // read-after-cite expectation depends on the reference landing on main.
+  let append: { mode: 'write' | 'propose'; commit?: string; etag?: string; branch?: string } | undefined;
   if (verify.status === 'verified' && args.target_file && cited.is_new) {
+    const isWeb = scheme === 'https' || scheme === 'http';
+    const appendMode: 'write' | 'propose' =
+      isWeb && ctx.config.citation.web_appends_propose ? 'propose' : 'write';
+
     const { content, encoding } = loadDocument(ctx, args.target_file);
     const newContent = buildCitationAppend(
       content,
@@ -187,7 +227,7 @@ export async function handleDocCite(
         file: args.target_file,
         operation: 'doc_cite append',
         target: ctx.config.citation.section_heading,
-        mode: 'write',
+        mode: appendMode,
         message: args.message ?? `cite: ${formatted_reference.slice(0, 80)}`,
         if_match: args.if_match,
       },
@@ -195,7 +235,12 @@ export async function handleDocCite(
       newContent,
       encoding,
     );
-    append = { mode: 'write', commit: writeResult.commit, etag: writeResult.etag };
+    append = {
+      mode: appendMode,
+      ...(writeResult.commit ? { commit: writeResult.commit } : {}),
+      ...(writeResult.etag ? { etag: writeResult.etag } : {}),
+      ...(writeResult.branch ? { branch: writeResult.branch } : {}),
+    };
   }
 
   // 7. Audit log.
@@ -237,6 +282,28 @@ function inferScheme(source: string): 'http' | 'https' | 'file' | 'enquire' | 'p
   if (source.startsWith('pdf:')) return 'pdf';
   if (!source.includes('://') && source.includes('/')) return 'enquire';
   return 'unknown';
+}
+
+/**
+ * Map a file:// URI to its equivalent root-prefixed en-quire path
+ * ("rootname/relative/path") if the absolute target lies inside a known
+ * root. Returns null if no root contains it (the fetch layer will then
+ * reject it as source_blocked, but we still don't want to RBAC-check
+ * against an arbitrary absolute path).
+ */
+function filePathToPrefixed(
+  uri: string,
+  roots: Record<string, { path: string }>,
+): string | null {
+  const absolute = decodeURIComponent(uri.slice('file://'.length));
+  for (const [rootName, root] of Object.entries(roots)) {
+    const rootPath = root.path;
+    if (absolute === rootPath || absolute.startsWith(rootPath + '/')) {
+      const rel = absolute === rootPath ? '' : absolute.slice(rootPath.length + 1);
+      return rel ? `${rootName}/${rel}` : rootName;
+    }
+  }
+  return null;
 }
 
 function auditFor(

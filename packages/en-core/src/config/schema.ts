@@ -64,7 +64,6 @@ const CitationFetchSchema = z.object({
   https_only: z.boolean().default(true),
   http_allowlist: z.array(z.string()).default([]),
   block_private_ranges: z.boolean().default(true),
-  use_proxy_env: z.boolean().default(false),
   allowed_content_types: z.array(z.string()).default([
     'text/html',
     'text/plain',

@@ -206,7 +206,7 @@ export interface ResolvedConfig {
 
 /**
  * Citation feature config — opt-in. With `enabled: false` (default) the
- * doc_cite and doc_cite_verify tools refuse to run. Web citation is also
+ * doc_cite and doc_cite_reverify tools refuse to run. Web citation is also
  * gated by an empty `fetch.http_allowlist` (no-op default) and the
  * `cite_web` permission, both of which must be explicitly granted.
  */
@@ -219,7 +219,6 @@ export interface ResolvedCitationConfig {
     https_only: boolean;
     http_allowlist: string[];
     block_private_ranges: boolean;
-    use_proxy_env: boolean;
     allowed_content_types: string[];
     timeout_ms: number;
     max_bytes: number;

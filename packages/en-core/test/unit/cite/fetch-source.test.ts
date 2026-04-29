@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MockAgent } from 'undici';
@@ -117,6 +117,28 @@ describe('fetchSource — file:// scheme', () => {
     writeFileSync(join(outside, 'secret.md'), 'top secret');
     const r = await fetchSource(`file://${join(outside, 'secret.md')}`, buildContext());
     expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('source_blocked');
+  });
+
+  it('rejects a symlink inside the root that points outside', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'outside-'));
+    writeFileSync(join(outside, 'secret.md'), 'top secret');
+    symlinkSync(join(outside, 'secret.md'), join(tmpRoot, 'sneaky.md'));
+    const r = await fetchSource(`file://${join(tmpRoot, 'sneaky.md')}`, buildContext());
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('source_blocked');
+  });
+});
+
+describe('fetchSource — symlink escape via bare en-quire path', () => {
+  it('rejects a symlink inside the root that points outside', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'outside-'));
+    writeFileSync(join(outside, 'secret.md'), 'top secret');
+    symlinkSync(join(outside, 'secret.md'), join(tmpRoot, 'sneaky.md'));
+    const r = await fetchSource('docs/sneaky.md', buildContext());
+    expect(r.ok).toBe(false);
+    // The symlink itself is inside the root by name; the realpath check
+    // catches the escape and surfaces it as source_blocked.
     if (!r.ok) expect(r.reason).toBe('source_blocked');
   });
 });
