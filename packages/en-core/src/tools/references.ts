@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
-import { requirePermission } from '../rbac/permissions.js';
+import { checkPermission, requirePermission } from '../rbac/permissions.js';
 
 /**
  * Cross-document reference queries over the doc_links index.
@@ -110,12 +110,19 @@ export async function handleReferencedBy(
     context: string | null;
   }>;
 
-  const referenced_by: InverseReferenceEntry[] = rows.map((r) => ({
-    source_file: r.source_file,
-    source_section: r.source_section,
-    relationship: r.relationship,
-    context: r.context,
-    target_section: r.target_section,
-  }));
+  // Filter to rows whose `source_file` the caller can also read. Inverse
+  // references leak two things otherwise: the existence and path of source
+  // files the caller can't see, and the `context` snippet which is taken
+  // from the source file's body. `read` on the target file is not
+  // sufficient — the source side has its own permission boundary.
+  const referenced_by: InverseReferenceEntry[] = rows
+    .filter((r) => checkPermission(ctx.caller, 'read', r.source_file).allowed)
+    .map((r) => ({
+      source_file: r.source_file,
+      source_section: r.source_section,
+      relationship: r.relationship,
+      context: r.context,
+      target_section: r.target_section,
+    }));
   return { referenced_by };
 }

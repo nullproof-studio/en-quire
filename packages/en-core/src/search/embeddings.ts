@@ -88,14 +88,23 @@ export class EmbeddingsClient {
     }
 
     if (!res.ok) {
-      let detail = '';
+      // Do NOT include the raw response body in the thrown error: the
+      // caller logs err.message, and a verbose or hostile endpoint can
+      // echo our submitted document text, query text, or auth header
+      // diagnostics into operator logs through that channel. Surface
+      // only the structured error code/type from the OpenAI-shape error
+      // envelope, length-capped to keep arbitrary strings out of logs.
+      let providerDetail = '';
       try {
-        const text = await res.text();
-        detail = text ? `: ${text.slice(0, 500)}` : '';
+        const json = await res.json() as { error?: { code?: string; type?: string } };
+        const tag = json?.error?.code ?? json?.error?.type;
+        if (typeof tag === 'string' && tag.length > 0) {
+          providerDetail = ` (${tag.slice(0, 64)})`;
+        }
       } catch {
-        /* ignore — body unreadable */
+        /* response wasn't JSON — leave providerDetail empty */
       }
-      throw new Error(`embeddings request failed: ${res.status} ${res.statusText}${detail}`);
+      throw new Error(`embeddings request failed: ${res.status} ${res.statusText}${providerDetail}`);
     }
 
     const payload = await res.json() as EmbeddingsResponse;

@@ -174,6 +174,21 @@ describe('handleReferencedBy', () => {
     expect(rels).toEqual(['implements', 'see_also']);
   });
 
+  it('hides incoming rows whose source file the caller cannot read', async () => {
+    // Caller can read the target (sops/runbook.md) but not the source
+    // (skills/triage.md). The two rows that actually point AT runbook all
+    // come from skills/triage.md, so the result must be empty — even
+    // though the caller can read the target, surfacing the source paths
+    // and context snippets would leak skills/ content they have no access
+    // to.
+    const ctx = buildContext([{ path: 'docs/sops/**', permissions: ['read'] }]);
+    const args: z.infer<typeof ReferencedBySchema> = { file: 'docs/sops/runbook.md' };
+    const result = await handleReferencedBy(args, ctx) as {
+      referenced_by: Array<{ source_file: string }>;
+    };
+    expect(result.referenced_by).toEqual([]);
+  });
+
   it('rejects callers without read permission for the queried file', async () => {
     const ctx = buildContext([{ path: 'docs/skills/**', permissions: ['read'] }]);
     const args: z.infer<typeof ReferencedBySchema> = { file: 'docs/sops/runbook.md' };

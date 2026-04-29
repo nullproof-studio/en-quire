@@ -226,6 +226,13 @@ export async function syncEmbeddings(
   };
   const pending: Pending[] = [];
 
+  // Track every on-disk file we successfully parsed (regardless of whether
+  // any of its sections cleared the embed threshold). The vec rows for
+  // these files are pre-emptively cleared in Phase 1.5 so renamed,
+  // deleted, or trimmed-below-threshold sections don't leave stale
+  // searchable vectors behind.
+  const filesProcessed = new Set<string>();
+
   for (const file of files) {
     const prefixedPath = prefix + file;
     let content: string;
@@ -244,6 +251,7 @@ export async function syncEmbeddings(
       skipped++;
       continue;
     }
+    filesProcessed.add(prefixedPath);
     const flat = flattenTree(tree);
     for (const node of flat) {
       const body = content.slice(node.bodyStartOffset, node.bodyEndOffset).trim();
@@ -261,6 +269,21 @@ export async function syncEmbeddings(
         body,
       });
     }
+  }
+
+  // Phase 1.5 — clear old embeddings for every file we just parsed.
+  // Without this, sections that were renamed, removed, or shortened below
+  // the embed threshold remain queryable via stale vectors even though
+  // they no longer exist in the document. The brief gap between this
+  // clear and the upsert in Phase 2 is acceptable for a startup-only
+  // sync; the trade is correctness over uninterrupted query results.
+  if (filesProcessed.size > 0) {
+    const runClear = db.transaction(() => {
+      for (const filePath of filesProcessed) {
+        removeEmbeddingsForFile(db, filePath);
+      }
+    });
+    runClear();
   }
 
   // Phase 2 — embed in batches, upsert results.

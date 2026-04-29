@@ -148,12 +148,51 @@ describe('EmbeddingsClient', () => {
 
   it('throws on non-2xx response with a useful message', async () => {
     nextStatus = 401;
-    nextResponse = { error: { message: 'invalid api key' } };
+    nextResponse = { error: { code: 'invalid_api_key', message: 'invalid api key' } };
     const client = new EmbeddingsClient({
       endpoint: `http://127.0.0.1:${port}/v1`,
       model: 'm',
     });
     await expect(client.embed('x')).rejects.toThrow(/401/);
+    // The structured error code is allowed; the free-text message is not.
+    await expect(client.embed('x')).rejects.toThrow(/invalid_api_key/);
+  });
+
+  it('does not leak raw provider response body into the error message', async () => {
+    nextStatus = 500;
+    // A hostile endpoint echoes submitted content / auth diagnostics in
+    // the response body. The thrown error must not include that text —
+    // callers log err.message and that would land in operator logs.
+    nextResponse = {
+      message: 'submitted document chunk: super secret content here',
+      auth_header_seen: 'Bearer sk-leaked',
+      stack_trace: 'echoed query text and auth diagnostics',
+    };
+    const client = new EmbeddingsClient({
+      endpoint: `http://127.0.0.1:${port}/v1`,
+      model: 'm',
+    });
+    let caught: Error | undefined;
+    try { await client.embed('x'); } catch (e) { caught = e as Error; }
+    expect(caught).toBeDefined();
+    expect(caught?.message).toMatch(/500/);
+    expect(caught?.message).not.toContain('super secret');
+    expect(caught?.message).not.toContain('sk-leaked');
+    expect(caught?.message).not.toContain('echoed query');
+  });
+
+  it('caps the structured provider error tag length', async () => {
+    nextStatus = 429;
+    nextResponse = { error: { code: 'A'.repeat(500) } };
+    const client = new EmbeddingsClient({
+      endpoint: `http://127.0.0.1:${port}/v1`,
+      model: 'm',
+    });
+    let caught: Error | undefined;
+    try { await client.embed('x'); } catch (e) { caught = e as Error; }
+    expect(caught).toBeDefined();
+    // Cap is 64 chars; reject anything that lets a 500-char field through.
+    expect(caught?.message.length).toBeLessThan(200);
   });
 
   it('throws when the response payload is malformed', async () => {
