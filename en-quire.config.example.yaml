@@ -50,9 +50,8 @@ port: 3100                          # Port for streamable-http transport
 # caller MUST have a strong `key` (enforced at startup, min 32 chars).
 listen_host: "127.0.0.1"
 
-# Search configuration
+# Search configuration. SQLite FTS5 is always on; semantic search is opt-in.
 search:
-  fulltext: true                    # Full-text search via SQLite FTS5 (always on)
   sync_on_start: blocking           # "blocking" (default) or "background" (use for 100k+ docs)
   batch_size: 500                   # Files per index transaction batch
   semantic:

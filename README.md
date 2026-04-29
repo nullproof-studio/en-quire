@@ -322,7 +322,6 @@ port: 3100                          # For streamable-http
 
 # Search
 search:
-  fulltext: true                    # Always on
   sync_on_start: blocking           # "blocking" or "background" (use background for 100k+ docs)
   batch_size: 500                   # Files per index transaction batch
   semantic:

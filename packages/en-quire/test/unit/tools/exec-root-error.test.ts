@@ -19,7 +19,7 @@ function makeCtx(): ToolContext {
     database: ':memory:',
     transport: 'stdio',
     port: 0,
-    search: { fulltext: false, sync_on_start: 'blocking', batch_size: 100, semantic: { enabled: false } },
+    search: { sync_on_start: 'blocking', batch_size: 100, semantic: { enabled: false } },
     logging: { console: 'error' },
     callers: {},
     require_read_before_write: false,

@@ -199,7 +199,13 @@ export async function handleContextBundle(
   // missing file, etc.) are skipped without consuming a bundle slot, so
   // a mixed-permission deployment doesn't end up with the cap consumed
   // by unreadable high-ranked candidates.
+  //
+  // Dedup is by (file, canonical_section_path) — a search hit that
+  // returned the path "Tool Selection" and a graph neighbour stored as
+  // the slug "tool-selection" both resolve to the same section, and
+  // shouldn't both consume a bundle slot.
   const sections: ContextBundleSection[] = [];
+  const emitted = new Set<string>();
   for (const node of ranked) {
     if (sections.length >= max_sections) break;
     if (!checkPermission(caller, 'read', node.file).allowed) continue;
@@ -225,9 +231,19 @@ export async function handleContextBundle(
         const address: SectionAddress = { type: 'text', text: slugMatch.heading.text };
         result = readSection(fileContent, tree, address, true);
       }
+
+      // Use the canonical section path returned by readSection so the
+      // response is round-trippable for follow-up doc_read_section /
+      // doc_history calls. Without this, a slug-fallback hit would
+      // surface section_path: "tool-selection" — not a valid address
+      // for any other tool.
+      const dedupKey = `${node.file}\x00${result.path}`;
+      if (emitted.has(dedupKey)) continue;
+      emitted.add(dedupKey);
+
       sections.push({
         file: node.file,
-        section_path: node.section,
+        section_path: result.path,
         content: result.content,
         relevance_score: node.relevance_score,
         hop_distance: node.hop_distance,

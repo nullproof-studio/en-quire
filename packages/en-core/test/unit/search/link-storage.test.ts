@@ -143,7 +143,8 @@ describe('storeLinks resolution', () => {
     expect(listLinks('docs/skills/triage.md')[0].target_file).toBe('?no-such-doc');
   });
 
-  it('passes through prefixed targets without re-resolving', () => {
+  it('passes through prefixed targets without re-resolving when indexed', () => {
+    indexFakeFile('docs/sops/runbook.md');
     storeLinks(db, 'docs/foo.md', [{
       source_section: null,
       target_path: 'docs/sops/runbook.md',
@@ -153,6 +154,19 @@ describe('storeLinks resolution', () => {
       prefixed: true,
     }]);
     expect(listLinks('docs/foo.md')[0].target_file).toBe('docs/sops/runbook.md');
+  });
+
+  it('marks missing prefixed targets with `?<target>` (typo or not-yet-created)', () => {
+    indexFakeFile('docs/sops/runbook.md');
+    storeLinks(db, 'docs/foo.md', [{
+      source_section: null,
+      target_path: 'docs/sops/runboooook.md', // misspelled frontmatter ref
+      target_section: null,
+      relationship: 'implements',
+      context: null,
+      prefixed: true,
+    }]);
+    expect(listLinks('docs/foo.md')[0].target_file).toBe('?docs/sops/runboooook.md');
   });
 
   it('replaces all rows for a source on each call (idempotent re-index)', () => {

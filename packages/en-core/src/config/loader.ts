@@ -127,7 +127,6 @@ export function loadConfig(configPath: string): ResolvedConfig {
     port: validated.port,
     listen_host: validated.listen_host,
     search: {
-      fulltext: validated.search.fulltext,
       sync_on_start: validated.search.sync_on_start,
       batch_size: validated.search.batch_size,
       semantic: {

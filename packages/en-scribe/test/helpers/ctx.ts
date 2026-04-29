@@ -58,7 +58,6 @@ export function makeCtx(options: {
     transport: 'stdio',
     port: 0,
     search: {
-      fulltext: false,
       sync_on_start: 'blocking',
       batch_size: 100,
       semantic: { enabled: false },

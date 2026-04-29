@@ -52,12 +52,23 @@ function resolveTarget(
   sourcePath: string,
   link: RawLink,
 ): ResolvedTarget {
-  if (link.prefixed) {
-    return { target_file: link.target_path, target_section: link.target_section };
-  }
-
   const target = link.target_path;
   const indexed = listIndexedPaths(db);
+
+  if (link.prefixed) {
+    // `prefixed: true` means the parser produced an already root-prefixed
+    // path (frontmatter relationships, mostly). Don't re-base relative
+    // to the source — but DO check whether the target is in the index.
+    // A misspelled or not-yet-indexed frontmatter ref must still go in
+    // tagged with `?` so resolveStaleLinks picks it up later and
+    // doc_context_bundle skips it cleanly. Without this check, a typo'd
+    // frontmatter `references: [docs/sops/runboooook.md]` would look
+    // resolved forever.
+    if (indexed.includes(target)) {
+      return { target_file: target, target_section: link.target_section };
+    }
+    return { target_file: `?${target}`, target_section: link.target_section };
+  }
 
   // Root-anchored path — leading `/` denotes "from the workspace root".
   // The index stores paths root-prefixed (e.g. `docs/sops/runbook.md`),

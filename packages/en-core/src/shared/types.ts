@@ -172,7 +172,6 @@ export interface ResolvedConfig {
   port: number;
   listen_host: string; // Interface to bind the HTTP server to (default 127.0.0.1)
   search: {
-    fulltext: boolean;
     sync_on_start: 'blocking' | 'background';
     batch_size: number;
     semantic: {

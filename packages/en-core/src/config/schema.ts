@@ -35,11 +35,16 @@ const SemanticSearchSchema = z.object({
 });
 
 const SearchSchema = z.object({
-  fulltext: z.boolean().default(true),
   semantic: SemanticSearchSchema.default({}),
   sync_on_start: z.enum(['blocking', 'background']).default('blocking'),
   batch_size: z.number().int().positive().default(500),
-});
+}).passthrough();
+// `passthrough` keeps Zod from erroring on unrecognised keys —
+// `search.fulltext` was a stale toggle that never gated any code path,
+// so it was removed in v0.3. Operators with `fulltext: false` in old
+// configs see no behaviour change (FTS was always on), and Zod's
+// passthrough mode silently accepts the legacy key without breaking
+// startup.
 
 const LoggingSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'debug']).default('info'),

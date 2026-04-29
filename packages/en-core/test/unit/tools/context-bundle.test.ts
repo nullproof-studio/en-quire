@@ -32,7 +32,6 @@ function buildContext(scopes: CallerIdentity['scopes']): ToolContext {
     port: 3100,
     listen_host: '127.0.0.1',
     search: {
-      fulltext: true,
       sync_on_start: 'blocking',
       batch_size: 500,
       semantic: { enabled: false },
@@ -192,11 +191,12 @@ describe('handleContextBundle', () => {
       ctx,
     ) as { sections: Array<{ file: string; section_path: string; content: string }> };
 
-    const linked = result.sections.find(
-      (s) => s.file === 'docs/sops/deployment.md' && s.section_path === 'metrics',
-    );
+    const linked = result.sections.find((s) => s.file === 'docs/sops/deployment.md');
     expect(linked).toBeDefined();
-    // Content is the actual "Metrics" section body, found via slug fallback.
+    // Returns the CANONICAL section path ("Deployment > Metrics"), not
+    // the raw slug ("metrics"), so doc_read_section / doc_history can
+    // round-trip the response without re-resolving.
+    expect(linked!.section_path).toBe('Deployment > Metrics');
     expect(linked!.content).toContain('p99 latency');
   });
 

@@ -6,7 +6,6 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'document_roots' | 'database'>
   port: 3100,
   listen_host: '127.0.0.1',
   search: {
-    fulltext: true,
     sync_on_start: 'blocking',
     batch_size: 500,
     semantic: {
