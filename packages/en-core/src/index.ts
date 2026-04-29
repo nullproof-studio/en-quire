@@ -33,6 +33,7 @@ export * from './git/post-propose.js';
 // Search
 export * from './search/database.js';
 export * from './search/indexer.js';
+export * from './search/link-storage.js';
 export * from './search/query.js';
 export * from './search/schema.js';
 export * from './search/sync.js';

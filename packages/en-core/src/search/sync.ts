@@ -7,6 +7,7 @@ import { parserRegistry } from '../document/parser-registry.js';
 import { indexDocument, removeFromIndex } from './indexer.js';
 import { getLogger } from '../shared/logger.js';
 import type { SectionNode } from '../shared/types.js';
+import type { RawLink } from '../document/parser-registry.js';
 
 /** Default number of files to index per transaction batch. */
 const BATCH_SIZE = 500;
@@ -97,13 +98,20 @@ export function syncIndex(
     const batch = toIndex.slice(i, i + batchSize);
 
     // Phase 1 — read + parse (no lock held)
-    const prepared: Array<{ prefixedPath: string; tree: SectionNode[]; content: string; mtime: number }> = [];
+    const prepared: Array<{
+      prefixedPath: string;
+      tree: SectionNode[];
+      content: string;
+      mtime: number;
+      links: RawLink[];
+    }> = [];
     for (const { file, prefixedPath, mtime } of batch) {
       try {
         const { content } = readDocument(documentRoot, file);
         const parser = parserRegistry.getParser(file);
         const tree = parser.parse(content);
-        prepared.push({ prefixedPath, tree, content, mtime });
+        const links = parser.extractLinks?.(content) ?? [];
+        prepared.push({ prefixedPath, tree, content, mtime, links });
       } catch {
         // Skip files that can't be parsed (encoding errors, etc.)
         skipped++;
@@ -113,7 +121,7 @@ export function syncIndex(
     // Phase 2 — SQL inserts only (lock held briefly)
     const runBatch = db.transaction(() => {
       for (const p of prepared) {
-        indexDocument(db, p.prefixedPath, p.tree, p.content, p.mtime);
+        indexDocument(db, p.prefixedPath, p.tree, p.content, p.mtime, p.links);
         indexed++;
       }
     });

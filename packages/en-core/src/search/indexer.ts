@@ -2,10 +2,16 @@
 import type Database from 'better-sqlite3';
 import type { SectionNode } from '../shared/types.js';
 import { flattenTree, getSectionPath } from '../document/section-tree.js';
+import type { RawLink } from '../document/parser-registry.js';
+import { storeLinks, removeLinks } from './link-storage.js';
 
 /**
  * Index all sections of a document into the FTS5 table.
  * Deletes existing entries for the file first (full re-index per file).
+ *
+ * Optional `links` are stored in the cross-document reference index
+ * (`doc_links`) in the same transaction so the two indexes never drift.
+ * Pass an empty array (or omit) for parsers that don't extract links.
  */
 export function indexDocument(
   db: Database.Database,
@@ -13,6 +19,7 @@ export function indexDocument(
   tree: SectionNode[],
   markdown: string,
   mtimeMs?: number,
+  links?: RawLink[],
 ): void {
   const deleteStmt = db.prepare('DELETE FROM sections_fts WHERE file_path = ?');
   const insertStmt = db.prepare(`
@@ -56,17 +63,20 @@ export function indexDocument(
     }
 
     metaStmt.run(filePath, mtimeMs ?? Date.now(), new Date().toISOString());
+
+    storeLinks(db, filePath, links ?? []);
   });
 
   runIndex();
 }
 
 /**
- * Remove a document from the search index.
+ * Remove a document from the search index (FTS5, metadata, link index).
  */
 export function removeFromIndex(db: Database.Database, filePath: string): void {
   db.prepare('DELETE FROM sections_fts WHERE file_path = ?').run(filePath);
   db.prepare('DELETE FROM index_metadata WHERE file_path = ?').run(filePath);
+  removeLinks(db, filePath);
 }
 
 /**
