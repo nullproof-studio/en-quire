@@ -276,6 +276,37 @@ describe('doc_cite — RBAC', () => {
     expect(result.append?.mode).toBe('propose');
   });
 
+  it('preflight: rejects propose-mode cite when target root has no git, before any fetch or registry insert', async () => {
+    // Root configured but git disabled — propose mode is infeasible.
+    let intercepted = false;
+    mockAgent
+      .get('https://forbes.com')
+      .intercept({ path: '/x' })
+      .reply(() => {
+        intercepted = true;
+        return { statusCode: 200, data: '<p>ok</p>', responseOptions: { headers: { 'content-type': 'text/html' } } };
+      });
+
+    const ctx = buildContext(
+      [{ path: '**', permissions: ['read', 'propose', 'cite', 'cite_web'] }],
+      { web_appends_propose: true },
+    );
+    // Strip git from the target root so propose mode would fail.
+    ctx.roots.docs = { root: ctx.roots.docs.root, git: null };
+
+    await expect(
+      handleDocCite(
+        { source: 'https://forbes.com/x', quote: 'ok', target_file: 'docs/profile.md' },
+        ctx,
+      ),
+    ).rejects.toThrow();
+
+    // No fetch happened, no registry row was allocated.
+    expect(intercepted).toBe(false);
+    const count = (db.prepare('SELECT COUNT(*) AS n FROM citations').get() as { n: number }).n;
+    expect(count).toBe(0);
+  });
+
   it('still uses direct write for local cites even when web_appends_propose is true', async () => {
     writeFileSync(join(docsRoot, 'source.md'), 'a quoted phrase here');
     await g.add('source.md');

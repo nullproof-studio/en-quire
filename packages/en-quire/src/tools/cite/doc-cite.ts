@@ -18,9 +18,11 @@ import {
   fetchSource,
   formatInline,
   formatReferenceLine,
+  GitRequiredError,
   loadDocument,
   logCiteAudit,
   requirePermission,
+  resolveFilePath,
   resolveWriteMode,
   validateEtag,
   verifyQuote,
@@ -121,6 +123,18 @@ export async function handleDocCite(
     isWebSource && ctx.config.citation.web_appends_propose ? 'propose' : 'write';
   if (args.target_file) {
     resolveWriteMode(ctx.caller, args.target_file, intendedAppendMode);
+    // Propose-mode feasibility: if the target root has no git, executeWrite
+    // would throw GitRequiredError AFTER fetch + verify + registry insert
+    // — leaking network egress and an orphan citation row. Catch the
+    // mismatch up front so propose-mode-on-non-git-root fails before any
+    // side effects.
+    if (intendedAppendMode === 'propose') {
+      const resolved = resolveFilePath(ctx.config.document_roots, args.target_file);
+      const rootCtx = ctx.roots[resolved.rootName];
+      if (!rootCtx?.git?.available) {
+        throw new GitRequiredError('Proposal workflows');
+      }
+    }
     // Validate if_match against the target's current content (if the
     // file exists yet — it may not, in which case the load will fail
     // with NotFound and we surface that). Auto-create of target_file is
