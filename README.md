@@ -311,6 +311,7 @@ callers:
 
 - Node.js 22+
 - npm
+- Git ≥ 2.38 (proposal conflict detection uses `git merge-tree --write-tree`)
 
 ### Build from source
 

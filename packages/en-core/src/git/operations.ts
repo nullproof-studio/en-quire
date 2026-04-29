@@ -316,6 +316,46 @@ export class GitOperations {
   }
 
   /**
+   * Check whether a proposal branch can be merged into the default branch
+   * cleanly. Uses `git merge-tree --write-tree` (git ≥ 2.38) so the working
+   * tree, index, and HEAD are untouched — this is a pure read of merge state.
+   *
+   * Exit semantics of `git merge-tree --write-tree`:
+   *   0 — clean merge (output: tree OID)
+   *   1 — merge has conflicts (output: tree OID, then conflicting paths)
+   *   >1 — error (bad ref, missing object, etc.) — propagated as a throw
+   */
+  async checkMergeable(branch: string): Promise<{ can_merge: boolean; conflicts: string[] }> {
+    this.requireGit('check mergeable');
+    const def = await this.resolveDefaultBranch();
+
+    try {
+      await execFileAsync(
+        'git',
+        ['merge-tree', '--write-tree', '--name-only', '--no-messages', def, branch],
+        {
+          cwd: this._documentRoot,
+          timeout: 30_000,
+          maxBuffer: 10 * 1_048_576,
+        },
+      );
+      return { can_merge: true, conflicts: [] };
+    } catch (err) {
+      const e = err as { code?: number | string; stdout?: string; stderr?: string };
+      // execFile surfaces the process exit code as `code` (number for normal
+      // exits; string like "ETIMEDOUT" for signal/timeout). On conflict (exit
+      // 1), stdout is still populated with the tree OID on the first line
+      // followed by conflicting file paths.
+      if (e.code === 1) {
+        const lines = (e.stdout ?? '').split('\n').filter(Boolean);
+        const conflicts = lines.length > 1 ? [...new Set(lines.slice(1))] : [];
+        return { can_merge: false, conflicts };
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Fetch the tip commit of a proposal branch along with the shortstat
    * diff against the default branch. The caller combines these with
    * `parseCommitMessage` to populate the structured metadata fields on
