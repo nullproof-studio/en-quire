@@ -5,6 +5,7 @@ import { writeDocument, readDocument } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import type { DocumentParser } from '../document/parser-registry.js';
 import { indexDocument } from '../search/indexer.js';
+import { removeEmbeddingsForFile } from '../search/vector-store.js';
 import { buildCommitMessage, buildProposalBranch } from '../git/commit-message.js';
 import { runPostProposeHooks } from '../git/post-propose.js';
 import { generateDiff } from '../shared/diff.js';
@@ -119,11 +120,27 @@ export async function executeWrite(
       }
     }
 
-    // Update search index (use prefixed path for index key)
+    // Update search index (use prefixed path for index key).
+    // Re-extract links from the new content so doc_links stays in lockstep
+    // with the body — without this pass, indexDocument(..., links: undefined)
+    // sees the default empty array and storeLinks erases every row for
+    // this file, breaking doc_references / doc_referenced_by until the
+    // next full sync repopulates.
     try {
       const parser = parserRegistry.getParser(resolved.relativePath);
       const tree = parser.parse(newContent);
-      indexDocument(ctx.db, resolved.prefixedPath, tree, newContent);
+      const links = parser.extractLinks?.(newContent) ?? [];
+      indexDocument(ctx.db, resolved.prefixedPath, tree, newContent, undefined, links);
+      // Drop semantic-index rows for this file. The vec content was
+      // embedded against the OLD section bodies, so leaving it in place
+      // means semantic and hybrid search return matches against text
+      // that no longer exists. Better to lose semantic results until
+      // the next syncEmbeddings pass than to return stale content.
+      try {
+        removeEmbeddingsForFile(ctx.db, resolved.prefixedPath);
+      } catch {
+        /* sqlite-vec table absent (semantic disabled) — no-op */
+      }
       logger.debug('write:index-updated', { file: params.file });
     } catch (indexErr) {
       // Index update failure is non-fatal

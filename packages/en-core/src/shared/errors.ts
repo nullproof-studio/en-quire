@@ -108,3 +108,19 @@ export class PathTraversalError extends EnquireError {
     this.name = 'PathTraversalError';
   }
 }
+
+export class MergeConflictError extends EnquireError {
+  constructor(
+    public readonly branch: string,
+    public readonly conflicts: string[],
+  ) {
+    const list = conflicts.length ? conflicts.map((c) => `  - ${c}`).join('\n') : '  (no paths reported)';
+    super(
+      'merge_conflict',
+      `Proposal "${branch}" cannot be merged cleanly into the default branch — ` +
+      `it conflicts with concurrent changes in:\n${list}\n` +
+      `Rebase the proposal onto the latest default branch (or reject and re-propose) before approving.`,
+    );
+    this.name = 'MergeConflictError';
+  }
+}

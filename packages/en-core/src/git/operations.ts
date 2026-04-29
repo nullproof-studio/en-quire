@@ -2,6 +2,7 @@
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { createHmac } from 'node:crypto';
 import { GitRequiredError, ValidationError } from '../shared/errors.js';
 import { tokeniseCommand } from '../shared/tokenise-command.js';
 import { detectGit } from './detector.js';
@@ -16,6 +17,7 @@ export class GitOperations {
   private _remote: string | null;
   private _pushProposals: boolean;
   private _prHook: string | null;
+  private _prHookSecret: string | null;
   private _documentRoot: string;
 
   constructor(
@@ -25,6 +27,7 @@ export class GitOperations {
     remote?: string | null,
     pushProposals?: boolean | null,
     prHook?: string | null,
+    prHookSecret?: string | null,
   ) {
     this._documentRoot = documentRoot;
     this.git = simpleGit(documentRoot);
@@ -34,6 +37,7 @@ export class GitOperations {
     this._remote = remote ?? null;
     this._pushProposals = pushProposals === true;
     this._prHook = prHook ?? null;
+    this._prHookSecret = prHookSecret ?? null;
   }
 
   get available(): boolean {
@@ -144,19 +148,28 @@ export class GitOperations {
   }
 
   /**
-   * Run the configured `git.pr_hook` command with per-token substitution
-   * of `{branch}`, `{file}`, and `{caller}`. The command is tokenised FIRST,
-   * then each token is substituted individually, so a substituted value that
-   * contains whitespace or shell metacharacters cannot split into new argv
-   * entries. Uses `execFile` (never `exec`), so the shell is never invoked.
+   * Run the configured `git.pr_hook` for a freshly-committed proposal.
+   *
+   * Two modes — chosen by the value's shape:
+   *   - If `pr_hook` starts with `http://` or `https://`, it's a webhook URL.
+   *     `runPrHookWebhook` POSTs the substitution payload as JSON, optionally
+   *     signing it with `git.pr_hook_secret` (HMAC-SHA256 → `X-EnQuire-Signature`).
+   *   - Otherwise it's a shell command. Tokenised FIRST, then each token
+   *     substituted individually so a value with whitespace or shell
+   *     metacharacters cannot split into new argv entries. Uses `execFile`
+   *     (never `exec`), so the shell is never invoked.
    *
    * Returns `{ ran: false }` quietly when the hook is not configured. Hook
-   * failures (non-zero exit, missing command, timeout) surface as warnings,
-   * never thrown — a failed hook must not roll back the proposal commit
-   * that already landed.
+   * failures (non-zero exit, missing command, timeout, non-2xx response,
+   * unreachable host) surface as warnings, never thrown — a failed hook
+   * must not roll back the proposal commit that already landed.
    */
   async runPrHook(subs: { branch: string; file: string; caller: string }): Promise<{ ran: boolean; warning?: string }> {
     if (!this._prHook) return { ran: false };
+
+    if (this._prHook.startsWith('http://') || this._prHook.startsWith('https://')) {
+      return this.runPrHookWebhook(this._prHook, subs);
+    }
 
     const tokens = tokeniseCommand(this._prHook);
     if (tokens.length === 0) {
@@ -182,6 +195,51 @@ export class GitOperations {
       const code = (err as NodeJS.ErrnoException | { code?: number }).code;
       const codeSuffix = code !== undefined ? ` (exit ${code})` : '';
       return { ran: false, warning: `pr_hook failed${codeSuffix}: ${msg}` };
+    }
+  }
+
+  /**
+   * Webhook-mode `pr_hook`: POST the substitution payload as JSON to the
+   * configured URL. Body shape: `{ branch, file, caller, timestamp }` where
+   * `timestamp` is the ISO 8601 string captured at hook time. When
+   * `pr_hook_secret` is set, the body is HMAC-SHA256 signed and the digest
+   * is sent as `X-EnQuire-Signature: sha256=<hex>`.
+   *
+   * Failure modes are all converted to a `{ ran: false, warning }` return —
+   * never throw. The local proposal commit must not be clobbered when the
+   * webhook receiver is down or returning errors.
+   */
+  private async runPrHookWebhook(
+    url: string,
+    subs: { branch: string; file: string; caller: string },
+  ): Promise<{ ran: boolean; warning?: string }> {
+    const body = JSON.stringify({
+      branch: subs.branch,
+      file: subs.file,
+      caller: subs.caller,
+      timestamp: new Date().toISOString(),
+    });
+
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (this._prHookSecret) {
+      const sig = createHmac('sha256', this._prHookSecret).update(body).digest('hex');
+      headers['x-enquire-signature'] = `sha256=${sig}`;
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body,
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok) {
+        return { ran: false, warning: `pr_hook webhook failed: ${res.status} ${res.statusText}` };
+      }
+      return { ran: true };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { ran: false, warning: `pr_hook webhook failed: ${msg}` };
     }
   }
 
@@ -316,6 +374,46 @@ export class GitOperations {
   }
 
   /**
+   * Check whether a proposal branch can be merged into the default branch
+   * cleanly. Uses `git merge-tree --write-tree` (git ≥ 2.38) so the working
+   * tree, index, and HEAD are untouched — this is a pure read of merge state.
+   *
+   * Exit semantics of `git merge-tree --write-tree`:
+   *   0 — clean merge (output: tree OID)
+   *   1 — merge has conflicts (output: tree OID, then conflicting paths)
+   *   >1 — error (bad ref, missing object, etc.) — propagated as a throw
+   */
+  async checkMergeable(branch: string): Promise<{ can_merge: boolean; conflicts: string[] }> {
+    this.requireGit('check mergeable');
+    const def = await this.resolveDefaultBranch();
+
+    try {
+      await execFileAsync(
+        'git',
+        ['merge-tree', '--write-tree', '--name-only', '--no-messages', def, branch],
+        {
+          cwd: this._documentRoot,
+          timeout: 30_000,
+          maxBuffer: 10 * 1_048_576,
+        },
+      );
+      return { can_merge: true, conflicts: [] };
+    } catch (err) {
+      const e = err as { code?: number | string; stdout?: string; stderr?: string };
+      // execFile surfaces the process exit code as `code` (number for normal
+      // exits; string like "ETIMEDOUT" for signal/timeout). On conflict (exit
+      // 1), stdout is still populated with the tree OID on the first line
+      // followed by conflicting file paths.
+      if (e.code === 1) {
+        const lines = (e.stdout ?? '').split('\n').filter(Boolean);
+        const conflicts = lines.length > 1 ? [...new Set(lines.slice(1))] : [];
+        return { can_merge: false, conflicts };
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Fetch the tip commit of a proposal branch along with the shortstat
    * diff against the default branch. The caller combines these with
    * `parseCommitMessage` to populate the structured metadata fields on
@@ -356,6 +454,51 @@ export class GitOperations {
     this.requireGit('get modified files');
     const status = await this.git.status();
     return [...status.modified, ...status.not_added, ...status.created];
+  }
+
+  /**
+   * Return the commits that touched lines `[lineStart, lineEnd]` of `file`.
+   * Uses `git log -L` (line-history) which returns the full diff for each
+   * touching commit; we strip to the metadata (sha, date, author, subject)
+   * since `doc_history` only surfaces a list, not the diffs themselves.
+   *
+   * Returns an empty array if `file` is unknown to git or the line range
+   * is outside the file. Newest first; capped at `limit`.
+   */
+  async getLineHistory(
+    file: string,
+    lineStart: number,
+    lineEnd: number,
+    limit: number,
+  ): Promise<Array<{ sha: string; date: string; author: string; subject: string }>> {
+    this.requireGit('get line history');
+
+    if (lineStart < 1 || lineEnd < lineStart) {
+      return [];
+    }
+
+    // %x1F = unit separator, %x1E = record separator. Stable delimiters
+    // that won't appear in normal commit messages, so we don't have to
+    // shell-escape anything.
+    const recordSep = '\x1Een-quire-history-record\x1E';
+    const fieldSep = '\x1F';
+    const format = `${fieldSep}%H${fieldSep}%aI${fieldSep}%an${fieldSep}%s${recordSep}`;
+    const range = `${lineStart},${lineEnd}:${file}`;
+
+    let raw: string;
+    try {
+      // -s suppresses the diff body; --no-patch is the modern alias but -s
+      // is supported by every git that supports -L.
+      raw = await this.git.raw(['log', '-s', `-L${range}`, `--format=${format}`, `-n${limit}`]);
+    } catch {
+      return [];
+    }
+
+    const records = raw.split(recordSep).map((r) => r.trim()).filter(Boolean);
+    return records.map((record) => {
+      const [, sha, date, author, subject] = record.split(fieldSep);
+      return { sha, date, author, subject };
+    }).filter((r) => r.sha);
   }
 
   async getLog(branch?: string): Promise<Array<{ hash: string; message: string; date: string }>> {

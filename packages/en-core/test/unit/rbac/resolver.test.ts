@@ -10,7 +10,6 @@ function baseConfig(partial: Partial<ResolvedConfig> = {}): ResolvedConfig {
     transport: 'stdio',
     port: 0,
     search: {
-      fulltext: true,
       sync_on_start: 'blocking',
       batch_size: 500,
       semantic: { enabled: false },

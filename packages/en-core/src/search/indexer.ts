@@ -2,10 +2,23 @@
 import type Database from 'better-sqlite3';
 import type { SectionNode } from '../shared/types.js';
 import { flattenTree, getSectionPath } from '../document/section-tree.js';
+import type { RawLink } from '../document/parser-registry.js';
+import { storeLinks, removeLinks } from './link-storage.js';
+import { removeEmbeddingsForFile } from './vector-store.js';
 
 /**
  * Index all sections of a document into the FTS5 table.
  * Deletes existing entries for the file first (full re-index per file).
+ *
+ * `links` semantics — three-way:
+ *   - `undefined`: doc_links rows for this file are LEFT ALONE. Use this
+ *     when the caller intends to update links separately (e.g. syncIndex
+ *     defers link storage until all index_metadata is populated so
+ *     resolution sees the complete file set).
+ *   - `[]`: existing rows are CLEARED, no new rows inserted.
+ *   - `RawLink[]`: existing rows are cleared and replaced with the
+ *     extracted set; the result is in lockstep with FTS in the same
+ *     transaction.
  */
 export function indexDocument(
   db: Database.Database,
@@ -13,6 +26,7 @@ export function indexDocument(
   tree: SectionNode[],
   markdown: string,
   mtimeMs?: number,
+  links?: RawLink[],
 ): void {
   const deleteStmt = db.prepare('DELETE FROM sections_fts WHERE file_path = ?');
   const insertStmt = db.prepare(`
@@ -56,17 +70,41 @@ export function indexDocument(
     }
 
     metaStmt.run(filePath, mtimeMs ?? Date.now(), new Date().toISOString());
+
+    if (links !== undefined) {
+      storeLinks(db, filePath, links);
+    }
   });
 
   runIndex();
 }
 
 /**
- * Remove a document from the search index.
+ * Remove a document from every index — FTS5, metadata, link index, and
+ * the optional sqlite-vec vector index. Also downgrades incoming
+ * `doc_links` rows that pointed AT this file: their `target_file` is
+ * tagged with the unresolved `?` prefix so consumers (doc_references,
+ * doc_referenced_by, doc_context_bundle) report a broken link instead
+ * of one that looks resolved but points at nothing. The vec call is a
+ * no-op when semantic search is disabled or the extension wasn't loaded.
+ *
+ * Centralising the downgrade here means every removal path — sync's
+ * vanished-on-disk pass, doc_rename, doc_delete — gets the same
+ * incoming-link cleanup without each having to remember it.
  */
 export function removeFromIndex(db: Database.Database, filePath: string): void {
+  // Downgrade incoming references first, while target_file still equals
+  // the un-prefixed path. Doing it after the FTS / metadata deletes
+  // would still work (doc_links is not joined to either), but pulling
+  // the order forward keeps the function trivially safe to reorder.
+  db.prepare(
+    `UPDATE doc_links SET target_file = '?' || target_file WHERE target_file = ?`,
+  ).run(filePath);
+
   db.prepare('DELETE FROM sections_fts WHERE file_path = ?').run(filePath);
   db.prepare('DELETE FROM index_metadata WHERE file_path = ?').run(filePath);
+  removeLinks(db, filePath);
+  removeEmbeddingsForFile(db, filePath);
 }
 
 /**

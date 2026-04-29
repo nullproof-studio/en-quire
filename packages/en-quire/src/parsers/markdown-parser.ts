@@ -1,12 +1,13 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type { Root, Heading } from 'mdast';
-import type { DocumentParser } from '@nullproof-studio/en-core';
+import type { DocumentParser, RawLink } from '@nullproof-studio/en-core';
 import type { SectionNode, SectionAddress } from '@nullproof-studio/en-core';
 import { parseMarkdown } from './parser.js';
 import { buildPreambleNode, fixSectionEndOffsets } from '@nullproof-studio/en-core';
 import { toString } from '@nullproof-studio/en-core';
 import { parserRegistry } from '@nullproof-studio/en-core';
 import { markdownStrategy, markdownCapabilities } from './markdown-strategy.js';
+import { extractLinks as extractMarkdownLinks } from './link-extractor.js';
 
 /**
  * Build a section tree from an mdast AST.
@@ -194,6 +195,10 @@ class MarkdownParser implements DocumentParser {
     } catch (err) {
       return [`Markdown parse error: ${err instanceof Error ? err.message : String(err)}`];
     }
+  }
+
+  extractLinks(content: string): RawLink[] {
+    return extractMarkdownLinks(content);
   }
 }
 

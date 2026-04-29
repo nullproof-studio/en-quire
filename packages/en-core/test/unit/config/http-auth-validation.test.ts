@@ -199,3 +199,22 @@ listen_host: "0.0.0.0"
     expect(config.listen_host).toBe('0.0.0.0');
   });
 });
+
+describe('loadConfig — legacy search.fulltext key', () => {
+  it('silently accepts and ignores `search.fulltext` in old configs', () => {
+    // The flag was removed in v0.3 — it never gated any code path, and
+    // operators with it set to either value should keep starting up
+    // without a config error.
+    const path = writeConfig(`
+document_roots:
+  notes:
+    path: .
+search:
+  fulltext: false
+  sync_on_start: blocking
+`);
+    expect(() => loadConfig(path)).not.toThrow();
+    const config = loadConfig(path);
+    expect((config.search as Record<string, unknown>).fulltext).toBeUndefined();
+  });
+});

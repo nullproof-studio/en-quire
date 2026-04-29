@@ -8,12 +8,16 @@ import {
   loadConfig,
   openDatabase,
   syncIndex,
+  syncEmbeddings,
   GitOperations,
   resolveCaller,
   initLogger,
   getLogger,
   ToolRegistry,
   attachRegistry,
+  EmbeddingsClient,
+  loadVectorExtension,
+  initVectorSchema,
 } from '@nullproof-studio/en-core';
 import type {
   ResolvedConfig,
@@ -33,6 +37,7 @@ interface ServerDependencies {
   db: Database.Database;
   roots: Record<string, RootContext>;
   caller: CallerIdentity;
+  embeddings?: EmbeddingsClient;
 }
 
 function createServer(deps: ServerDependencies): McpServer {
@@ -46,6 +51,7 @@ function createServer(deps: ServerDependencies): McpServer {
     roots: deps.roots,
     caller: deps.caller,
     db: deps.db,
+    embeddings: deps.embeddings,
   };
 
   const registry = new ToolRegistry();
@@ -85,6 +91,7 @@ async function main() {
       root.git.remote,
       root.git.push_proposals,
       root.git.pr_hook,
+      root.git.pr_hook_secret,
     );
     roots[name] = { root, git };
     log.info('Root configured', {
@@ -143,15 +150,67 @@ async function main() {
     }
   }
 
+  // Optional semantic phase: if config opts in, load sqlite-vec, init the
+  // vector schema, and embed every section in the background. Failure to
+  // load the extension or reach the embeddings endpoint degrades to
+  // FTS-only — never refuses to start.
+  const embeddings = await initSemanticSearch(db, config, log);
+
   if (config.transport === 'streamable-http') {
     // HTTP transport MUST NOT use the resolveCaller auto-select fallback —
     // every request authenticates its own caller via Bearer token.
-    await startHttpTransport(config, db, roots);
+    await startHttpTransport(config, db, roots, embeddings);
   } else {
     // stdio is inherently single-process; the startup-resolved caller is safe.
     const caller = resolveCaller(config);
-    await startStdioTransport(config, db, roots, caller);
+    await startStdioTransport(config, db, roots, caller, embeddings);
   }
+}
+
+async function initSemanticSearch(
+  db: Database.Database,
+  config: ResolvedConfig,
+  log: ReturnType<typeof getLogger>,
+): Promise<EmbeddingsClient | undefined> {
+  const sem = config.search.semantic;
+  if (!sem.enabled) return undefined;
+
+  if (!sem.endpoint || !sem.model || !sem.dimensions) {
+    log.warn('Semantic search enabled but endpoint/model/dimensions missing — degrading to FTS-only');
+    return undefined;
+  }
+
+  const vec = await loadVectorExtension(db);
+  if (!vec.loaded) {
+    log.warn('Semantic search enabled but sqlite-vec failed to load — degrading to FTS-only', {
+      warning: vec.warning,
+    });
+    return undefined;
+  }
+  initVectorSchema(db, sem.dimensions);
+
+  const client = new EmbeddingsClient({
+    endpoint: sem.endpoint,
+    model: sem.model,
+    api_key: sem.api_key,
+    api_key_env: sem.api_key_env,
+  });
+
+  // Embedding sync runs in the background regardless of `sync_on_start`:
+  // the initial pass can be slow (network I/O per batch) and should not
+  // block the MCP server from accepting requests.
+  for (const [name, root] of Object.entries(config.document_roots)) {
+    setImmediate(async () => {
+      try {
+        const result = await syncEmbeddings(db, name, root.path, client);
+        log.info('Embedding sync complete', { root: name, ...result });
+      } catch (err) {
+        log.error('Embedding sync failed', { root: name, error: String(err) });
+      }
+    });
+  }
+
+  return client;
 }
 
 async function startStdioTransport(
@@ -159,9 +218,10 @@ async function startStdioTransport(
   db: ReturnType<typeof openDatabase>,
   roots: Record<string, RootContext>,
   caller: ReturnType<typeof resolveCaller>,
+  embeddings?: EmbeddingsClient,
 ) {
   const log = getLogger();
-  const server = createServer({ config, db, roots, caller });
+  const server = createServer({ config, db, roots, caller, embeddings });
   const transport = new StdioServerTransport();
 
   log.info('Server starting on stdio', {
@@ -174,11 +234,12 @@ async function startHttpTransport(
   config: ReturnType<typeof loadConfig>,
   db: ReturnType<typeof openDatabase>,
   roots: Record<string, RootContext>,
+  embeddings?: EmbeddingsClient,
 ) {
   const log = getLogger();
 
   const { httpServer, sessions } = createMcpHttpServer({
-    config, db, roots,
+    config, db, roots, embeddings,
     createMcpServer: (deps) => createServer(deps),
     realm: 'en-quire',
   });
