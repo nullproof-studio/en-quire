@@ -49,19 +49,19 @@ en-quire fills this gap: a server that understands document structure, supports 
 ## MCP Tools
 
 ### Document Reading
-`doc_outline` · `doc_read_section` · `doc_read` · `doc_list`
+`doc_outline` · `doc_read_section` · `doc_read` · `doc_list` · `doc_insert_text`
 
 ### Document Editing
-`doc_replace_section` · `doc_insert_section` · `doc_append_section` · `doc_delete_section` · `doc_set_value` · `doc_create` · `doc_find_replace` · `doc_rename` · `doc_generate_toc` · `doc_status`
+`doc_replace_section` · `doc_insert_section` · `doc_append_section` · `doc_delete_section` · `doc_move_section` · `doc_set_value` · `doc_create` · `doc_find_replace` · `doc_rename` · `doc_generate_toc` · `doc_status`
 
-### Search
-`doc_search` · `doc_list`
+### Search & Cross-Document
+`doc_search` (fulltext / semantic / hybrid) · `doc_references` · `doc_referenced_by` · `doc_context_bundle` · `doc_history` · `doc_list`
 
 ### Governance
-`doc_proposals_list` · `doc_proposal_diff` · `doc_proposal_approve` · `doc_proposal_reject`
+`doc_proposals_list` · `doc_proposal_diff` (returns `can_merge` + `conflicts[]`) · `doc_proposal_approve` (refuses on conflict) · `doc_proposal_reject`
 
 ### Admin
-`doc_exec` — escape hatch for feature discovery, with full audit logging.
+`doc_exec` · `doc_audit_log` — escape hatch for feature discovery, with full audit logging and on-demand audit-log queries.
 
 ## Quick Start
 
@@ -245,6 +245,64 @@ doc_find_replace({
   expected_count: 3
 })
 ```
+
+### 9. Cross-document references and context bundles
+
+`doc_search` finds matches in a single document. For topics that span SOPs, skills, and runbooks, en-quire maintains a derived link index (`doc_links`) populated from markdown links, Obsidian-style `[[wiki]]` links, and frontmatter `references` / `implements` / `supersedes` / `see_also` arrays.
+
+```
+// Outgoing references from a file (or one of its sections)
+doc_references({ file: "skills/triage.md", section: "Tool Selection" })
+→ { references: [
+    { target_file: "sops/runbook.md", target_section: "checks", relationship: "references", context: "..." },
+  ] }
+
+// Inverse — which skills and runbooks point AT this section?
+// Use this for impact analysis before editing a shared SOP section.
+doc_referenced_by({ file: "sops/runbook.md", section: "checks" })
+→ { referenced_by: [
+    { source_file: "skills/triage.md", source_section: "Tool Selection", ... },
+  ] }
+
+// Single-call topic gathering. Seeds with FTS hits, expands via the
+// link graph in both directions up to max_depth hops, returns the
+// section bodies with combined relevance + hop_distance scores.
+doc_context_bundle({
+  query: "deployment metrics",
+  max_sections: 10,
+  max_depth: 1,
+})
+→ { sections: [
+    { file: "sops/deployment.md", section_path: "Metrics", content: "...", relevance_score: 0.71, hop_distance: 0 },
+    { file: "skills/observability.md", section_path: "Observability", content: "...", relevance_score: 0.34, hop_distance: 1 },
+  ] }
+```
+
+### 10. Section-level history
+
+```
+doc_history({ file: "sops/runbook.md", section: "checks", limit: 5 })
+→ { history: [
+    { sha: "...", date: "2026-04-29T13:09:26Z", author: "Andy", subject: "fix: tighten check ordering" },
+    { sha: "...", date: "2026-04-15T08:37:54Z", author: "Andy", subject: "init: add checks section" },
+  ] }
+```
+
+Resolves the section to its current line range, then runs `git log -L` over those lines so editing one section never appears in history queries for another.
+
+### 11. Semantic search
+
+When `search.semantic.enabled` is on (config below), `doc_search` accepts `search_type: "semantic"` or `"hybrid"`:
+
+```
+doc_search({
+  query: "how do we keep agent edits auditable",
+  search_type: "hybrid",     // 50/50 fulltext + vector blend
+  max_results: 10,
+})
+```
+
+Embeddings come from any OpenAI-compatible endpoint (OpenAI, LM Studio, Ollama via its `/v1` shim, vLLM, llama.cpp's `--api`, text-embeddings-inference). When sqlite-vec or the endpoint is unavailable, semantic mode degrades silently to fulltext rather than refusing requests.
 
 ## Configuration
 
