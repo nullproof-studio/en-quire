@@ -43,6 +43,10 @@ const RootGitSchema = z.object({
   auto_commit: z.boolean().default(true),
   remote: z.string().nullable().default(null),
   pr_hook: z.string().nullable().default(null),
+  // HMAC-SHA256 secret used to sign webhook-mode pr_hook bodies (sent as the
+  // `X-EnQuire-Signature: sha256=<hex>` header). Ignored for command-mode hooks.
+  // Prefer env interpolation over a literal value in committed config.
+  pr_hook_secret: z.string().nullable().default(null),
   default_branch: z.string().nullable().default(null), // null = detect from origin HEAD / local branches
   push_proposals: z.boolean().default(false), // push proposal branches to `remote` after commit
 });

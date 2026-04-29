@@ -14,7 +14,8 @@ document_roots:
       # enabled: null                 # Auto-detect (checks for .git directory)
       auto_commit: true               # Commit on every write operation
       remote: null                    # Optional: push proposals to remote
-      pr_hook: null                   # Optional: webhook/script to open PRs
+      pr_hook: null                   # Optional: webhook URL or shell command run after a propose write
+      pr_hook_secret: null            # Optional: HMAC-SHA256 secret signing webhook bodies (X-EnQuire-Signature)
 
   # Example: a second root for agent skill files
   # skills:

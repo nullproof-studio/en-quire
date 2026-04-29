@@ -151,6 +151,7 @@ export interface RootGitConfig {
   auto_commit: boolean;
   remote: string | null;
   pr_hook: string | null;
+  pr_hook_secret: string | null; // HMAC-SHA256 secret for webhook-mode pr_hook signing
   default_branch: string | null; // null = detect from origin HEAD / local branches
   push_proposals: boolean; // push proposal branches to `remote` after commit
 }
