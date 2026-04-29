@@ -456,6 +456,51 @@ export class GitOperations {
     return [...status.modified, ...status.not_added, ...status.created];
   }
 
+  /**
+   * Return the commits that touched lines `[lineStart, lineEnd]` of `file`.
+   * Uses `git log -L` (line-history) which returns the full diff for each
+   * touching commit; we strip to the metadata (sha, date, author, subject)
+   * since `doc_history` only surfaces a list, not the diffs themselves.
+   *
+   * Returns an empty array if `file` is unknown to git or the line range
+   * is outside the file. Newest first; capped at `limit`.
+   */
+  async getLineHistory(
+    file: string,
+    lineStart: number,
+    lineEnd: number,
+    limit: number,
+  ): Promise<Array<{ sha: string; date: string; author: string; subject: string }>> {
+    this.requireGit('get line history');
+
+    if (lineStart < 1 || lineEnd < lineStart) {
+      return [];
+    }
+
+    // %x1F = unit separator, %x1E = record separator. Stable delimiters
+    // that won't appear in normal commit messages, so we don't have to
+    // shell-escape anything.
+    const recordSep = '\x1Een-quire-history-record\x1E';
+    const fieldSep = '\x1F';
+    const format = `${fieldSep}%H${fieldSep}%aI${fieldSep}%an${fieldSep}%s${recordSep}`;
+    const range = `${lineStart},${lineEnd}:${file}`;
+
+    let raw: string;
+    try {
+      // -s suppresses the diff body; --no-patch is the modern alias but -s
+      // is supported by every git that supports -L.
+      raw = await this.git.raw(['log', '-s', `-L${range}`, `--format=${format}`, `-n${limit}`]);
+    } catch {
+      return [];
+    }
+
+    const records = raw.split(recordSep).map((r) => r.trim()).filter(Boolean);
+    return records.map((record) => {
+      const [, sha, date, author, subject] = record.split(fieldSep);
+      return { sha, date, author, subject };
+    }).filter((r) => r.sha);
+  }
+
   async getLog(branch?: string): Promise<Array<{ hash: string; message: string; date: string }>> {
     this.requireGit('get log');
     const def = branch ? await this.resolveDefaultBranch() : undefined;

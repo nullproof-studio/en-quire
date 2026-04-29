@@ -54,6 +54,7 @@ export * from './document/text-find.js';
 export * from './tools/audit-log.js';
 export * from './tools/context.js';
 export * from './tools/context-bundle.js';
+export * from './tools/history.js';
 export * from './tools/proposals.js';
 export * from './tools/references.js';
 export * from './tools/registry.js';
