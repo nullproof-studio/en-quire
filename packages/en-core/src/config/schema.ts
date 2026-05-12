@@ -21,17 +21,30 @@ const CallerConfigSchema = z.object({
 
 const SemanticSearchSchema = z.object({
   enabled: z.boolean().default(false),
+  // Base URL of an OpenAI-compatible embeddings server (e.g.
+  // "https://api.openai.com/v1", "http://localhost:1234/v1"). The client
+  // appends "/embeddings" — do not include the trailing path.
   endpoint: z.string().optional(),
   model: z.string().optional(),
   dimensions: z.number().int().positive().optional(),
+  // Authorisation: literal API key or env var name to read at startup.
+  // Prefer api_key_env so secrets don't sit in committed config. When
+  // both are set, the env var wins.
+  api_key: z.string().nullable().default(null),
+  api_key_env: z.string().nullable().default(null),
 });
 
 const SearchSchema = z.object({
-  fulltext: z.boolean().default(true),
   semantic: SemanticSearchSchema.default({}),
   sync_on_start: z.enum(['blocking', 'background']).default('blocking'),
   batch_size: z.number().int().positive().default(500),
-});
+}).passthrough();
+// `passthrough` keeps Zod from erroring on unrecognised keys —
+// `search.fulltext` was a stale toggle that never gated any code path,
+// so it was removed in v0.3. Operators with `fulltext: false` in old
+// configs see no behaviour change (FTS was always on), and Zod's
+// passthrough mode silently accepts the legacy key without breaking
+// startup.
 
 const LoggingSchema = z.object({
   level: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -43,6 +56,10 @@ const RootGitSchema = z.object({
   auto_commit: z.boolean().default(true),
   remote: z.string().nullable().default(null),
   pr_hook: z.string().nullable().default(null),
+  // HMAC-SHA256 secret used to sign webhook-mode pr_hook bodies (sent as the
+  // `X-EnQuire-Signature: sha256=<hex>` header). Ignored for command-mode hooks.
+  // Prefer env interpolation over a literal value in committed config.
+  pr_hook_secret: z.string().nullable().default(null),
   default_branch: z.string().nullable().default(null), // null = detect from origin HEAD / local branches
   push_proposals: z.boolean().default(false), // push proposal branches to `remote` after commit
 });

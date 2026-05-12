@@ -34,6 +34,8 @@ export function wrapHandler<T>(
               candidates?: unknown;
               actual_count?: unknown;
               expected_count?: unknown;
+              conflicts?: unknown;
+              branch?: unknown;
             };
             return {
               error: err.code,
@@ -43,6 +45,8 @@ export function wrapHandler<T>(
                 && { candidates: errExtras.candidates as string[] }),
               ...(typeof errExtras.actual_count === 'number' && { actual_count: errExtras.actual_count }),
               ...(typeof errExtras.expected_count === 'number' && { expected_count: errExtras.expected_count }),
+              ...(Array.isArray(errExtras.conflicts) && { conflicts: errExtras.conflicts as string[] }),
+              ...(typeof errExtras.branch === 'string' && { branch: errExtras.branch }),
             };
           })()
         : { error: 'internal_error', message: String(err) };

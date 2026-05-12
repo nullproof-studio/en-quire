@@ -46,6 +46,31 @@ export function initSearchSchema(db: Database.Database): void {
       timestamp TEXT NOT NULL
     );
   `);
+
+  // Cross-document reference index. Derived from document content (markdown
+  // links, Obsidian-style wiki links, frontmatter relationship arrays); fully
+  // rebuilt on every write/sync — disposable. Powers doc_references /
+  // doc_referenced_by / doc_context_bundle.
+  //
+  // - `source_section` is null for links that appear before the first heading
+  //   (frontmatter, preamble).
+  // - `target_file` may be the literal `?<unresolved>` form when a wiki link
+  //   couldn't be resolved unambiguously to an indexed file basename.
+  // - `target_section` is null when the link points to a whole document.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS doc_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source_file TEXT NOT NULL,
+      source_section TEXT,
+      target_file TEXT NOT NULL,
+      target_section TEXT,
+      relationship TEXT NOT NULL,
+      context TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_doc_links_source ON doc_links(source_file, source_section);
+    CREATE INDEX IF NOT EXISTS idx_doc_links_target ON doc_links(target_file, target_section);
+  `);
 }
 
 /**

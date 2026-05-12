@@ -88,11 +88,14 @@ export async function handleDocCreate(
       }
     }
 
-    // Index the new document (use prefixed path)
+    // Index the new document (use prefixed path). Extract links so the
+    // create path doesn't ship with empty doc_links rows for a file that
+    // does have references in its body — same fix as write-helpers.
     try {
       const parser = parserRegistry.getParser(resolved.relativePath);
       const tree = parser.parse(args.content);
-      indexDocument(ctx.db, resolved.prefixedPath, tree, args.content);
+      const links = parser.extractLinks?.(args.content) ?? [];
+      indexDocument(ctx.db, resolved.prefixedPath, tree, args.content, undefined, links);
     } catch {
       // Non-fatal
     }

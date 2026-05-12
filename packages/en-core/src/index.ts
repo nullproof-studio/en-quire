@@ -32,10 +32,13 @@ export * from './git/post-propose.js';
 
 // Search
 export * from './search/database.js';
+export * from './search/embeddings.js';
 export * from './search/indexer.js';
+export * from './search/link-storage.js';
 export * from './search/query.js';
 export * from './search/schema.js';
 export * from './search/sync.js';
+export * from './search/vector-store.js';
 
 // Document — format-agnostic pieces
 export * from './document/ast-utils.js';
@@ -48,8 +51,12 @@ export * from './document/section-tree.js';
 export * from './document/text-find.js';
 
 // Tool runtime
+export * from './tools/audit-log.js';
 export * from './tools/context.js';
+export * from './tools/context-bundle.js';
+export * from './tools/history.js';
 export * from './tools/proposals.js';
+export * from './tools/references.js';
 export * from './tools/registry.js';
 export * from './tools/runtime.js';
 export * from './tools/status.js';
