@@ -151,6 +151,7 @@ export interface RootGitConfig {
   auto_commit: boolean;
   remote: string | null;
   pr_hook: string | null;
+  pr_hook_secret: string | null; // HMAC-SHA256 secret for webhook-mode pr_hook signing
   default_branch: string | null; // null = detect from origin HEAD / local branches
   push_proposals: boolean; // push proposal branches to `remote` after commit
 }
@@ -171,7 +172,6 @@ export interface ResolvedConfig {
   port: number;
   listen_host: string; // Interface to bind the HTTP server to (default 127.0.0.1)
   search: {
-    fulltext: boolean;
     sync_on_start: 'blocking' | 'background';
     batch_size: number;
     semantic: {
@@ -179,6 +179,8 @@ export interface ResolvedConfig {
       endpoint?: string;
       model?: string;
       dimensions?: number;
+      api_key?: string | null;
+      api_key_env?: string | null;
     };
   };
   logging: {

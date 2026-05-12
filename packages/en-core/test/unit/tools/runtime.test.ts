@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   wrapHandler,
+  MergeConflictError,
   NotFoundError,
   PreconditionFailedError,
   ValidationError,
@@ -45,5 +46,17 @@ describe('wrapHandler error serialization', () => {
       throw new PreconditionFailedError('docs/foo.md', 'etag-123', 'stale');
     }, {});
     expect(payload.current_etag).toBe('etag-123');
+  });
+
+  it('spreads branch and conflicts from MergeConflictError', async () => {
+    const { isError, payload } = await runAndParse(async () => {
+      throw new MergeConflictError('propose/m/foo.md/20260429T000000Z', ['foo.md', 'bar.md']);
+    }, {});
+    expect(isError).toBe(true);
+    expect(payload.error).toBe('merge_conflict');
+    expect(payload.branch).toBe('propose/m/foo.md/20260429T000000Z');
+    expect(payload.conflicts).toEqual(['foo.md', 'bar.md']);
+    expect(payload.message).toContain('foo.md');
+    expect(payload.message).toContain('bar.md');
   });
 });

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
 import { requirePermission } from '../rbac/permissions.js';
-import { GitRequiredError, ValidationError } from '../shared/errors.js';
+import { GitRequiredError, MergeConflictError, ValidationError } from '../shared/errors.js';
 import { getProductName } from '../shared/logger.js';
 import { parseProposalBranch, parseCommitMessage } from '../git/commit-message.js';
 import type { GitOperations } from '../git/operations.js';
@@ -146,7 +146,25 @@ export async function handleProposalDiff(
     // Leave message empty if tip inspection fails.
   }
 
-  return { diff, file, caller, message };
+  // Surface merge state on the diff response so reviewers see drift before
+  // they approve. `checkMergeable` uses `git merge-tree --write-tree` so it
+  // doesn't touch the working tree — safe to call on every diff request.
+  let can_merge = true;
+  let conflicts: string[] = [];
+  try {
+    const merge = await git.checkMergeable(args.branch);
+    can_merge = merge.can_merge;
+    conflicts = merge.conflicts;
+  } catch (err) {
+    // Non-fatal: treat unknown mergeability as "unknown" rather than blocking
+    // diff inspection. The approve path re-checks and fails closed there.
+    getLogger().warn('checkMergeable failed during proposal_diff', {
+      branch: args.branch,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return { diff, file, caller, message, can_merge, conflicts };
 }
 
 // --- proposal_approve ---
@@ -169,6 +187,15 @@ export async function handleProposalApprove(
   const { file } = parseProposalBranch(args.branch, root);
 
   requirePermission(ctx.caller, 'approve', file);
+
+  // Pre-flight: refuse to approve a proposal that can't be merged cleanly.
+  // approveProposal() already verifies remote state; this adds the structural
+  // check (the proposal hasn't drifted relative to the default branch's tree)
+  // so we fail before mutating any local state.
+  const { can_merge, conflicts } = await git.checkMergeable(args.branch);
+  if (!can_merge) {
+    throw new MergeConflictError(args.branch, conflicts);
+  }
 
   const mergeMessage = args.message ?? `[${getProductName()}] Approve proposal: ${args.branch}`;
   const { merge_commit } = await git.approveProposal(args.branch, mergeMessage);

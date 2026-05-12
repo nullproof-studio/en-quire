@@ -12,6 +12,7 @@ import type {
   ResolvedConfig,
   CallerIdentity,
   RootContext,
+  EmbeddingsClient,
 } from '@nullproof-studio/en-core';
 
 /**
@@ -28,11 +29,13 @@ export interface CreateHttpServerOptions {
   config: ResolvedConfig;
   db: Database.Database;
   roots: Record<string, RootContext>;
+  embeddings?: EmbeddingsClient;
   createMcpServer: (deps: {
     config: ResolvedConfig;
     db: Database.Database;
     roots: Record<string, RootContext>;
     caller: CallerIdentity;
+    embeddings?: EmbeddingsClient;
   }) => McpServer;
   realm: string; // for WWW-Authenticate, e.g. "en-quire"
 }
@@ -51,7 +54,7 @@ export interface McpHttpServerHandle {
 const MAX_REQUEST_BODY = 10 * 1024 * 1024; // 10 MB
 
 export function createMcpHttpServer(options: CreateHttpServerOptions): McpHttpServerHandle {
-  const { config, db, roots, createMcpServer, realm } = options;
+  const { config, db, roots, embeddings, createMcpServer, realm } = options;
   const log = getLogger();
 
   const sessions = new Map<string, {
@@ -145,7 +148,7 @@ export function createMcpHttpServer(options: CreateHttpServerOptions): McpHttpSe
       sessionIdGenerator: () => randomUUID(),
     });
 
-    const server = createMcpServer({ config, db, roots, caller: auth.caller });
+    const server = createMcpServer({ config, db, roots, caller: auth.caller, embeddings });
     await server.connect(transport);
 
     transport.onclose = () => {

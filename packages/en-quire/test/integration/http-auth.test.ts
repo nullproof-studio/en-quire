@@ -53,7 +53,7 @@ function makeConfig(rootDir: string): ResolvedConfig {
     transport: 'streamable-http',
     port: 0,
     listen_host: '127.0.0.1',
-    search: { fulltext: false, sync_on_start: 'blocking', batch_size: 100, semantic: { enabled: false } },
+    search: { sync_on_start: 'blocking', batch_size: 100, semantic: { enabled: false } },
     logging: { level: 'error', dir: null },
     callers: {
       alice: {

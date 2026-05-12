@@ -108,6 +108,7 @@ export function loadConfig(configPath: string): ResolvedConfig {
         auto_commit: root.git.auto_commit,
         remote: root.git.remote,
         pr_hook: root.git.pr_hook,
+        pr_hook_secret: root.git.pr_hook_secret,
         default_branch: root.git.default_branch,
         push_proposals: root.git.push_proposals,
       },
@@ -126,7 +127,6 @@ export function loadConfig(configPath: string): ResolvedConfig {
     port: validated.port,
     listen_host: validated.listen_host,
     search: {
-      fulltext: validated.search.fulltext,
       sync_on_start: validated.search.sync_on_start,
       batch_size: validated.search.batch_size,
       semantic: {
@@ -134,6 +134,8 @@ export function loadConfig(configPath: string): ResolvedConfig {
         endpoint: validated.search.semantic.endpoint,
         model: validated.search.semantic.model,
         dimensions: validated.search.semantic.dimensions,
+        api_key: validated.search.semantic.api_key,
+        api_key_env: validated.search.semantic.api_key_env,
       },
     },
     logging: {
