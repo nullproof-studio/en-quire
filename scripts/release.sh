@@ -1,80 +1,103 @@
 #!/usr/bin/env bash
 #
-# release.sh — bump all three packages in lockstep, commit, and tag.
+# release.sh — prepare a lockstep release PR.
 #
 # Usage:
-#   scripts/release.sh <patch|minor|major|X.Y.Z> [--skip-tests]
+#   scripts/release.sh <patch|minor|major|X.Y.Z>
 #
-# Examples:
-#   scripts/release.sh minor        # 0.2.0 -> 0.3.0
-#   scripts/release.sh 0.2.1        # explicit version
+# main is protected (PRs + status checks required), so releases go through a PR:
+#   1. This script bumps en-core, en-quire, en-scribe to the SAME version (plus
+#      the @nullproof-studio/en-core dependency pin in en-quire/en-scribe) on a
+#      release/vX.Y.Z branch, and opens a PR.
+#   2. CI validates the PR; you merge it.
+#   3. On main, run scripts/tag-release.sh to tag the merged commit, which fires
+#      the Release workflow (npm publish + provenance + GitHub Release).
 #
-# What it does (nothing is pushed — that's the last manual step):
-#   1. Refuses to run on a dirty tree or off the main branch.
-#   2. Bumps version in en-core, en-quire, en-scribe to the SAME version, and
-#      updates the @nullproof-studio/en-core dependency pin in en-quire/en-scribe.
-#   3. Syncs package-lock.json, builds, and runs tests (skip with --skip-tests).
-#   4. Commits "chore(release): vX.Y.Z" and creates the matching tag.
-#
-# Then push to fire the Release workflow:
-#   git push origin main --follow-tags
+# Version bumps are applied with `npm pkg set` (which never touches the
+# dependency tree) and the lockfile's workspace entries are patched surgically.
+# We deliberately do NOT run `npm version` or `npm install` here: those reify the
+# whole workspace and re-resolve transitive optional deps (e.g. @emnapi) for the
+# current platform, producing a lockfile that fails `npm ci` on Linux CI.
 
 set -euo pipefail
 
 PACKAGES=(en-core en-quire en-scribe)
-DEPENDENTS=(en-quire en-scribe)   # packages that pin @nullproof-studio/en-core
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-# --- args ---
 BUMP="${1:-}"
-SKIP_TESTS=0
-for a in "${@:2}"; do
-  [ "$a" = "--skip-tests" ] && SKIP_TESTS=1
-done
 if [ -z "$BUMP" ]; then
-  echo "usage: scripts/release.sh <patch|minor|major|X.Y.Z> [--skip-tests]" >&2
+  echo "usage: scripts/release.sh <patch|minor|major|X.Y.Z>" >&2
   exit 1
 fi
 
-# --- preconditions ---
+# --- preconditions: clean main, in sync with origin ---
 branch="$(git rev-parse --abbrev-ref HEAD)"
 if [ "$branch" != "main" ]; then
-  echo "error: releases must be cut from 'main' (on '$branch')." >&2
+  echo "error: start releases from 'main' (on '$branch')." >&2
   exit 1
 fi
 if [ -n "$(git status --porcelain)" ]; then
   echo "error: working tree is dirty — commit or stash first." >&2
   exit 1
 fi
-
-# --- compute the new version once, from en-core ---
-NEW="$(cd packages/en-core && npm version "$BUMP" --no-git-tag-version)"
-NEW="${NEW#v}"
-echo "Releasing v$NEW"
-
-# --- apply to the other packages + dependency pins ---
-for pkg in "${PACKAGES[@]:1}"; do
-  npm version "$NEW" --no-git-tag-version -w "@nullproof-studio/$pkg" >/dev/null
-done
-for pkg in "${DEPENDENTS[@]}"; do
-  npm pkg set "dependencies.@nullproof-studio/en-core=$NEW" -w "@nullproof-studio/$pkg"
-done
-
-# --- sync lockfile, build, test ---
-npm install --package-lock-only
-npm run build
-if [ "$SKIP_TESTS" = 0 ]; then
-  npm test
-else
-  echo "⚠️  tests skipped (--skip-tests)"
+git fetch origin main --quiet
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]; then
+  echo "error: local main differs from origin/main — run 'git pull' first." >&2
+  exit 1
 fi
 
-# --- commit + tag ---
+# --- compute the new version ---
+CUR="$(node -p "require('./packages/en-core/package.json').version")"
+case "$BUMP" in
+  patch|minor|major)
+    NEW="$(node -e 'const v=process.argv[1].split(".").map(Number),t=process.argv[2];
+      if(t==="major"){v[0]++;v[1]=0;v[2]=0}else if(t==="minor"){v[1]++;v[2]=0}else{v[2]++}
+      console.log(v.join("."))' "$CUR" "$BUMP")"
+    ;;
+  *)
+    if ! [[ "$BUMP" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      echo "error: '$BUMP' is not a bump keyword or an X.Y.Z version." >&2
+      exit 1
+    fi
+    NEW="$BUMP"
+    ;;
+esac
+echo "Releasing v$NEW (from $CUR)"
+
+# --- branch ---
+git switch -c "release/v$NEW"
+
+# --- bump package.json versions + en-core pins (no reify) ---
+for pkg in "${PACKAGES[@]}"; do
+  npm pkg set "version=$NEW" -w "@nullproof-studio/$pkg" >/dev/null
+done
+npm pkg set "dependencies.@nullproof-studio/en-core=$NEW" -w @nullproof-studio/en-quire >/dev/null
+npm pkg set "dependencies.@nullproof-studio/en-core=$NEW" -w @nullproof-studio/en-scribe >/dev/null
+
+# --- surgically patch ONLY the workspace entries in the lockfile ---
+node -e '
+const fs=require("fs"), f="package-lock.json", NEW=process.argv[1];
+const lock=JSON.parse(fs.readFileSync(f,"utf8")), p=lock.packages;
+for (const k of ["packages/en-core","packages/en-quire","packages/en-scribe"]) p[k].version=NEW;
+for (const k of ["packages/en-quire","packages/en-scribe"]) p[k].dependencies["@nullproof-studio/en-core"]=NEW;
+fs.writeFileSync(f, JSON.stringify(lock,null,2)+"\n");
+' "$NEW"
+
+# --- commit, push, open PR ---
 git add packages/*/package.json package-lock.json
 git commit -m "chore(release): v$NEW"
-git tag -a "v$NEW" -m "en-quire v$NEW"
+git push -u origin "release/v$NEW"
+gh pr create --base main --head "release/v$NEW" \
+  --title "chore(release): v$NEW" \
+  --body "Lockstep version bump to **v$NEW** for en-core, en-quire, en-scribe (and the en-core dependency pin).
+
+After this merges and CI is green, publish from main:
+\`\`\`
+git checkout main && git pull
+scripts/tag-release.sh
+\`\`\`"
 
 echo
-echo "✓ Committed and tagged v$NEW. To release, push:"
-echo "    git push origin main --follow-tags"
+echo "✓ Opened release PR for v$NEW. Once it merges and CI is green:"
+echo "    git checkout main && git pull && scripts/tag-release.sh"
