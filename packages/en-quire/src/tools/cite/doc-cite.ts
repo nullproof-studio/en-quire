@@ -218,11 +218,14 @@ export async function handleDocCite(
   });
 
   // 5. Format outputs.
-  const formatted_reference = formatReferenceLine({
-    source_uri: cited.source_uri,
-    citation_number: cited.citation_number,
-    source_hash,
-  });
+  const formatted_reference = formatReferenceLine(
+    {
+      source_uri: cited.source_uri,
+      citation_number: cited.citation_number,
+      source_hash,
+    },
+    { obsidianBlockId: ctx.config.citation.obsidian_block_ids },
+  );
   const formatted_inline = formatInline(args.quote, cited.citation_number);
 
   // 6. Auto-append (only when verified and target_file is set, and only on

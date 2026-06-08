@@ -3,12 +3,24 @@ import { ValidationError } from '../shared/errors.js';
 
 const URL_DISALLOWED = /[\s\x00-\x1F\x7F\]]/;
 const HEX = /^[0-9a-f]+$/;
-const REFERENCE_LINE = /^\((\d+)\)\s+(\S+)\s+\[hash:sha256:([0-9a-f]+)\]$/;
+// Optional trailing ` ^cite-{N}` is an Obsidian block-ID — emitted only when
+// citation.obsidian_block_ids is enabled. It's a renderer hint, not part of
+// the parsed citation shape, so the parser accepts but discards it.
+const REFERENCE_LINE = /^\((\d+)\)\s+(\S+)\s+\[hash:sha256:([0-9a-f]+)\](?:\s+\^cite-\d+)?$/;
 
 export interface CitationReference {
   source_uri: string;
   citation_number: number;
   source_hash: string;
+}
+
+export interface FormatReferenceLineOptions {
+  /**
+   * Append an Obsidian-style block-ID suffix (` ^cite-{N}`) to the reference
+   * line. Lets `[[#^cite-N]]` self-links resolve in Obsidian. Off by default
+   * — the suffix renders literally in non-Obsidian markdown viewers.
+   */
+  obsidianBlockId?: boolean;
 }
 
 /**
@@ -28,7 +40,10 @@ export function formatInline(quote: string, citation_number: number): string {
  * already canonicalises and rejects malformed URLs upstream — this is the
  * belt-and-braces gate at the formatter boundary.
  */
-export function formatReferenceLine(ref: CitationReference): string {
+export function formatReferenceLine(
+  ref: CitationReference,
+  options: FormatReferenceLineOptions = {},
+): string {
   const { source_uri, citation_number, source_hash } = ref;
 
   if (source_uri.length === 0) {
@@ -47,7 +62,8 @@ export function formatReferenceLine(ref: CitationReference): string {
     throw new ValidationError('source_hash must be lowercase hex');
   }
 
-  return `(${citation_number}) ${source_uri} [hash:sha256:${source_hash}]`;
+  const base = `(${citation_number}) ${source_uri} [hash:sha256:${source_hash}]`;
+  return options.obsidianBlockId ? `${base} ^cite-${citation_number}` : base;
 }
 
 /**

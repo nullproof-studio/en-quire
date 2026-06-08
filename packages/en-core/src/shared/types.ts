@@ -215,6 +215,9 @@ export interface ResolvedCitationConfig {
   section_heading: string;
   section_position: string;
   web_appends_propose: boolean;
+  /** When true, doc_cite appends `^cite-{N}` to each reference line so
+   *  Obsidian's `[[#^cite-N]]` self-links resolve. Off by default. */
+  obsidian_block_ids: boolean;
   fetch: {
     https_only: boolean;
     http_allowlist: string[];

@@ -25,6 +25,7 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'document_roots' | 'database'>
     section_heading: 'Citations',
     section_position: 'end',
     web_appends_propose: false,
+    obsidian_block_ids: false,
     fetch: {
       https_only: true,
       http_allowlist: [],
