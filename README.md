@@ -387,6 +387,18 @@ Three postures the design supports explicitly:
 
 For SME and enterprise: run en-quire under a dedicated service identity, keep `citation.fetch.http_allowlist` empty by default, and grant `cite_web` only to callers that genuinely need it. Outbound HTTPS goes through whatever the host's network policy allows — if a corporate proxy is mandatory, configure it at the OS or container level (proxy-via-en-quire-config is deferred to phase 2).
 
+#### Obsidian deep-linking (opt-in)
+
+For deployments where Citations sections are read primarily in Obsidian, set `citation.obsidian_block_ids: true`. Each auto-appended reference line gains a trailing `^cite-{N}` block-ID:
+
+```markdown
+(3) https://forbes.com/x [hash:sha256:46147180bb...] ^cite-3
+```
+
+Obsidian renders these as block references, making `[[Profile#^cite-3]]` resolve to the exact citation row from anywhere in the vault — useful when one document cites a fact in another. The suffix renders as literal text in GitHub, Azure DevOps Wiki, Hugo, and other markdown engines (mildly ugly, harmless). Default is off because the suffix is wasted bytes outside Obsidian.
+
+The parser tolerates the suffix in either direction — a doc written with `obsidian_block_ids: true` still round-trips cleanly through `doc_cite_reverify` if the toggle is later turned off, and vice versa.
+
 #### `doc_cite_reverify`
 
 Pass a `citation_id` from a prior `doc_cite` call to **reverify** an existing citation — re-fetch its stored source URI and check both whether the source has changed (`hash_match`) and whether the cited quote is still present (`text_still_present`). Useful for detecting source drift and link rot without re-running the full cite flow. Does not create new citations; the `re-` prefix signals "operates on prior state."
