@@ -19,7 +19,7 @@
   "author": "Nullproof Studio",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nullproof-studio/en-quire.git",
+    "url": "git+https://github.com/nullproof-studio/en-quire.git",
     "directory": "packages/en-quire"
   },
   "keywords": [
