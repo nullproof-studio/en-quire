@@ -178,6 +178,7 @@ export function loadConfig(configPath: string): ResolvedConfig {
       section_heading: validated.citation.section_heading,
       section_position: validated.citation.section_position,
       web_appends_propose: validated.citation.web_appends_propose,
+      obsidian_block_ids: validated.citation.obsidian_block_ids,
       fetch: {
         https_only: validated.citation.fetch.https_only,
         http_allowlist: validated.citation.fetch.http_allowlist,

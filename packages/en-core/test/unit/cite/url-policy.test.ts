@@ -267,6 +267,26 @@ describe('evaluateUrlPolicy — secret pattern rejection', () => {
     expect(r.ok).toBe(true);
   });
 
+  it('does not flag a 64-char hyphenated kebab slug (real-world NIST news URL)', () => {
+    // Regression: this exact NIST path is 64 chars between two `/`. The
+    // hyphenated slug is obviously not a secret — only the prior `[A-Za-z0-9_-]{64,}`
+    // alphabet flagged it. New-style alphabet `[A-Za-z0-9_]{64,}` excludes `-`.
+    const r = evaluateUrlPolicy(
+      'https://www.nist.gov/news-events/news/2026/01/caisi-issues-request-information-about-securing-ai-agent-systems',
+      { ...DEFAULT, http_allowlist: ['*.nist.gov', 'nist.gov'] },
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it('still flags a 64-char underscore-or-alnum blob (no hyphens)', () => {
+    // Tokens that *don't* use `-` (e.g. hex, base64-with-underscore) must
+    // still trip the heuristic.
+    const blob = 'a'.repeat(32) + '_' + 'b'.repeat(31);
+    const r = evaluateUrlPolicy(`https://forbes.com/api/${blob}`, DEFAULT);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.matched_pattern).toBe('high-entropy-blob');
+  });
+
   it('returns a redacted canonical_path so the secret is not persisted', () => {
     const r = evaluateUrlPolicy(
       'https://forbes.com/api/sk-abcdef0123456789abcdef0123',

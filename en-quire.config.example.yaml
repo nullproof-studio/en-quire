@@ -102,6 +102,12 @@ citation:
   # knob (citation.local_appends_propose) — not yet shipped.
   web_appends_propose: false
 
+  # When true, each auto-appended reference line ends with `^cite-{N}` so
+  # Obsidian's `[[#^cite-N]]` block-reference links resolve. The suffix
+  # renders literally in non-Obsidian markdown viewers — leave off unless
+  # this root is read primarily in Obsidian.
+  obsidian_block_ids: false
+
   fetch:
     https_only: true                      # Reject plain http:// even if allowlisted.
     http_allowlist: []                    # Empty = no external fetches. Globs allowed (e.g. "*.forbes.com").

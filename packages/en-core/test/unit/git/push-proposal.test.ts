@@ -6,6 +6,14 @@ import { tmpdir } from 'node:os';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { GitOperations } from '@nullproof-studio/en-core';
 
+// Recent git ships `safe.bareRepository = explicit` as the default and
+// refuses to operate on bare repos found via filesystem paths. The
+// fixtures here create a temp bare repo to stand in for a remote, so we
+// override per-invocation. Tests-only — production code shouldn't bypass
+// the operator's safety preference.
+const sg = (baseDir: string) =>
+  simpleGit({ baseDir, config: ['safe.bareRepository=all'] });
+
 let workDir: string;
 let remoteDir: string;
 let g: SimpleGit;
@@ -15,11 +23,11 @@ beforeEach(async () => {
   remoteDir = mkdtempSync(join(tmpdir(), 'push-remote-'));
 
   // Bare "remote"
-  const bare = simpleGit(remoteDir);
+  const bare = sg(remoteDir);
   await bare.init(true);
 
   // Working repo wired to it
-  g = simpleGit(workDir);
+  g = sg(workDir);
   await g.init();
   await g.addConfig('user.email', 'test@example.com');
   await g.addConfig('user.name', 'Test');
@@ -56,7 +64,7 @@ describe('GitOperations.pushProposalBranch', () => {
     expect(result.warning).toBeUndefined();
 
     // Branch now exists on the bare remote
-    const remote = simpleGit(remoteDir);
+    const remote = sg(remoteDir);
     const branches = await remote.branch();
     expect(branches.all).toContain(branch);
   });
@@ -71,7 +79,7 @@ describe('GitOperations.pushProposalBranch', () => {
     expect(result.warning).toBeUndefined();
 
     // Branch NOT on remote
-    const remote = simpleGit(remoteDir);
+    const remote = sg(remoteDir);
     const branches = await remote.branch();
     expect(branches.all).not.toContain(branch);
   });
@@ -84,7 +92,7 @@ describe('GitOperations.pushProposalBranch', () => {
     const result = await ops.pushProposalBranch(branch);
     expect(result.pushed).toBe(false);
 
-    const remote = simpleGit(remoteDir);
+    const remote = sg(remoteDir);
     const branches = await remote.branch();
     expect(branches.all).not.toContain(branch);
   });

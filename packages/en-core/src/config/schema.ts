@@ -93,6 +93,10 @@ const CitationSchema = z.object({
   section_heading: z.string().default('Citations'),
   section_position: z.string().default('end'),
   web_appends_propose: z.boolean().default(false),
+  // Append an Obsidian block-ID (`^cite-{N}`) to each reference line so
+  // `[[#^cite-N]]` self-links resolve in Obsidian. Off by default — the
+  // suffix renders literally in non-Obsidian markdown viewers.
+  obsidian_block_ids: z.boolean().default(false),
   fetch: CitationFetchSchema.default({}),
   rate_limit: CitationRateLimitSchema.default({}),
 });

@@ -60,7 +60,10 @@ const SECRET_PATTERNS: ReadonlyArray<{ name: SecretPatternName; regex: RegExp }>
   { name: 'slack-token', regex: /xox[abprs]-[A-Za-z0-9-]{10,}/ },
   { name: 'jwt', regex: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
   // Long high-entropy blob — single path segment ≥ 64 chars of hex/base64url.
-  { name: 'high-entropy-blob', regex: /(?:^|[/?&=])([A-Za-z0-9_-]{64,})(?:$|[/?&=])/ },
+  // Hyphens are deliberately excluded: kebab-case slugs (news article URLs,
+  // blog posts) routinely run ≥ 64 chars and are not secrets. Real opaque
+  // tokens use hex, base64url-with-underscore, or plain alphanumerics.
+  { name: 'high-entropy-blob', regex: /(?:^|[/?&=])([A-Za-z0-9_]{64,})(?:$|[/?&=])/ },
 ];
 
 // Whitespace and control chars in the raw input are rejected up-front —
