@@ -10,6 +10,8 @@ export interface SectionNode {
     text: string;
     level: number; // 1-6
     position: Position;
+    /** Stable `^id` anchor token on the heading line, if present (see anchors.ts) */
+    anchorId?: string;
   };
   /** Byte offset in original string where section body begins (after heading line) */
   bodyStartOffset: number;
@@ -57,7 +59,19 @@ export interface DotPathAddress {
   segments: string[];
 }
 
-export type SectionAddress = TextAddress | PathAddress | IndexAddress | PatternAddress | DotPathAddress;
+/** Stable anchor address: "^store-map" — matches a heading's `^id` token */
+export interface AnchorAddress {
+  type: 'anchor';
+  id: string;
+}
+
+export type SectionAddress =
+  | TextAddress
+  | PathAddress
+  | IndexAddress
+  | PatternAddress
+  | DotPathAddress
+  | AnchorAddress;
 
 /** Position for inserting a new section relative to an anchor */
 export type InsertPosition = 'before' | 'after' | 'child_start' | 'child_end';
@@ -66,6 +80,8 @@ export type InsertPosition = 'before' | 'after' | 'child_start' | 'child_end';
 export interface OutlineEntry {
   level: number;
   text: string;
+  /** Stable `^id` anchor for the section, if it has one. */
+  id?: string;
   path: string;
   line_start: number;
   line_end: number;

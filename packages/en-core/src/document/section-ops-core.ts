@@ -9,6 +9,7 @@ import type {
 import { getSectionPath, getBreadcrumb, flattenTree } from './section-tree.js';
 import { resolveSingleSection, resolveAddress } from './section-address.js';
 import { countCodePoints } from './ast-utils.js';
+import { extractAnchor } from './anchors.js';
 import { offsetToLine } from './line-utils.js';
 import { countWords } from '../shared/word-count.js';
 import { ValidationError } from '../shared/errors.js';
@@ -75,8 +76,9 @@ export function replaceSection(
   const node = resolveSingleSection(tree, address);
 
   if (typeof replaceHeading === 'string') {
-    // Replace heading text only, then replace body
-    const cleanHeading = ops.stripHeadingMarkers(replaceHeading);
+    // Replace heading text only, then replace body. Carry the stable `^id`
+    // anchor across the rename so links/addresses targeting it stay valid.
+    const cleanHeading = preserveAnchor(ops.stripHeadingMarkers(replaceHeading), node, ops);
     const newHeadingLine = ops.renderHeading(node.heading.level, cleanHeading);
     const before = markdown.slice(0, node.headingStartOffset);
     const after = markdown.slice(node.bodyEndOffset);
@@ -96,7 +98,9 @@ export function replaceSection(
       const normalized = newContent.replace(/^\n*/, '');
       return before + headingLine + '\n\n' + ensureTrailingNewlines(normalized) + after;
     }
-    return before + ensureTrailingNewlines(newContent) + after;
+    // Content carries its own heading line — carry the stable anchor onto it.
+    const preserved = preserveAnchorInContent(newContent, node, ops);
+    return before + ensureTrailingNewlines(preserved) + after;
   }
 
   // Replace body only, preserve heading
@@ -129,6 +133,56 @@ export function replaceSection(
 
   const normalized = strippedContent.replace(/^\n*/, '');
   return before + '\n\n' + ensureTrailingNewlines(normalized) + after;
+}
+
+/** Collect every `^id` anchor currently in use across the section tree. */
+function collectAnchorIds(tree: SectionNode[]): Set<string> {
+  const ids = new Set<string>();
+  for (const n of flattenTree(tree)) {
+    if (n.heading.anchorId) ids.add(n.heading.anchorId);
+  }
+  return ids;
+}
+
+/**
+ * Append a fresh, unique `^id` anchor to a new heading's text. No-op for
+ * formats without anchor support, or when the author already wrote an anchor.
+ */
+function withFreshAnchor(headingText: string, tree: SectionNode[], ops: OpsStrategy): string {
+  if (!ops.deriveAnchorId || !ops.formatAnchor) return headingText;
+  if (extractAnchor(headingText).anchorId) return headingText;
+  const id = ops.deriveAnchorId(headingText, collectAnchorIds(tree));
+  return headingText + ops.formatAnchor(id);
+}
+
+/**
+ * Carry a section's existing `^id` anchor onto its replacement heading text,
+ * so renaming the display text never drops the stable id. No-op when the
+ * format has no anchors, the section had none, or the new text already
+ * carries an explicit anchor.
+ */
+function preserveAnchor(newHeadingText: string, node: SectionNode, ops: OpsStrategy): string {
+  if (!ops.formatAnchor || !node.heading.anchorId) return newHeadingText;
+  if (extractAnchor(newHeadingText).anchorId) return newHeadingText;
+  return newHeadingText + ops.formatAnchor(node.heading.anchorId);
+}
+
+/**
+ * Inject a section's existing anchor into the first heading line of
+ * caller-supplied content (the `replace_heading: true` path). Preserves the
+ * stable id across a full-heading-line rewrite.
+ */
+function preserveAnchorInContent(content: string, node: SectionNode, ops: OpsStrategy): string {
+  if (!ops.formatAnchor || !node.heading.anchorId) return content;
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(#{1,6})\s+(.*\S)\s*$/.exec(lines[i]);
+    if (!m) continue;
+    if (extractAnchor(m[2]).anchorId) return content; // explicit anchor wins
+    lines[i] = `${m[1]} ${m[2]}${ops.formatAnchor(node.heading.anchorId)}`;
+    return lines.join('\n');
+  }
+  return content;
 }
 
 /**
@@ -179,7 +233,9 @@ export function insertSection(
       : anchorNode.heading.level
   );
 
-  const newSection = `\n${ops.renderHeading(headingLevel, cleanHeading)}\n\n${content}\n`;
+  // Auto-assign a stable `^id` anchor to the new heading (markdown only).
+  const headingWithAnchor = withFreshAnchor(cleanHeading, tree, ops);
+  const newSection = `\n${ops.renderHeading(headingLevel, headingWithAnchor)}\n\n${content}\n`;
 
   let insertOffset: number;
 
@@ -437,6 +493,7 @@ export function buildOutline(
       const entry: OutlineEntry = {
         level: node.heading.level,
         text: node.heading.text,
+        ...(node.heading.anchorId !== undefined && { id: node.heading.anchorId }),
         path: getSectionPath(node),
         line_start: node.heading.position.start.line,
         line_end: offsetToLine(markdown, node.sectionEndOffset),

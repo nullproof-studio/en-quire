@@ -108,6 +108,14 @@ describe('markdown link extractor — Obsidian wiki links', () => {
     expect(links[0].target_section).toBeNull();
   });
 
+  it('preserves a stable ^id anchor fragment verbatim (caret kept)', () => {
+    // The caret discriminator must survive into the stored target_section so
+    // the link resolves by anchor — the rename-proof citation path.
+    const links = extract('See [[evidence-spec#^store-map]] for storage details.\n');
+    expect(links[0].target_path).toBe('evidence-spec');
+    expect(links[0].target_section).toBe('^store-map');
+  });
+
   it('skips wiki links inside code blocks', () => {
     const md = [
       '```',

@@ -41,6 +41,7 @@ export * from './search/sync.js';
 export * from './search/vector-store.js';
 
 // Document — format-agnostic pieces
+export * from './document/anchors.js';
 export * from './document/ast-utils.js';
 export * from './document/line-utils.js';
 export * from './document/ops-strategy.js';

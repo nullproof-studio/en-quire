@@ -7,7 +7,7 @@ import type { ToolContext } from '@nullproof-studio/en-core';
 import { safePath, writeDocument } from '@nullproof-studio/en-core';
 import { computeEtag } from '@nullproof-studio/en-core';
 import { parserRegistry } from '@nullproof-studio/en-core';
-import { indexDocument } from '@nullproof-studio/en-core';
+import { indexDocument, assignAnchors } from '@nullproof-studio/en-core';
 import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
 import { runPostProposeHooks, getLogger } from '@nullproof-studio/en-core';
 import { requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
@@ -56,7 +56,13 @@ export async function handleDocCreate(
 
     // Validate content before writing
     const parser = parserRegistry.getParser(resolved.relativePath);
-    const createWarnings = parser.validate(args.content);
+
+    // Auto-assign stable `^id` anchors to headings (markdown only — gated on
+    // the strategy so YAML `#` comment lines are never mistaken for headings).
+    const supportsAnchors = parser.ops.deriveAnchorId !== undefined && parser.ops.formatAnchor !== undefined;
+    const content = supportsAnchors ? assignAnchors(args.content).content : args.content;
+
+    const createWarnings = parser.validate(content);
     const hasErrors = createWarnings.some((w) =>
       w.includes('syntax error') || w.includes('parse error') || w.includes('Duplicate sibling'));
     if (hasErrors) {
@@ -65,7 +71,7 @@ export async function handleDocCreate(
       );
     }
 
-    writeDocument(resolved.root.path, resolved.relativePath, args.content);
+    writeDocument(resolved.root.path, resolved.relativePath, content);
 
     let commit: string | undefined;
     if (git?.available) {
@@ -92,16 +98,15 @@ export async function handleDocCreate(
     // create path doesn't ship with empty doc_links rows for a file that
     // does have references in its body — same fix as write-helpers.
     try {
-      const parser = parserRegistry.getParser(resolved.relativePath);
-      const tree = parser.parse(args.content);
-      const links = parser.extractLinks?.(args.content) ?? [];
-      indexDocument(ctx.db, resolved.prefixedPath, tree, args.content, undefined, links);
+      const tree = parser.parse(content);
+      const links = parser.extractLinks?.(content) ?? [];
+      indexDocument(ctx.db, resolved.prefixedPath, tree, content, undefined, links);
     } catch {
       // Non-fatal
     }
 
     return {
-      success: true, file: args.file, mode, branch, commit, etag: computeEtag(args.content),
+      success: true, file: args.file, mode, branch, commit, etag: computeEtag(content),
       ...(createWarnings.length > 0 && { warnings: createWarnings }),
     };
   } finally {

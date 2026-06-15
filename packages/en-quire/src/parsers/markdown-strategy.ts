@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type { SectionNode } from '@nullproof-studio/en-core';
 import type { OpsStrategy, ParserCapabilities } from '@nullproof-studio/en-core';
-import { ValidationError } from '@nullproof-studio/en-core';
+import { ValidationError, slugify, uniqueSlug } from '@nullproof-studio/en-core';
 
 /**
  * Markdown-specific rendering and heading logic.
@@ -14,6 +14,14 @@ export const markdownStrategy: OpsStrategy = {
 
   stripHeadingMarkers(heading) {
     return heading.replace(/^#+\s*/, '');
+  },
+
+  deriveAnchorId(headingText, taken) {
+    return uniqueSlug(slugify(headingText), taken);
+  },
+
+  formatAnchor(id) {
+    return ` ^${id}`;
   },
 
   hasChildHeadings(content, parentLevel) {

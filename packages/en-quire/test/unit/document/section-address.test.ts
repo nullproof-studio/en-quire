@@ -250,9 +250,38 @@ describe('resolveSingleSection', () => {
     // Closest matches by edit distance: Foe (1), Fop (1), then Foobar (3).
     // Substring-only matching put Foobar first historically because it contained "Foo".
     // Levenshtein-ranked output should put the distance-1 matches first.
-    expect(err.candidates![0]).toMatch(/^(Foe|Fop)$/);
-    expect(err.candidates![1]).toMatch(/^(Foe|Fop)$/);
-    expect(err.candidates!.slice(0, 2)).not.toContain('Foobar');
+    // Candidates are full breadcrumb paths ("Doc > Foe") so they are
+    // unambiguous, copy-pasteable addresses.
+    expect(err.candidates![0]).toMatch(/ > (Foe|Fop)$/);
+    expect(err.candidates![1]).toMatch(/ > (Foe|Fop)$/);
+    expect(err.candidates!.slice(0, 2).some((c) => c.endsWith('Foobar'))).toBe(false);
+  });
+
+  it('ranks path-address not-found candidates by the leaf segment, surfacing a parenthetical-suffixed heading', () => {
+    // Reproduces the incident: the caller addressed the section by its short
+    // name ("Storage Mapping"), but the real heading carries a trailing
+    // parenthetical qualifier. The closest-match hint must surface the real
+    // heading as the top suggestion, as a ready-to-use full path.
+    const md =
+      '# Doc\n\n## Implementation Notes\n\n### Storage Mapping (Postgres, pending OQ-004)\n\nx.\n\n### Hashing\n\ny.\n';
+    const ast = parseMarkdown(md);
+    const tree = buildSectionTree(ast, md);
+    let caught: unknown;
+    try {
+      resolveSingleSection(tree, parseAddress('Implementation Notes > Storage Mapping'));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AddressResolutionError);
+    const err = caught as AddressResolutionError;
+    expect(err.candidates).toBeDefined();
+    // Ranking against the full joined path string buried this under the parent
+    // heading; ranking against the leaf ("Storage Mapping") surfaces it first.
+    expect(err.candidates![0]).toBe(
+      'Doc > Implementation Notes > Storage Mapping (Postgres, pending OQ-004)',
+    );
+    // And the message must carry it too, for callers that read the string.
+    expect(err.message).toContain('Storage Mapping (Postgres, pending OQ-004)');
   });
 
   it('emits distinguishable candidates for nested duplicate-named sections', () => {
