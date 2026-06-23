@@ -28,9 +28,17 @@ export interface SearchOptions {
  * - `-` (NOT), `*` (prefix), `AND`, `OR`, `NOT`, `NEAR`
  * - Bare hyphens in terms like "en-quire" become "en MINUS quire"
  *
- * Strategy: quote each whitespace-delimited token with double quotes.
- * This treats every token as a literal phrase, disabling operator parsing.
- * Internal double quotes are escaped by doubling them.
+ * Strategy: quote each whitespace-delimited token with double quotes, then
+ * join with `OR`. Quoting treats every token as a literal phrase, disabling
+ * operator parsing; internal double quotes are escaped by doubling them.
+ *
+ * Joining with OR (rather than the FTS5 default of space = implicit AND) makes
+ * a multi-term query match sections containing ANY term, not only those
+ * containing EVERY term. BM25 `rank` still scores sections matching more (and
+ * rarer) terms higher, and fulltextSearch's structural re-ranking refines from
+ * there — so this widens recall without flattening relevance. Implicit-AND was
+ * the cause of "4 sensible keywords returned zero results": no single section
+ * happened to contain all four.
  */
 export function sanitiseFts5Query(query: string): string {
   const tokens = query.trim().split(/\s+/).filter(Boolean);
@@ -38,7 +46,7 @@ export function sanitiseFts5Query(query: string): string {
 
   return tokens
     .map((token) => `"${token.replace(/"/g, '""')}"`)
-    .join(' ');
+    .join(' OR ');
 }
 
 /**
