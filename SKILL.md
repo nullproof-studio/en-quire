@@ -44,7 +44,7 @@ Start every session with:
 1. **`doc_status`** — see all configured roots, their git status, index health, and pending proposals
 2. **`doc_list`** — see all files, or scope to a specific root with `doc_list(scope: "skills")`
 
-File paths include the root prefix: `codex/en-quire.mdx`, `agents/minnie.md`, `skills/en-quire/SKILL.md`. Use the prefix in all tool calls.
+File paths include the root prefix: `codex/en-quire.mdx`, `agents/researcher.md`, `skills/en-quire/SKILL.md`. Use the prefix in all tool calls.
 
 Search works across all roots by default. Scope to a single root with `doc_search(query: "...", scope: "agents")`.
 
@@ -52,7 +52,7 @@ Search works across all roots by default. Scope to a single root with `doc_searc
 
 Use en-quire tools (`doc_*`) instead of filesystem tools (`read_file`, `write_file`, `edit_file`) for any operation on:
 - **Markdown files** (.md, .mdx) — SOPs, skill files, codex articles, session memory, agent profiles
-- **YAML files** (.yaml, .yml) — Docker Compose, config files, CI/CD pipelines, Home Assistant configs
+- **YAML files** (.yaml, .yml) — Docker Compose, config files, CI/CD pipelines, Kubernetes manifests
 
 en-quire provides section-level addressing, structural search, and diff responses that eliminate the need to read or rewrite whole files. For YAML, "sections" are key paths (e.g. `services.api.environment`).
 
@@ -104,7 +104,7 @@ This eliminates the previous need for filesystem tools to access frontmatter.
 ## Search
 
 Use `doc_search` to find content across documents and roots. Results include:
-- `file` — with root prefix (e.g. `codex/en-quire.mdx`, `agents/minnie.md`)
+- `file` — with root prefix (e.g. `codex/en-quire.mdx`, `agents/researcher.md`)
 - `section_path` — the full breadcrumb (e.g. `"RBAC Model > Permission Types"` for markdown, `"services > api > environment"` for YAML)
 - `breadcrumb[]` — ancestor headings/keys for triaging relevance
 - `score` — structural ranking that boosts heading/key name matches
@@ -176,7 +176,7 @@ Any section address can be a breadcrumb path (`"Parent > Child"`), not just a ba
 
 **Reach for a path whenever a heading name might not be globally unique.** `"Operations > Parameters"` resolves unambiguously where bare `"Parameters"` would collide and raise an ambiguity error. This is the correct way to buy uniqueness: it costs nothing, and unlike numbering the heading (`"7.2 Parameters"`) or contriving an artificially unique name, a path never drifts when sections are inserted, moved, or deleted. Use paths for uniqueness; keep the heading text itself descriptive and stable.
 
-When using `doc_insert_section` with `anchor`, the same applies — a breadcrumb path (e.g. `"CRITICAL ADDENDUM > Capability Name"`) disambiguates which parent you're targeting when multiple siblings have overlapping content.
+When using `doc_insert_section` with `anchor`, the same applies — a breadcrumb path (e.g. `"Capabilities > Capability Name"`) disambiguates which parent you're targeting when multiple siblings have overlapping content.
 
 ### Stable Section Anchors (`^id`)
 
@@ -199,7 +199,7 @@ Use `^id` for cross-document citations and any reference you expect to persist; 
 
 When inserting content with nested sub-headings, **every sub-heading must be globally unique across the entire document** — not just within the inserted block. If you insert content with "How It Works" as a sub-heading, and another section already has "How It Works", the write is blocked with:
 
-> "Duplicate sibling heading 'How It Works' under 'CRITICAL ADDENDUM' — index [0,8,X] and [0,8,Y] both match."
+> "Duplicate sibling heading 'How It Works' under 'Capabilities' — index [0,8,X] and [0,8,Y] both match."
 
 **Solution:** Use unique sub-heading names within inserted content. Instead of generic names like "How It Works", use descriptive names that include the capability or context: "How [Capability] Works", "How [Capability] Functions", "How [Capability] Operates". This prevents collisions without needing to rename existing sections.
 
