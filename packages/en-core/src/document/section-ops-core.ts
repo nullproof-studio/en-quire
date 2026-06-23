@@ -109,6 +109,15 @@ export function replaceSection(
   // which would create a duplicate heading since replaceSection preserves the original.
   const strippedContent = ops.stripLeadingDuplicateHeading(newContent, node.heading.text);
 
+  // Guard: body content must only contain DEEPER (child) headings. A heading at
+  // or above the section's own level terminates the section, so it would break
+  // out as a sibling and silently re-parent the following siblings' subtrees.
+  // (Same guard appendSection uses; deeper headings are still allowed and
+  // replace the existing children below.)
+  if (node.heading.level > 0) {
+    ops.checkForBreakingHeadings(strippedContent, node.heading.level);
+  }
+
   // If replacement content contains child-level headings, replace the entire section
   // body including children (sectionEndOffset) to avoid duplicating existing children.
   // Otherwise replace only the body text (bodyEndOffset), preserving children.

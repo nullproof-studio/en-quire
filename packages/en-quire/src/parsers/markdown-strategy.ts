@@ -57,8 +57,10 @@ export const markdownStrategy: OpsStrategy = {
         const headingLevel = match[1].length;
         if (headingLevel <= sectionLevel) {
           throw new ValidationError(
-            `Cannot append content containing a level-${headingLevel} heading to a level-${sectionLevel} section. ` +
-            `Use doc_insert_section to add sibling or higher-level sections.`,
+            `Cannot place a level-${headingLevel} heading inside a level-${sectionLevel} section — ` +
+            `it terminates the section and breaks out as a sibling. ` +
+            `Content may only contain deeper (child) headings; ` +
+            `use doc_insert_section to add a sibling or higher-level section.`,
           );
         }
       }
