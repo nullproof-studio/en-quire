@@ -84,7 +84,10 @@ function describeMatchForDisambiguation(node: SectionNode): string {
     indexPath.unshift(curr.index);
     curr = curr.parent;
   }
-  return `"${fullPathString(node)}" (index ${JSON.stringify(indexPath)})`;
+  // Lead with the stable ^id anchor when present — it's the most rename-proof
+  // address and the one the caller should reach for first.
+  const anchor = node.heading.anchorId ? `, anchor "^${node.heading.anchorId}"` : '';
+  return `"${fullPathString(node)}" (index ${JSON.stringify(indexPath)}${anchor})`;
 }
 
 function resolveTextAddress(tree: SectionNode[], text: string): SectionNode[] {

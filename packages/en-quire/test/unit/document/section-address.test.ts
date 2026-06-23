@@ -301,4 +301,26 @@ describe('resolveSingleSection', () => {
     expect(err.candidates!.some((c) => c.includes('Section A'))).toBe(true);
     expect(err.candidates!.some((c) => c.includes('Section B'))).toBe(true);
   });
+
+  it('surfaces the stable ^id anchor in ambiguity candidates when present', () => {
+    // Reproduces the incident: same-named level-5 headings under different
+    // parents make a bare text address ambiguous. Each candidate carries a
+    // stable ^id, the most rename-proof address — it must be offered so the
+    // agent reaches for it instead of misdiagnosing the doc as blocked.
+    const md =
+      '# Doc\n\n## Section A\n\n### Foo ^foo-a\n\nA.\n\n## Section B\n\n### Foo ^foo-b\n\nB.\n';
+    const ast = parseMarkdown(md);
+    const tree = buildSectionTree(ast, md);
+    let caught: unknown;
+    try {
+      resolveSingleSection(tree, { type: 'text', text: 'Foo' });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(AddressResolutionError);
+    const err = caught as AddressResolutionError;
+    // Each candidate must offer its ^id anchor as a copy-pasteable address.
+    expect(err.candidates!.some((c) => c.includes('^foo-a'))).toBe(true);
+    expect(err.candidates!.some((c) => c.includes('^foo-b'))).toBe(true);
+  });
 });
