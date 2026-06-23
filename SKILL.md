@@ -136,6 +136,16 @@ For selective application, use `apply_matches` with specific match IDs from the 
 
 
 
+## Removing Sections
+
+To remove a section, use **`doc_delete_section`** — it deletes the heading, body, and all children in one call. That is the *only* correct way to remove a section.
+
+**Do not fake a deletion with `doc_replace_section` and empty content.** Replace preserves the heading, so empty content just clears the body and leaves an orphan heading behind — then you're stuck trying to strip the heading with `doc_find_replace`. `doc_delete_section` does the whole thing cleanly.
+
+**Removing several sections:** call `doc_delete_section` once per section. Each response returns a fresh `etag`; pass it as the next call's `if_match` to chain deletes without re-reading between them. Address each by a stable `^id` anchor or a path so the right section is hit even as earlier deletes shift the document. Deletes are independent — order doesn't matter as long as each address still resolves.
+
+**Caution:** deleting an h1 (top-level) section removes the entire document body beneath it. Run `doc_outline` first to confirm scope.
+
 ## Structural Changes: Moving and Reordering Sections
 
 Use `doc_move_section` to atomically delete a section from its current location and insert it at a new position within the same document — equivalent to cut-and-paste. The section's heading, body, and all children are preserved. Never use separate delete + insert calls to move a section — if the content exceeds your context window, the insert will silently lose data.
@@ -318,6 +328,7 @@ The full-file read prevents tone drift between section edits.
 - **Prefer a path address over a numbered or contrived-unique heading.** When a heading name might repeat, address it by path (`"Parent > Child"`) instead of forcing uniqueness into the heading. Paths give uniqueness without renumber drift.
 - **Never forget to update the TOC after structural changes.** After moving, inserting, or deleting sections, check if the document has a table of contents and regenerate it with `doc_generate_toc`.
 - **Never use delete + insert to relocate a section.** Use `doc_move_section` — it is atomic and preserves all content including children. The delete + insert pattern risks permanent data loss when the section content exceeds your context window. You will lose content silently and cannot recover it.
+- **To remove a section, use `doc_delete_section` — never `doc_replace_section` with empty content.** Replace preserves the heading, so empty content leaves an orphan heading. `doc_delete_section` removes heading + body + children in one call; chain its returned `etag` to remove several.
 ## Tool Quick Reference
 
 | Task | Tool | Key params |
