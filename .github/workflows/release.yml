@@ -1,0 +1,82 @@
+name: Release
+
+# Triggered by pushing a version tag, e.g.:
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# Publishes every workspace package at the tag's version to npm (in dependency
+# order) and cuts a matching GitHub Release. Authentication to npm uses OIDC
+# "trusted publishing" — no NPM_TOKEN secret. npm verifies the Actions run and
+# attaches a provenance attestation automatically.
+#
+# One-time setup per package on npmjs.com:
+#   Package → Settings → Publishing access → Trusted Publisher → GitHub Actions
+#   Repository: nullproof-studio/en-quire   Workflow: release.yml
+# A package must already exist on npm before its trusted publisher can be set up,
+# so brand-new packages need one initial manual `npm publish` (see PR/release notes).
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # create the GitHub Release
+  id-token: write   # OIDC token for npm trusted publishing + provenance
+
+jobs:
+  release:
+    name: Publish & release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # Trusted publishing (OIDC) requires npm >= 11.5.1; Node 22 ships an older npm.
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Verify tag matches package versions
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          fail=0
+          for pkg in en-core en-quire en-scribe; do
+            V=$(node -p "require('./packages/$pkg/package.json').version")
+            if [ "$V" != "$TAG" ]; then
+              echo "::error::packages/$pkg is at $V but the tag is v$TAG"
+              fail=1
+            fi
+          done
+          [ "$fail" = 0 ] && echo "All packages at $TAG"
+          exit $fail
+
+      # Dependency order: en-core first (en-quire and en-scribe depend on it).
+      # Already-published versions are skipped so re-running a release is safe.
+      - name: Publish packages
+        run: |
+          for pkg in en-core en-quire en-scribe; do
+            name=$(node -p "require('./packages/$pkg/package.json').name")
+            version=$(node -p "require('./packages/$pkg/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "↩︎  $name@$version already on npm — skipping"
+            else
+              echo "📦  Publishing $name@$version"
+              npm publish -w "$name"
+            fi
+          done
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --verify-tag

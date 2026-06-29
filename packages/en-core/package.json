@@ -1,6 +1,6 @@
 {
   "name": "@nullproof-studio/en-core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Reliability primitives shared by the en-quire and en-scribe MCP servers: etag, proposals, diff, file-utils, git, RBAC, parser registry.",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,7 @@
   "author": "Nullproof Studio",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nullproof-studio/en-quire.git",
+    "url": "git+https://github.com/nullproof-studio/en-quire.git",
     "directory": "packages/en-core"
   },
   "engines": {
@@ -33,7 +33,7 @@
     "cheerio": "^1.2.0",
     "diff": "^8.0.3",
     "micromatch": "^4.0.8",
-    "simple-git": "^3.27.0",
+    "simple-git": "^3.36.0",
     "undici": "^8.1.0",
     "winston": "^3.19.0",
     "yaml": "^2.7.1",
