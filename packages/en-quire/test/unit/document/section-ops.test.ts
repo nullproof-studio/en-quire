@@ -548,6 +548,65 @@ describe('appendToSection — heading guard', () => {
 
 });
 
+describe('replaceSection — break-out heading guard', () => {
+  // Reproduces the silent-corruption incident: an agent replacing a level-3
+  // section writes its intended children at the WRONG level (same as the
+  // section, e.g. ### under a ### section). Those headings terminate the
+  // section, break out as siblings, and steal the following siblings' subtrees
+  // — with no error. Body-replace content must only ever contain deeper
+  // (child) headings.
+  it('rejects body-replace content with a same-level heading', () => {
+    const md = '# Doc\n\n## Gym\n\n### Operations\n\nIntro.\n\n#### op-a\n\nA.\n\n### Glossary\n\nTerms.\n';
+    const tree = parse(md);
+    expect(() => replaceSection(md, tree,
+      { type: 'text', text: 'Operations' },
+      'Intro.\n\n### op-a\n\nA.\n', // ### is level 3 — same as Operations
+    )).toThrow(/heading/i);
+  });
+
+  it('rejects body-replace content with a higher-level heading', () => {
+    const md = '# Doc\n\n## Gym\n\n### Operations\n\nIntro.\n';
+    const tree = parse(md);
+    expect(() => replaceSection(md, tree,
+      { type: 'text', text: 'Operations' },
+      'Intro.\n\n## Sneaky\n\nx.\n', // ## is above level 3
+    )).toThrow(/heading/i);
+  });
+
+  it('allows body-replace content with deeper (child) headings', () => {
+    const md = '# Doc\n\n## Gym\n\n### Operations\n\nIntro.\n\n#### old\n\nO.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree,
+      { type: 'text', text: 'Operations' },
+      'Intro.\n\n#### op-a\n\nA.\n\n#### op-b\n\nB.\n', // level 4 — valid children
+    );
+    expect(result).toContain('#### op-a');
+    expect(result).toContain('#### op-b');
+    expect(result).not.toContain('#### old'); // children replaced
+  });
+
+  it('does not reject same-level headings inside code blocks', () => {
+    const md = '# Doc\n\n## Gym\n\n### Operations\n\nIntro.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree,
+      { type: 'text', text: 'Operations' },
+      'Intro.\n\n```markdown\n### Example\n```\n',
+    );
+    expect(result).toContain('### Example');
+  });
+
+  it('still allows the replace_heading path to carry the section heading line', () => {
+    const md = '# Doc\n\n## Gym\n\n### Operations\n\nIntro.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree,
+      { type: 'text', text: 'Operations' },
+      '### Renamed Operations\n\nIntro.\n',
+      true, // replace_heading: content legitimately starts at the section level
+    );
+    expect(result).toContain('### Renamed Operations');
+  });
+});
+
 describe('replaceSection — auto-strip duplicate heading from content (#27)', () => {
   it('strips leading heading from content when it matches the target section', () => {
     const md = '# Doc\n\n## A\n\nOld content.\n\n## B\n\nKeep this.\n';

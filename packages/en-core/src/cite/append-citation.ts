@@ -61,7 +61,7 @@ function appendInsideExistingSection(
 
   // Strip trailing whitespace/newlines from the existing section body so we
   // can re-add a deterministic single blank line + the new reference line.
-  const trimmed = sectionBody.replace(/\s+$/, '');
+  const trimmed = sectionBody.trimEnd();
   const newSectionBody = `${trimmed}\n\n${referenceLine}\n`;
 
   return beforeSection + newSectionBody + afterSection;
@@ -90,7 +90,7 @@ function findNextHeadingOfLevelOrHigher(
 }
 
 function appendNewSection(body: string, heading: string, referenceLine: string): string {
-  const trimmed = body.replace(/\s+$/, '');
+  const trimmed = body.trimEnd();
   const lead = trimmed.length === 0 ? '' : '\n';
   return `${trimmed}${lead}\n## ${heading}\n\n${referenceLine}\n`;
 }
