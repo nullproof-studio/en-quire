@@ -4,7 +4,7 @@ import type { DocumentParser, RawLink } from '@nullproof-studio/en-core';
 import type { SectionNode, SectionAddress } from '@nullproof-studio/en-core';
 import { parseMarkdown } from './parser.js';
 import { buildPreambleNode, fixSectionEndOffsets } from '@nullproof-studio/en-core';
-import { toString } from '@nullproof-studio/en-core';
+import { toString, extractAnchor, flattenTree } from '@nullproof-studio/en-core';
 import { parserRegistry } from '@nullproof-studio/en-core';
 import { markdownStrategy, markdownCapabilities } from './markdown-strategy.js';
 import { extractLinks as extractMarkdownLinks } from './link-extractor.js';
@@ -40,11 +40,13 @@ export function buildSectionTree(ast: Root, markdown: string): SectionNode[] {
 
     const bodyEndOffset = findBodyEnd(headings, i, sectionEndOffset);
 
+    const { text: headingText, anchorId } = extractAnchor(toString(heading));
     const node: SectionNode = {
       heading: {
-        text: toString(heading),
+        text: headingText,
         level: heading.depth,
         position: heading.position!,
+        ...(anchorId !== undefined && { anchorId }),
       },
       headingStartOffset: headingStartOffset,
       bodyStartOffset,
@@ -115,6 +117,7 @@ function stripAddressMarkers(text: string): string {
  *
  * Rules:
  * - If it's a JSON array of numbers → IndexAddress
+ * - If it's a bare "^id" token → AnchorAddress (stable section anchor)
  * - If it contains " > " → PathAddress
  * - If it contains glob characters (*, ?) → PatternAddress
  * - Otherwise → TextAddress
@@ -134,6 +137,11 @@ export function parseAddress(raw: string): SectionAddress {
     } catch {
       // Not valid JSON, fall through
     }
+  }
+
+  const anchorMatch = /^\^([A-Za-z0-9][\w-]*)$/.exec(trimmed);
+  if (anchorMatch) {
+    return { type: 'anchor', id: anchorMatch[1] };
   }
 
   if (trimmed.includes(' > ')) {
@@ -191,7 +199,12 @@ class MarkdownParser implements DocumentParser {
         for (const node of tree) { node.index += 1; }
         tree.unshift(preamble);
       }
-      return [...setextWarnings, ...findDuplicateSiblings(tree), ...findUnbalancedFences(content)];
+      return [
+        ...setextWarnings,
+        ...findDuplicateSiblings(tree),
+        ...findDuplicateAnchors(tree),
+        ...findUnbalancedFences(content),
+      ];
     } catch (err) {
       return [`Markdown parse error: ${err instanceof Error ? err.message : String(err)}`];
     }
@@ -293,6 +306,27 @@ function buildIndexPath(node: SectionNode): number[] {
  * Returns a blocking error (contains "syntax error") so executeWrite
  * rejects the write.
  */
+/**
+ * Detect duplicate `^id` anchors across the whole document. Anchors must be
+ * unique to be addressable — two headings sharing an id make "^id" resolve
+ * ambiguously and any inbound [[doc#^id]] link unresolvable.
+ */
+function findDuplicateAnchors(nodes: SectionNode[]): string[] {
+  const seen = new Map<string, string>(); // id → first heading text
+  const dupes = new Set<string>();
+  for (const node of flattenTree(nodes)) {
+    const id = node.heading.anchorId;
+    if (id === undefined) continue;
+    if (seen.has(id)) dupes.add(id);
+    else seen.set(id, node.heading.text);
+  }
+  return [...dupes].map(
+    (id) =>
+      `Duplicate anchor "^${id}" on multiple headings — anchors must be unique to be addressable. ` +
+      `Give each heading a distinct ^id (or run doc_assign_ids on a fresh copy).`,
+  );
+}
+
 function findUnbalancedFences(content: string): string[] {
   const lines = content.split('\n');
   let inFence = false;

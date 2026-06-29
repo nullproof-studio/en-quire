@@ -6,6 +6,14 @@ import { tmpdir } from 'node:os';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { GitOperations, ValidationError } from '@nullproof-studio/en-core';
 
+// Recent git ships `safe.bareRepository = explicit` as the default and
+// refuses to operate on bare repos found via filesystem paths. The
+// fixtures here create a temp bare repo to stand in for a remote, so we
+// override per-invocation. Tests-only — production code shouldn't bypass
+// the operator's safety preference.
+const sg = (baseDir: string) =>
+  simpleGit({ baseDir, config: ['safe.bareRepository=all'] });
+
 let workDir: string;
 let remoteDir: string;
 let g: SimpleGit;
@@ -14,10 +22,10 @@ beforeEach(async () => {
   workDir = mkdtempSync(join(tmpdir(), 'safe-approve-work-'));
   remoteDir = mkdtempSync(join(tmpdir(), 'safe-approve-remote-'));
 
-  const bare = simpleGit(remoteDir);
+  const bare = sg(remoteDir);
   await bare.init(true);
 
-  g = simpleGit(workDir);
+  g = sg(workDir);
   await g.init();
   await g.addConfig('user.email', 'test@example.com');
   await g.addConfig('user.name', 'Test');
@@ -70,7 +78,7 @@ describe('GitOperations.fetchAndPrune', () => {
     await makeAndPushProposal(branch, 'a.md', 'payload\n');
 
     // Simulate upstream merge + branch deletion on the remote
-    const bare = simpleGit(remoteDir);
+    const bare = sg(remoteDir);
     await bare.raw(['update-ref', '-d', `refs/heads/${branch}`]);
 
     const ops = new GitOperations(workDir, null, null, 'origin', true);
@@ -93,7 +101,7 @@ describe('GitOperations.approveProposal — safe pre-flight', () => {
     await makeAndPushProposal(branch, 'a.md', 'payload\n');
 
     // Remote-side removal (as GitHub "merge + delete branch" would do)
-    const bare = simpleGit(remoteDir);
+    const bare = sg(remoteDir);
     await bare.raw(['update-ref', '-d', `refs/heads/${branch}`]);
 
     const ops = new GitOperations(workDir, null, null, 'origin', true);

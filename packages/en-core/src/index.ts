@@ -41,6 +41,7 @@ export * from './search/sync.js';
 export * from './search/vector-store.js';
 
 // Document — format-agnostic pieces
+export * from './document/anchors.js';
 export * from './document/ast-utils.js';
 export * from './document/line-utils.js';
 export * from './document/ops-strategy.js';
@@ -49,6 +50,16 @@ export * from './document/section-address.js';
 export * from './document/section-ops-core.js';
 export * from './document/section-tree.js';
 export * from './document/text-find.js';
+
+// Cite (verbatim source-span attestation)
+export * from './cite/append-citation.js';
+export * from './cite/fetch-source.js';
+export * from './cite/format.js';
+export * from './cite/normalise.js';
+export * from './cite/rate-limit.js';
+export * from './cite/registry.js';
+export * from './cite/url-policy.js';
+export * from './cite/verify-quote.js';
 
 // Tool runtime
 export * from './tools/audit-log.js';

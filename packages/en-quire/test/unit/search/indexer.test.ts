@@ -113,6 +113,17 @@ describe('searchDocuments', () => {
     expect(results[0].file).toBe('component-doc.mdx');
   });
 
+  it('OR-matches multi-term queries instead of requiring every term (recall)', () => {
+    // A query where one term is present and another is absent must still
+    // return the section matching the present term. Under the old implicit-AND
+    // join this returned zero — the reported "4 sensible keywords, 0 results"
+    // footgun. BM25 + structural re-ranking surfaces the best fit.
+    indexFixture('nested-headings.md');
+    const results = searchDocuments(db, 'Environment zzzznotpresentanywhere');
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].section_heading).toBe('1.1 Environment Check');
+  });
+
   it('indexes and searches .mdx files', () => {
     indexFixture('component-doc.mdx');
     const results = searchDocuments(db, 'button');
@@ -122,8 +133,8 @@ describe('searchDocuments', () => {
 });
 
 describe('sanitiseFts5Query', () => {
-  it('quotes simple terms', () => {
-    expect(sanitiseFts5Query('hello world')).toBe('"hello" "world"');
+  it('quotes simple terms and joins them with OR', () => {
+    expect(sanitiseFts5Query('hello world')).toBe('"hello" OR "world"');
   });
 
   it('handles hyphenated terms', () => {
@@ -131,7 +142,7 @@ describe('sanitiseFts5Query', () => {
   });
 
   it('escapes internal double quotes', () => {
-    expect(sanitiseFts5Query('say "hello"')).toBe('"say" """hello"""');
+    expect(sanitiseFts5Query('say "hello"')).toBe('"say" OR """hello"""');
   });
 
   it('handles empty query', () => {

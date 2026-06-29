@@ -10,7 +10,7 @@ import { computeEtag } from '@nullproof-studio/en-core';
 
 export const DocReadSectionSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
-  section: z.string().describe('Section address — heading text (e.g. "Financial Performance") or path (e.g. "Parent > Child").'),
+  section: z.string().describe('Section address — heading text (e.g. "Financial Performance"), path (e.g. "Parent > Child"), or a stable "^id" anchor (e.g. "^store-map"). The "^id" form is rename-proof; get ids from doc_outline.'),
   include_children: z.boolean().default(true).describe('When true (default), returns the section body AND all child sections. When false, returns only the section body text (content between the heading and the first child heading).'),
 });
 

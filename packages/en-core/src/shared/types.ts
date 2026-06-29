@@ -10,6 +10,8 @@ export interface SectionNode {
     text: string;
     level: number; // 1-6
     position: Position;
+    /** Stable `^id` anchor token on the heading line, if present (see anchors.ts) */
+    anchorId?: string;
   };
   /** Byte offset in original string where section body begins (after heading line) */
   bodyStartOffset: number;
@@ -57,7 +59,19 @@ export interface DotPathAddress {
   segments: string[];
 }
 
-export type SectionAddress = TextAddress | PathAddress | IndexAddress | PatternAddress | DotPathAddress;
+/** Stable anchor address: "^store-map" — matches a heading's `^id` token */
+export interface AnchorAddress {
+  type: 'anchor';
+  id: string;
+}
+
+export type SectionAddress =
+  | TextAddress
+  | PathAddress
+  | IndexAddress
+  | PatternAddress
+  | DotPathAddress
+  | AnchorAddress;
 
 /** Position for inserting a new section relative to an anchor */
 export type InsertPosition = 'before' | 'after' | 'child_start' | 'child_end';
@@ -66,6 +80,8 @@ export type InsertPosition = 'before' | 'after' | 'child_start' | 'child_end';
 export interface OutlineEntry {
   level: number;
   text: string;
+  /** Stable `^id` anchor for the section, if it has one. */
+  id?: string;
   path: string;
   line_start: number;
   line_end: number;
@@ -131,7 +147,19 @@ export interface EncodingInfo {
 }
 
 /** Permission types for RBAC */
-export type Permission = 'read' | 'write' | 'propose' | 'approve' | 'search' | 'exec';
+export type Permission =
+  | 'read'
+  | 'write'
+  | 'propose'
+  | 'approve'
+  | 'search'
+  | 'exec'
+  // Citation permissions. `cite` covers en-quire managed paths and file://
+  // sources. `cite_web` is required additionally for https?:// — the egress
+  // capability is gated separately so a deployer can grant local-only
+  // citation without enabling web fetch.
+  | 'cite'
+  | 'cite_web';
 
 /** Caller identity resolved from transport context */
 export interface CallerIdentity {
@@ -189,6 +217,42 @@ export interface ResolvedConfig {
   };
   callers: Record<string, CallerConfig>;
   require_read_before_write: boolean;
+  citation: ResolvedCitationConfig;
+}
+
+/**
+ * Citation feature config — opt-in. With `enabled: false` (default) the
+ * doc_cite and doc_cite_reverify tools refuse to run. Web citation is also
+ * gated by an empty `fetch.http_allowlist` (no-op default) and the
+ * `cite_web` permission, both of which must be explicitly granted.
+ */
+export interface ResolvedCitationConfig {
+  enabled: boolean;
+  section_heading: string;
+  section_position: string;
+  web_appends_propose: boolean;
+  /** When true, doc_cite appends `^cite-{N}` to each reference line so
+   *  Obsidian's `[[#^cite-N]]` self-links resolve. Off by default. */
+  obsidian_block_ids: boolean;
+  fetch: {
+    https_only: boolean;
+    http_allowlist: string[];
+    block_private_ranges: boolean;
+    allowed_content_types: string[];
+    timeout_ms: number;
+    max_bytes: number;
+    max_redirects: number;
+    decompression_factor: number;
+    strip_query: boolean;
+    strip_fragment: boolean;
+    allow_userinfo: boolean;
+    max_path_chars: number;
+    max_host_chars: number;
+    secret_pattern_reject: boolean;
+  };
+  rate_limit: {
+    external_per_minute: number;
+  };
 }
 
 /** Caller configuration from config file */

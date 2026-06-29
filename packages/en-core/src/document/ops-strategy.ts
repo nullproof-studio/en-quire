@@ -36,6 +36,18 @@ export interface OpsStrategy {
 
   /** Generate a table of contents from the section tree. Optional — not all formats support it. */
   generateToc?(tree: SectionNode[], maxDepth: number, style: 'links' | 'plain'): string;
+
+  /**
+   * Stable-anchor support (markdown only). Formats that support `^id` anchors
+   * implement both; formats that don't (e.g. YAML) omit them, and section-ops
+   * treats anchors as absent.
+   *
+   * `deriveAnchorId` returns a fresh, unique slug for a new heading given the
+   * ids already in use. `formatAnchor` renders an id as the trailing token to
+   * append to a heading's text (e.g. "^store-map" → " ^store-map").
+   */
+  deriveAnchorId?(headingText: string, taken: ReadonlySet<string>): string;
+  formatAnchor?(id: string): string;
 }
 
 export interface ParserCapabilities {
