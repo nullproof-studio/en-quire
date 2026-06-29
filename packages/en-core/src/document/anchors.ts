@@ -18,10 +18,12 @@
 /**
  * Matches a trailing ` ^id` anchor token at the end of a heading's text.
  * The id must start with an alphanumeric and may contain word chars and
- * hyphens. Whitespace before the caret is required so mid-text carets
- * (e.g. "mc^2") are never mistaken for anchors.
+ * hyphens. A single whitespace before the caret is required so mid-text carets
+ * (e.g. "mc^2") are never mistaken for anchors. Callers right-trim first, so
+ * the token sits flush against the end — this keeps the pattern free of the
+ * unanchored greedy `\s+ … \s*$` shape that backtracks quadratically (ReDoS).
  */
-const ANCHOR_RE = /\s+\^([A-Za-z0-9][\w-]*)\s*$/;
+const ANCHOR_RE = /\s\^([A-Za-z0-9][\w-]*)$/;
 
 /** A heading's text split into its display text and optional anchor id. */
 export interface ExtractedAnchor {
@@ -34,10 +36,11 @@ export interface ExtractedAnchor {
  * display text plus the id when present. Leaves text untouched otherwise.
  */
 export function extractAnchor(headingText: string): ExtractedAnchor {
-  const match = ANCHOR_RE.exec(headingText);
+  const trimmed = headingText.trimEnd();
+  const match = ANCHOR_RE.exec(trimmed);
   if (!match) return { text: headingText };
   return {
-    text: headingText.slice(0, match.index).trimEnd(),
+    text: trimmed.slice(0, match.index).trimEnd(),
     anchorId: match[1],
   };
 }
@@ -52,7 +55,28 @@ export function slugify(text: string): string {
     .replace(/[^\w\s-]/g, '')
     .trim()
     .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    // The collapse above leaves single hyphens only, so a single anchored strip
+    // at each edge suffices — and avoids the unanchored `-+$` that backtracks
+    // quadratically (ReDoS) on a long run of separators.
+    .replace(/^-/, '')
+    .replace(/-$/, '');
+}
+
+/**
+ * Strip a trailing closed-ATX closer — whitespace, a run of `#`, then optional
+ * whitespace (`### Heading ###`) — from heading text. Written as a single
+ * backward scan rather than `/\s+#+\s*$/`, whose unanchored greedy whitespace
+ * backtracks quadratically (ReDoS) on whitespace-heavy headings.
+ */
+function stripAtxCloser(text: string): string {
+  let end = text.length;
+  while (end > 0 && /\s/.test(text[end - 1])) end--; // trailing whitespace (\s*$)
+  const hashEnd = end;
+  while (end > 0 && text[end - 1] === '#') end--; // the '#' run (#+)
+  if (end === hashEnd || end === 0) return text; // no '#' run, or '#'s start the line
+  if (!/\s/.test(text[end - 1])) return text; // a closer needs whitespace before it (\s+)
+  while (end > 0 && /\s/.test(text[end - 1])) end--; // consume that whitespace run
+  return text.slice(0, end);
 }
 
 /**
@@ -106,10 +130,12 @@ export function assignAnchors(markdown: string): { content: string; assigned: As
     }
     if (inCode) continue;
 
-    const m = /^(#{1,6})\s+(.*)$/.exec(line);
+    // `(\S.*)?` (not `(.*)`) keeps `\s+` from overlapping the capture, so the
+    // pattern can't backtrack quadratically (ReDoS) on a whitespace-only line.
+    const m = /^(#{1,6})\s+(\S.*)?$/.exec(line);
     if (!m) continue;
 
-    const headingText = m[2].replace(/\s+#+\s*$/, ''); // tolerate closed ATX (trailing #)
+    const headingText = stripAtxCloser(m[2] ?? ''); // tolerate closed ATX (trailing #)
     if (extractAnchor(headingText).anchorId) continue; // already anchored
 
     const id = uniqueSlug(slugify(headingText), taken);
@@ -134,7 +160,7 @@ function forEachHeadingLine(lines: string[], visit: (text: string) => void): voi
       continue;
     }
     if (inCode) continue;
-    const m = /^#{1,6}\s+(.*)$/.exec(line);
-    if (m) visit(m[1].replace(/\s+#+\s*$/, ''));
+    const m = /^#{1,6}\s+(\S.*)?$/.exec(line);
+    if (m) visit(stripAtxCloser(m[1] ?? ''));
   }
 }

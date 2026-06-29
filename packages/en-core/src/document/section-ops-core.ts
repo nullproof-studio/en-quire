@@ -185,10 +185,13 @@ function preserveAnchorInContent(content: string, node: SectionNode, ops: OpsStr
   if (!ops.formatAnchor || !node.heading.anchorId) return content;
   const lines = content.split('\n');
   for (let i = 0; i < lines.length; i++) {
-    const m = /^(#{1,6})\s+(.*\S)\s*$/.exec(lines[i]);
-    if (!m) continue;
-    if (extractAnchor(m[2]).anchorId) return content; // explicit anchor wins
-    lines[i] = `${m[1]} ${m[2]}${ops.formatAnchor(node.heading.anchorId)}`;
+    // `(\S.*)?` + trimEnd replaces `\s+(.*\S)\s*$`, whose two greedy whitespace
+    // runs overlap the capture and backtrack quadratically (ReDoS).
+    const m = /^(#{1,6})\s+(\S.*)?$/.exec(lines[i]);
+    if (!m || m[2] === undefined) continue;
+    const text = m[2].trimEnd();
+    if (extractAnchor(text).anchorId) return content; // explicit anchor wins
+    lines[i] = `${m[1]} ${text}${ops.formatAnchor(node.heading.anchorId)}`;
     return lines.join('\n');
   }
   return content;
