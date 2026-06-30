@@ -3,9 +3,16 @@
 # Default CMD runs enquire. For enscribe: `docker run --entrypoint enscribe ...`
 
 # ---- build stage ------------------------------------------------------------
-FROM node:22-slim AS build
+FROM node:24-slim AS build
 
 WORKDIR /app
+
+# better-sqlite3 has no prebuilt binary for every node 24 target, so node-gyp
+# may compile it from source — which needs python3 + a C++ toolchain. These
+# live only in the build stage; the runtime stage below stays slim.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy workspace manifests first so npm ci can cache deps when only code changes
 COPY package.json package-lock.json tsconfig.base.json ./
@@ -23,7 +30,7 @@ RUN npm run build
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 
 # ---- runtime stage ----------------------------------------------------------
-FROM node:22-slim AS runtime
+FROM node:24-slim AS runtime
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git sqlite3 curl \
