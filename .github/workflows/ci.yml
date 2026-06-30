@@ -74,6 +74,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm publish -w @nullproof-studio/en-core --dry-run
-      - run: npm publish -w @nullproof-studio/en-quire --dry-run
-      - run: npm publish -w @nullproof-studio/en-scribe --dry-run
+      # Validate packaging (contents, files, prepack) without the registry
+      # "cannot publish over previously published versions" check that
+      # `npm publish --dry-run` performs on npm 11+ (which fails every PR that
+      # doesn't bump the version). `npm pack --dry-run` is the per-PR gate.
+      - run: npm pack -w @nullproof-studio/en-core --dry-run
+      - run: npm pack -w @nullproof-studio/en-quire --dry-run
+      - run: npm pack -w @nullproof-studio/en-scribe --dry-run
