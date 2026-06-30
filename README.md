@@ -510,29 +510,48 @@ npm test              # single run across all packages (vitest discovers package
 npm run test:watch    # watch mode
 ```
 
-### Publish npm packages
+### Releasing
 
-Published in dependency order — en-core first, then the two binaries:
+A single GitHub Actions workflow (`Release`) cuts a release: it bumps the version
+and publishes every target at one synchronized version — the three npm packages,
+a GHCR container image, and a GitHub Release.
+
+**To release:** Actions → **Release** → **Run workflow** → choose the bump
+(`major` | `minor` | `patch`) or enter an explicit version. The workflow then:
+
+1. Bumps all three packages in lockstep (keeping the internal
+   `@nullproof-studio/en-core` pin in sync) and refreshes `package-lock.json`.
+2. Commits `chore(release): vX.Y.Z` to `main` and pushes the matching `vX.Y.Z` tag.
+3. Publishes:
+   - **npm** — en-core → en-quire → en-scribe (dependency order), via OIDC
+     "trusted publishing" (no `NPM_TOKEN`; provenance attached automatically;
+     already-published versions are skipped, so re-runs are safe).
+   - **Docker** — `ghcr.io/nullproof-studio/en-quire` tagged `:<version>` and `:latest`.
+   - **GitHub Release** — with auto-generated notes.
+
+Alternatives:
 
 ```bash
-npm run build
-npm run lint
-npm test
-npm publish -w @nullproof-studio/en-core
-npm publish -w @nullproof-studio/en-quire
-npm publish -w @nullproof-studio/en-scribe
+# Bump versions locally without releasing (rewrites the 3 package.json + lockfile)
+npm run bump <major|minor|patch|X.Y.Z>
+
+# Publish from an already-committed version by pushing the tag
+git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
-CI runs `npm publish --dry-run` for each package on every PR to catch tarball-shape regressions before release. All three are configured for public access via `publishConfig.access`; bump versions in the respective `packages/*/package.json` before running `publish`.
+Every PR runs `npm pack -w <pkg> --dry-run` to catch tarball-shape regressions
+before release. One-time setup: `main`'s branch protection must allow
+`github-actions[bot]` to push (the manual path commits the bump to `main`), and
+each package needs its npm Trusted Publisher configured (Settings → Publishing
+access) — see the header of `.github/workflows/release.yml`.
 
-### Build and publish Docker image
+### Run the Docker image
 
-One multi-stage image ships both binaries. The default entrypoint is `enquire`; override for en-scribe.
+One multi-stage image ships both binaries and is published to GHCR by the
+`Release` workflow above. The default entrypoint is `enquire`; override for
+en-scribe. To build it locally for development: `docker build -t en-quire .`.
 
 ```bash
-# Build
-docker build -t ghcr.io/nullproof-studio/en-quire:latest .
-
 # Run en-quire (default)
 docker run -i --rm \
   -v /path/to/docs:/data/docs:rw \
@@ -547,12 +566,6 @@ docker run -i --rm \
   -v /path/to/config:/app/config:ro \
   ghcr.io/nullproof-studio/en-quire:latest \
   --config /app/config/en-scribe.config.yaml
-
-# Publish to GitHub Container Registry
-echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
-docker push ghcr.io/nullproof-studio/en-quire:latest
-docker tag ghcr.io/nullproof-studio/en-quire:latest ghcr.io/nullproof-studio/en-quire:0.2.0
-docker push ghcr.io/nullproof-studio/en-quire:0.2.0
 ```
 
 When using streamable-http transport, the image includes a health check at `GET /health`:
