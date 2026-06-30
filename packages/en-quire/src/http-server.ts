@@ -5,7 +5,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type Database from 'better-sqlite3';
 import {
-  authenticateBearer,
+  createAuthBackend,
   getLogger,
 } from '@nullproof-studio/en-core';
 import type {
@@ -63,12 +63,16 @@ export function createMcpHttpServer(options: CreateHttpServerOptions): McpHttpSe
     callerId: string;
   }>();
 
-  const unauthorized = (res: ServerResponse, reason: string) => {
-    res.writeHead(401, {
-      'Content-Type': 'application/json',
-      'WWW-Authenticate': `Bearer realm="${realm}"`,
-    });
-    res.end(JSON.stringify({ error: 'unauthorized', reason }));
+  // Pluggable authentication: static bearer keys (default) or OAuth 2.1
+  // Resource Server token validation, selected by `config.auth.mode`.
+  const authBackend = createAuthBackend(config, realm);
+  const discoveryDocs = new Map(authBackend.discovery().map((d) => [d.path, d.body]));
+
+  const denyAuth = (res: ServerResponse, status: 401 | 403, reason: string) => {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (status === 401) headers['WWW-Authenticate'] = authBackend.challenge();
+    res.writeHead(status, headers);
+    res.end(JSON.stringify({ error: status === 401 ? 'unauthorized' : 'forbidden', reason }));
   };
 
   const httpServer = createHttpServer(async (req, res) => {
@@ -87,16 +91,25 @@ export function createMcpHttpServer(options: CreateHttpServerOptions): McpHttpSe
       return;
     }
 
+    // OAuth discovery metadata (e.g. /.well-known/oauth-protected-resource).
+    // Unauthenticated by design — clients fetch it precisely to learn how to
+    // authenticate. Empty for the bearer backend.
+    if (req.method === 'GET' && discoveryDocs.has(url.pathname)) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(discoveryDocs.get(url.pathname)));
+      return;
+    }
+
     if (url.pathname !== '/mcp') {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found. Use /mcp or /health endpoints.' }));
       return;
     }
 
-    const auth = authenticateBearer(req.headers.authorization, config.callers);
+    const auth = await authBackend.authenticate(req.headers.authorization);
     if (!auth.ok) {
-      log.debug('auth:rejected', { reason: auth.reason, path: url.pathname });
-      unauthorized(res, auth.reason);
+      log.debug('auth:rejected', { reason: auth.reason, status: auth.status, path: url.pathname });
+      denyAuth(res, auth.status, auth.reason);
       return;
     }
 
@@ -108,7 +121,7 @@ export function createMcpHttpServer(options: CreateHttpServerOptions): McpHttpSe
           log.warn('auth:session-caller-mismatch', {
             sessionId, expected: session.callerId, got: auth.caller.id,
           });
-          unauthorized(res, 'session_caller_mismatch');
+          denyAuth(res, 401, 'session_caller_mismatch');
           return;
         }
         await session.transport.close();
@@ -131,7 +144,7 @@ export function createMcpHttpServer(options: CreateHttpServerOptions): McpHttpSe
         log.warn('auth:session-caller-mismatch', {
           sessionId, expected: session.callerId, got: auth.caller.id,
         });
-        unauthorized(res, 'session_caller_mismatch');
+        denyAuth(res, 401, 'session_caller_mismatch');
         return;
       }
       await session.transport.handleRequest(req, res);

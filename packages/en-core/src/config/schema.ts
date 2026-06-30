@@ -23,6 +23,59 @@ const CallerConfigSchema = z.object({
   scopes: z.array(CallerScopeSchema),
 });
 
+// Role-based access policy. A binding carries exactly one selector
+// (user | domain | idp_group | idp_role | local_group) plus the roles it
+// grants. The single-selector rule is enforced here; cross-references
+// (roles/local_groups/default_role must exist) are validated in the loader
+// where the whole policy is in hand.
+const SELECTOR_KEYS = ['user', 'domain', 'idp_group', 'idp_role', 'local_group'] as const;
+
+const RoleBindingSchema = z.object({
+  user: z.string().optional(),
+  domain: z.string().optional(),
+  idp_group: z.string().optional(),
+  idp_role: z.string().optional(),
+  local_group: z.string().optional(),
+  roles: z.array(z.string()).min(1),
+}).refine(
+  (b) => SELECTOR_KEYS.filter((k) => b[k] !== undefined).length === 1,
+  { message: 'each binding must set exactly one selector (user | domain | idp_group | idp_role | local_group)' },
+);
+
+// OAuth provider trusted for token validation under `auth.mode: oauth-external`.
+// `audience` MUST match this server's resource identifier — it is what stops a
+// token minted for another service being replayed here. `subject_claim` selects
+// the identity; the optional *_claim fields select group/role/domain facts when
+// the IdP supplies them (corporate directories do; consumer Google does not).
+const OAuthProviderSchema = z.object({
+  issuer: z.string(),
+  jwks_uri: z.string().optional(), // derived from issuer's discovery doc when omitted
+  audience: z.string(),
+  algorithms: z.array(z.string()).default(['RS256']),
+  subject_claim: z.string().default('sub'),
+  groups_claim: z.string().optional(),
+  roles_claim: z.string().optional(),
+  domain_claim: z.string().optional(), // e.g. Google Workspace "hd"
+});
+
+// Authentication backend selector. `bearer` (default) keeps the static
+// pre-shared-key path. `oauth-external` makes en-quire an OAuth Resource Server:
+// it validates JWT access tokens against one or more trusted providers and maps
+// the verified identity to scopes via the `rbac` policy. Multiple providers are
+// supported concurrently (a request authenticates against any of them).
+const AuthSchema = z.object({
+  mode: z.enum(['bearer', 'oauth-external']).default('bearer'),
+  resource: z.string().optional(), // canonical RS URL advertised in discovery + expected as aud
+  providers: z.array(OAuthProviderSchema).default([]),
+});
+
+const RbacSchema = z.object({
+  roles: z.record(z.string(), z.array(CallerScopeSchema)).default({}),
+  local_groups: z.record(z.string(), z.array(z.string())).default({}),
+  bindings: z.array(RoleBindingSchema).default([]),
+  default_role: z.string().nullable().default(null),
+});
+
 const SemanticSearchSchema = z.object({
   enabled: z.boolean().default(false),
   // Base URL of an OpenAI-compatible embeddings server (e.g.
@@ -135,6 +188,8 @@ export const ConfigSchema = z.object({
   callers: z.record(z.string(), CallerConfigSchema).default({}),
   require_read_before_write: z.boolean().default(true),
   citation: CitationSchema.default({}),
+  rbac: RbacSchema.default({}),
+  auth: AuthSchema.default({}),
 });
 
 export type RawConfig = z.input<typeof ConfigSchema>;

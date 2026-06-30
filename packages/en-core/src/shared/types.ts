@@ -218,6 +218,55 @@ export interface ResolvedConfig {
   callers: Record<string, CallerConfig>;
   require_read_before_write: boolean;
   citation: ResolvedCitationConfig;
+  /**
+   * Role-based access policy. Always populated by the loader (empty when the
+   * `rbac` block is absent). Optional on the type so the many hand-built
+   * `ResolvedConfig` literals in tests stay valid without restating it.
+   */
+  rbac?: ResolvedRbacConfig;
+  /**
+   * Authentication backend. Always populated by the loader (defaults to
+   * `{ mode: 'bearer' }`). Optional on the type so existing `ResolvedConfig`
+   * literals in tests stay valid.
+   */
+  auth?: ResolvedAuthConfig;
+}
+
+/** A single role binding: one selector → one or more roles. */
+export interface ResolvedRoleBinding {
+  user?: string;
+  domain?: string;
+  idp_group?: string;
+  idp_role?: string;
+  local_group?: string;
+  roles: string[];
+}
+
+/** Resolved (validated) role-based access policy. */
+export interface ResolvedRbacConfig {
+  roles: Record<string, CallerScope[]>;
+  local_groups: Record<string, string[]>;
+  bindings: ResolvedRoleBinding[];
+  default_role: string | null;
+}
+
+/** A trusted OAuth provider for `auth.mode: oauth-external`. */
+export interface ResolvedOAuthProvider {
+  issuer: string;
+  jwks_uri?: string;
+  audience: string;
+  algorithms: string[];
+  subject_claim: string;
+  groups_claim?: string;
+  roles_claim?: string;
+  domain_claim?: string;
+}
+
+/** Resolved (validated) authentication backend configuration. */
+export interface ResolvedAuthConfig {
+  mode: 'bearer' | 'oauth-external';
+  resource?: string;
+  providers: ResolvedOAuthProvider[];
 }
 
 /**

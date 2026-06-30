@@ -97,6 +97,55 @@ Add en-quire to your MCP client (Claude Desktop, Cursor, etc.):
 }
 ```
 
+### Remote access (Claude.ai / Claude Desktop connectors)
+
+The stdio config above is for local clients. To add en-quire as a **remote
+connector** in the hosted Claude clients, run the HTTP transport behind OAuth.
+en-quire supports two authentication backends, selected by `auth.mode`:
+
+| Mode | What it is | Use when |
+|---|---|---|
+| `bearer` (default) | Static pre-shared key on `callers[].key`, sent as `Authorization: Bearer`. | stdio, Cursor, or any client where you set the header by hand. |
+| `oauth-external` | en-quire is an OAuth 2.1 **Resource Server**: it validates JWT access tokens from a trusted IdP and advertises discovery metadata. | Claude.ai web / Claude Desktop custom connectors, which require the OAuth handshake and cannot use a static token. |
+
+Under `oauth-external`, en-quire does **not** issue tokens or run a login page —
+your IdP (Entra ID, Okta, Auth0, WorkOS, Google, Keycloak, …) handles login,
+MFA, consent, and refresh. en-quire validates the resulting JWT (`iss`, `aud`,
+signature, expiry) against one or more trusted providers — **multiple IdPs are
+supported concurrently** — and maps the verified identity to permissions via the
+[role-based `rbac` policy](en-quire.config.example.yaml). Minimal config:
+
+```yaml
+transport: streamable-http
+listen_host: "0.0.0.0"          # serve the connector (put TLS in front — OAuth requires HTTPS)
+auth:
+  mode: oauth-external
+  resource: "https://docs.example.com/mcp"   # this server's public URL = token audience
+  providers:
+    - issuer: "https://your-tenant.auth0.com/"
+      audience: "https://docs.example.com/mcp"
+      subject_claim: email
+      groups_claim: "https://docs.example.com/groups"
+rbac:
+  roles:
+    editor: [ { path: "sops/**", permissions: [read, search, propose] } ]
+  bindings:
+    - { idp_group: "docs-editors", roles: [editor] }
+```
+
+The verified subject (e.g. the user's email) becomes the caller id, so audit
+logs and proposal branches carry **real per-user attribution** instead of a
+shared key. For IdPs that don't supply group membership (notably consumer
+Google), maintain membership in en-quire via `rbac.local_groups` and bind on
+`local_group` / `user`. See [`en-quire.config.example.yaml`](en-quire.config.example.yaml)
+for the full `auth` + `rbac` reference.
+
+> **Note:** Claude's connector flow expects OAuth Dynamic Client Registration,
+> which most corporate IdPs support but consumer Google does not — Google needs
+> a pre-registered client. A self-hosted authorization-server mode
+> (`oauth-internal`) for fully offline / air-gapped deployments is planned; see
+> [issue #95](https://github.com/nullproof-studio/en-quire/issues/95).
+
 ## Usage
 
 Once connected, an agent (or you through an MCP client) can use en-quire's tools to navigate, search, and edit markdown documents. Here's a typical workflow.

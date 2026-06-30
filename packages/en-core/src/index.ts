@@ -22,6 +22,9 @@ export * from './config/schema.js';
 export * from './rbac/http-auth.js';
 export * from './rbac/permissions.js';
 export * from './rbac/resolver.js';
+export * from './rbac/roles.js';
+export * from './rbac/auth-backend.js';
+export * from './rbac/oauth-external.js';
 export * from './rbac/types.js';
 
 // Git
