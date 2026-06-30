@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run build
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       # lint depends on en-core's dist (cross-package type resolution)
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm test
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       # en-core dist is required — integration tests import from
@@ -70,10 +70,14 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm publish -w @nullproof-studio/en-core --dry-run
-      - run: npm publish -w @nullproof-studio/en-quire --dry-run
-      - run: npm publish -w @nullproof-studio/en-scribe --dry-run
+      # Validate packaging (contents, files, prepack) without the registry
+      # "cannot publish over previously published versions" check that
+      # `npm publish --dry-run` performs on npm 11+ (which fails every PR that
+      # doesn't bump the version). `npm pack --dry-run` is the per-PR gate.
+      - run: npm pack -w @nullproof-studio/en-core --dry-run
+      - run: npm pack -w @nullproof-studio/en-quire --dry-run
+      - run: npm pack -w @nullproof-studio/en-scribe --dry-run
