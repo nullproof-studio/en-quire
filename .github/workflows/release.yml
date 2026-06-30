@@ -1,34 +1,64 @@
 name: Release
 
-# Triggered by pushing a version tag, e.g.:
-#   git tag v0.2.0 && git push origin v0.2.0
+# Two ways in, one pipeline out (npm ×3 + GHCR image + GitHub Release):
 #
-# Publishes every workspace package at the tag's version to npm (in dependency
-# order) and cuts a matching GitHub Release. Authentication to npm uses OIDC
-# "trusted publishing" — no NPM_TOKEN secret. npm verifies the Actions run and
-# attaches a provenance attestation automatically.
+#   1. Manual (recommended): Actions → Release → Run workflow → pick the bump
+#      (major | minor | patch) or an explicit version. The job bumps all three
+#      packages in lockstep, commits `chore(release): vX.Y.Z` to main, pushes
+#      the matching tag, then publishes everything.
 #
-# One-time setup per package on npmjs.com:
+#   2. Tag push: `git tag vX.Y.Z && git push origin vX.Y.Z` (assumes the version
+#      is already committed) — publishes at that tag.
+#
+# npm uses OIDC "trusted publishing" — no NPM_TOKEN secret; npm verifies the
+# Actions run and attaches a provenance attestation. The container image is
+# pushed to GitHub Container Registry (ghcr.io) using the built-in token.
+#
+# One-time npm setup per package on npmjs.com:
 #   Package → Settings → Publishing access → Trusted Publisher → GitHub Actions
 #   Repository: nullproof-studio/en-quire   Workflow: release.yml
-# A package must already exist on npm before its trusted publisher can be set up,
-# so brand-new packages need one initial manual `npm publish` (see PR/release notes).
+# A package must already exist on npm before its trusted publisher can be set up.
+#
+# NOTE: the manual path commits the bump directly to `main`. If `main` is a
+# protected branch, add `github-actions[bot]` to the branch-protection bypass
+# list (Settings → Branches) so the release commit can land.
 
 on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Semver bump (ignored if "version" is set)'
+        type: choice
+        required: true
+        default: patch
+        options: [patch, minor, major]
+      version:
+        description: 'Explicit version X.Y.Z (overrides bump)'
+        type: string
+        required: false
   push:
     tags:
       - 'v*'
 
 permissions:
-  contents: write   # create the GitHub Release
+  contents: write   # commit the bump, push the tag, create the GitHub Release
   id-token: write   # OIDC token for npm trusted publishing + provenance
+  packages: write   # push the image to ghcr.io
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
-    name: Publish & release
+    name: Bump, publish & release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Dispatch bumps & commits to main; a tag push checks out the tag.
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v6
         with:
@@ -36,30 +66,57 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      # Trusted publishing (OIDC) requires npm >= 11.5.1; Node 22 ships an older npm.
+      # Trusted publishing (OIDC) requires npm >= 11.5.1.
       - name: Update npm
         run: npm install -g npm@latest
 
       - run: npm ci
+
+      - name: Bump version (lockstep) and tag
+        id: bump
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          node scripts/bump-version.mjs "${{ inputs.version || inputs.bump }}"
+          NEW=$(node -p "require('./packages/en-core/package.json').version")
+          git add package.json package-lock.json packages/*/package.json
+          git commit -m "chore(release): v$NEW"
+          git tag "v$NEW"
+          git push origin HEAD:main
+          git push origin "v$NEW"
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = 'workflow_dispatch' ]; then
+            V=$(node -p "require('./packages/en-core/package.json').version")
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$V"
+
       - run: npm run build
 
       - name: Verify tag matches package versions
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          WANT="${{ steps.ver.outputs.version }}"
           fail=0
           for pkg in en-core en-quire en-scribe; do
             V=$(node -p "require('./packages/$pkg/package.json').version")
-            if [ "$V" != "$TAG" ]; then
-              echo "::error::packages/$pkg is at $V but the tag is v$TAG"
+            if [ "$V" != "$WANT" ]; then
+              echo "::error::packages/$pkg is at $V but the release is v$WANT"
               fail=1
             fi
           done
-          [ "$fail" = 0 ] && echo "All packages at $TAG"
+          [ "$fail" = 0 ] && echo "All packages at $WANT"
           exit $fail
 
       # Dependency order: en-core first (en-quire and en-scribe depend on it).
       # Already-published versions are skipped so re-running a release is safe.
-      - name: Publish packages
+      - name: Publish packages to npm
         run: |
           for pkg in en-core en-quire en-scribe; do
             name=$(node -p "require('./packages/$pkg/package.json').name")
@@ -72,11 +129,33 @@ jobs:
             fi
           done
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.version }}
+            ghcr.io/${{ github.repository }}:latest
+          provenance: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            --title "${{ steps.ver.outputs.tag }}" \
             --generate-notes \
             --verify-tag
