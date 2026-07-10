@@ -4,7 +4,7 @@ import { resolveScopes } from '@nullproof-studio/en-core';
 import type { RbacConfig, IdentityFacts } from '@nullproof-studio/en-core';
 
 const ROLES = {
-  admin: [{ path: '**', permissions: ['read', 'search', 'write', 'propose', 'approve', 'exec'] as const }],
+  admin: [{ path: '**', permissions: ['read', 'search', 'write', 'propose', 'approve'] as const }],
   editor: [{ path: 'sops/**', permissions: ['read', 'search', 'propose'] as const }],
   reader: [{ path: '**', permissions: ['read', 'search'] as const }],
 };

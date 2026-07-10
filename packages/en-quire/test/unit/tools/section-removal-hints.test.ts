@@ -23,7 +23,7 @@ function makeCtx(): TestEnv {
     search: { sync_on_start: 'blocking', batch_size: 100, semantic: { enabled: false } },
     logging: { console: 'error' }, callers: {}, require_read_before_write: false,
   } as unknown as ResolvedConfig;
-  const caller: CallerIdentity = { id: 'test', scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'exec'] }] };
+  const caller: CallerIdentity = { id: 'test', scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search'] }] };
   const roots: Record<string, RootContext> = { docs: { root: config.document_roots.docs, git: new GitOperations(dir, false) } };
   return { ctx: { config, roots, caller, db }, dir, cleanup: () => { db.close(); rmSync(dir, { recursive: true, force: true }); } };
 }

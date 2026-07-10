@@ -6,7 +6,7 @@ import type { CallerIdentity } from '@nullproof-studio/en-core';
 
 const adminCaller: CallerIdentity = {
   id: 'admin',
-  scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'exec'] }],
+  scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search'] }],
 };
 
 const readOnlyCaller: CallerIdentity = {
@@ -40,7 +40,7 @@ const webCiteCaller: CallerIdentity = {
 describe('checkPermission', () => {
   it('allows admin full access', () => {
     expect(checkPermission(adminCaller, 'write', 'any/file.md').allowed).toBe(true);
-    expect(checkPermission(adminCaller, 'exec', 'any/file.md').allowed).toBe(true);
+    expect(checkPermission(adminCaller, 'approve', 'any/file.md').allowed).toBe(true);
   });
 
   it('denies write for read-only caller', () => {

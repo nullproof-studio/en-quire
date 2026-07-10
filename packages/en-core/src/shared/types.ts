@@ -153,7 +153,6 @@ export type Permission =
   | 'propose'
   | 'approve'
   | 'search'
-  | 'exec'
   // Citation permissions. `cite` covers en-quire managed paths and file://
   // sources. `cite_web` is required additionally for https?:// — the egress
   // capability is gated separately so a deployer can grant local-only

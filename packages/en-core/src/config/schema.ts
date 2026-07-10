@@ -1,12 +1,13 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 
-// `admin` was reserved in earlier drafts but never gated any tool handler
-// — `exec` is the real privileged-operation gate. Having an ungated
-// permission in the enum is a footgun (operators grant it expecting
-// restrictions, nothing happens), so it's been removed.
+// `admin` and `exec` were reserved in earlier drafts. `admin` never gated any
+// tool handler; `exec` gated the `doc_exec` command escape hatch, which was
+// removed as a security risk. An ungated permission in the enum is a footgun
+// (operators grant it expecting a capability, nothing happens), so neither
+// remains.
 const PermissionSchema = z.enum([
-  'read', 'write', 'propose', 'approve', 'search', 'exec',
+  'read', 'write', 'propose', 'approve', 'search',
   // Citation permissions. cite ⇒ local + en-quire managed sources; cite_web
   // ⇒ additionally required for https?:// (network egress is gated
   // independently so a deployer can grant local-only citation).

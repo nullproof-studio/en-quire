@@ -45,10 +45,6 @@ import {
 import { DocCiteSchema, handleDocCite } from './tools/cite/doc-cite.js';
 import { DocCiteReverifySchema, handleDocCiteReverify } from './tools/cite/doc-cite-reverify.js';
 
-// Admin
-import { DocExecSchema, handleDocExec } from './tools/admin/doc-exec.js';
-import { DocAuditLogSchema, handleDocAuditLog } from './tools/admin/doc-audit-log.js';
-
 /**
  * Register all en-quire tools into a registry.
  *
@@ -108,8 +104,4 @@ export function registerEnQuireTools(registry: ToolRegistry): void {
   // every attempt — successful or denied — recorded to cite_audit_log.
   registry.register({ name: 'doc_cite', description: 'Verify that a verbatim quote appears in a source and (optionally) auto-append a content-free reference line to a Citations section. The agent submits the proposed quote; the tool re-fetches the source independently and confirms or denies. Verbatim source-span attestation only — NOT semantic truth verification. Supports https:// (requires cite_web permission and the deployer\'s host allowlist), file:// (must lie inside a configured root), bare en-quire managed paths, and pdf:// (deferred). Auto-append is content-free: only "(N) <canonical-URL> [hash:sha256:HEX]" — no fetched titles, no surrounding context. On a failed verify (status: not_found, source_blocked, source_not_found, etc.) the response carries no source text and no nearest-match hints — re-read the source with doc_read or a web fetch tool, correct the quote, then retry.', schema: DocCiteSchema.shape, handler: handleDocCite });
   registry.register({ name: 'doc_cite_reverify', description: 'Reverify an existing citation: re-fetch the stored source URI and report whether the SHA-256 hash and the cited quote are still intact. Requires a citation_id from a prior doc_cite call — does not create new citations. Returns hash_match and text_still_present; updates last_verified_at / last_verified_hash on the registry row. Same RBAC as doc_cite (cite for local sources, cite_web for https) — re-fetching is the same network/IO capability as a fresh cite.', schema: DocCiteReverifySchema.shape, handler: handleDocCiteReverify });
-
-  // Admin
-  registry.register({ name: 'doc_exec', description: 'Execute a command in a document root (admin)', schema: DocExecSchema.shape, handler: handleDocExec });
-  registry.register({ name: 'doc_audit_log', description: 'Query the doc_exec audit trail (admin). Filter by date range (start_date / end_date as ISO 8601), caller, or command substring. Returns entries newest-first with stdout/stderr truncated to 500 chars; total reflects the unfiltered match count.', schema: DocAuditLogSchema.shape, handler: handleDocAuditLog });
 }

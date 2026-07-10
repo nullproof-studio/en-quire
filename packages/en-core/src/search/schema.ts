@@ -33,20 +33,6 @@ export function initSearchSchema(db: Database.Database): void {
     );
   `);
 
-  // Audit log for doc_exec calls
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS exec_audit_log (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      caller TEXT NOT NULL,
-      command TEXT NOT NULL,
-      working_dir TEXT,
-      stdout TEXT,
-      stderr TEXT,
-      exit_code INTEGER,
-      timestamp TEXT NOT NULL
-    );
-  `);
-
   // Cross-document reference index. Derived from document content (markdown
   // links, Obsidian-style wiki links, frontmatter relationship arrays); fully
   // rebuilt on every write/sync — disposable. Powers doc_references /
@@ -112,9 +98,8 @@ export function initSearchSchema(db: Database.Database): void {
       ON citations(target_file, source_hash, quote_text);
   `);
 
-  // Cite audit log — one row per cite attempt, success or denied. Distinct
-  // from exec_audit_log so cite traffic doesn't drown out exec audit and can
-  // be queried independently. canonical_path may already be redacted (e.g.
+  // Cite audit log — one row per cite attempt, success or denied. Queried
+  // independently of other logs. canonical_path may already be redacted (e.g.
   // '/api/[secret-pattern:openai-key]') when secret-pattern detection fired:
   // the matched segment is replaced before persistence so the audit log does
   // not become a database of exfiltrated secrets.

@@ -30,7 +30,7 @@ rbac:
   roles:
     admin:
       - path: "**"
-        permissions: [read, search, write, propose, approve, exec]
+        permissions: [read, search, write, propose, approve]
     editor:
       - path: "sops/**"
         permissions: [read, search, propose]

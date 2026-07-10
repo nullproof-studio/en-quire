@@ -36,7 +36,7 @@ function makeCtx(): TestEnv {
 
   const caller: CallerIdentity = {
     id: 'test',
-    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search', 'exec'] }],
+    scopes: [{ path: '**', permissions: ['read', 'write', 'propose', 'approve', 'search'] }],
   };
   const roots: Record<string, RootContext> = {
     docs: { root: config.document_roots.docs, git: new GitOperations(dir, false) },

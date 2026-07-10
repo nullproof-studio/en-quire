@@ -65,7 +65,6 @@ export * from './cite/url-policy.js';
 export * from './cite/verify-quote.js';
 
 // Tool runtime
-export * from './tools/audit-log.js';
 export * from './tools/context.js';
 export * from './tools/context-bundle.js';
 export * from './tools/history.js';
