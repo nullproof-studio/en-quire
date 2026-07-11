@@ -509,7 +509,7 @@ callers:
 | Component | Choice |
 |-----------|--------|
 | Language | TypeScript |
-| Runtime | Node.js 22 (LTS) |
+| Runtime | Node.js 24 (LTS) |
 | Markdown AST | unified / remark |
 | YAML parser | yaml (with source token preservation) |
 | Git operations | simple-git |
@@ -523,7 +523,7 @@ callers:
 
 ### Prerequisites
 
-- Node.js 22+
+- Node.js 24+ (CI, dev, and the Docker runtime standardize on Node 24; the published packages keep an `engines` floor of Node 22)
 - npm
 - Git ≥ 2.38 (proposal conflict detection uses `git merge-tree --write-tree`)
 
