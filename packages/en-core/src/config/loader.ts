@@ -125,6 +125,57 @@ export function loadConfig(configPath: string): ResolvedConfig {
     }
   }
 
+  // RBAC cross-reference validation. The schema enforces per-binding shape
+  // (exactly one selector, at least one role); here we check references
+  // across the whole policy — bindings/default_role must name defined roles,
+  // and local_group selectors must name defined local_groups. A dangling
+  // reference is a silent authorisation hole (the binding never grants
+  // anything, or grants nothing because the role is empty), so fail loudly.
+  {
+    const roleNames = new Set(Object.keys(validated.rbac.roles));
+    const localGroupNames = new Set(Object.keys(validated.rbac.local_groups));
+    for (const [i, binding] of validated.rbac.bindings.entries()) {
+      for (const role of binding.roles) {
+        if (!roleNames.has(role)) {
+          throw new ValidationError(
+            `rbac.bindings[${i}] references unknown role "${role}". ` +
+            `Defined roles: ${[...roleNames].join(', ') || '(none)'}.`,
+          );
+        }
+      }
+      if (binding.local_group !== undefined && !localGroupNames.has(binding.local_group)) {
+        throw new ValidationError(
+          `rbac.bindings[${i}] references undefined local_group "${binding.local_group}". ` +
+          `Defined local_groups: ${[...localGroupNames].join(', ') || '(none)'}.`,
+        );
+      }
+    }
+    if (validated.rbac.default_role !== null && !roleNames.has(validated.rbac.default_role)) {
+      throw new ValidationError(
+        `rbac.default_role "${validated.rbac.default_role}" is not a defined role. ` +
+        `Defined roles: ${[...roleNames].join(', ') || '(none)'}.`,
+      );
+    }
+  }
+
+  // oauth-external requires a resource identifier (the expected `aud`, also
+  // advertised in protected-resource metadata) and at least one trusted
+  // provider — without both, no request could ever authenticate, which is a
+  // misconfiguration worth failing loudly on.
+  if (validated.auth.mode === 'oauth-external') {
+    if (!validated.auth.resource) {
+      throw new ValidationError(
+        `auth.mode "oauth-external" requires "auth.resource" — the canonical URL of ` +
+        `this server, used as the expected token audience and advertised in discovery.`,
+      );
+    }
+    if (validated.auth.providers.length === 0) {
+      throw new ValidationError(
+        `auth.mode "oauth-external" requires at least one entry in "auth.providers".`,
+      );
+    }
+  }
+
   // Resolve document roots
   const document_roots: Record<string, ResolvedRoot> = {};
   for (const [name, root] of Object.entries(validated.document_roots)) {
@@ -173,6 +224,26 @@ export function loadConfig(configPath: string): ResolvedConfig {
     },
     callers: validated.callers,
     require_read_before_write: validated.require_read_before_write,
+    rbac: {
+      roles: validated.rbac.roles,
+      local_groups: validated.rbac.local_groups,
+      bindings: validated.rbac.bindings,
+      default_role: validated.rbac.default_role,
+    },
+    auth: {
+      mode: validated.auth.mode,
+      resource: validated.auth.resource,
+      providers: validated.auth.providers.map((p) => ({
+        issuer: p.issuer,
+        jwks_uri: p.jwks_uri,
+        audience: p.audience,
+        algorithms: p.algorithms,
+        subject_claim: p.subject_claim,
+        groups_claim: p.groups_claim,
+        roles_claim: p.roles_claim,
+        domain_claim: p.domain_claim,
+      })),
+    },
     citation: {
       enabled: validated.citation.enabled,
       section_heading: validated.citation.section_heading,

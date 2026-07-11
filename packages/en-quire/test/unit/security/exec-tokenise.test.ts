@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { describe, it, expect } from 'vitest';
-import { tokeniseCommand } from '../../../src/tools/admin/doc-exec.js';
+import { tokeniseCommand } from '@nullproof-studio/en-core';
 
 describe('tokeniseCommand', () => {
   it('splits simple command', () => {

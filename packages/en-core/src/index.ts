@@ -22,6 +22,9 @@ export * from './config/schema.js';
 export * from './rbac/http-auth.js';
 export * from './rbac/permissions.js';
 export * from './rbac/resolver.js';
+export * from './rbac/roles.js';
+export * from './rbac/auth-backend.js';
+export * from './rbac/oauth-external.js';
 export * from './rbac/types.js';
 
 // Git
@@ -62,7 +65,6 @@ export * from './cite/url-policy.js';
 export * from './cite/verify-quote.js';
 
 // Tool runtime
-export * from './tools/audit-log.js';
 export * from './tools/context.js';
 export * from './tools/context-bundle.js';
 export * from './tools/history.js';

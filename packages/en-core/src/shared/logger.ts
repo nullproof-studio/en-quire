@@ -1,7 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { createLogger, format, transports, Logger } from 'winston';
 import { join } from 'node:path';
-import type Database from 'better-sqlite3';
 
 export interface LoggingConfig {
   level: 'error' | 'warn' | 'info' | 'debug';
@@ -96,43 +95,4 @@ export function getLogger(): Logger {
     _logger = initLogger();
   }
   return _logger;
-}
-
-// --- Audit logging (SQLite) ---
-
-export interface ExecAuditEntry {
-  caller: string;
-  command: string;
-  working_dir?: string;
-  stdout?: string;
-  stderr?: string;
-  exit_code?: number;
-}
-
-/**
- * Log a doc_exec invocation to the audit table and the application log.
- */
-export function logExecAudit(db: Database.Database, entry: ExecAuditEntry): void {
-  const stmt = db.prepare(`
-    INSERT INTO exec_audit_log (caller, command, working_dir, stdout, stderr, exit_code, timestamp)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  stmt.run(
-    entry.caller,
-    entry.command,
-    entry.working_dir ?? null,
-    entry.stdout?.slice(0, 10000) ?? null,
-    entry.stderr?.slice(0, 10000) ?? null,
-    entry.exit_code ?? null,
-    new Date().toISOString(),
-  );
-
-  // Also log via Winston for file/stderr visibility
-  const logger = getLogger();
-  logger.info('doc_exec', {
-    caller: entry.caller,
-    command: entry.command,
-    exit_code: entry.exit_code,
-  });
 }

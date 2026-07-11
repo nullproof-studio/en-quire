@@ -202,3 +202,77 @@ callers:
   #   scopes:
   #     - path: "docs/**"
   #       permissions: [read, search, cite, cite_web]
+
+# ─────────────────────────────────────────────────────────────────────────
+# Authentication backend (HTTP transport)
+#
+#   bearer          (default) Static pre-shared keys on `callers[].key`.
+#                   Fine for stdio, Cursor, or any client that lets you set a
+#                   header by hand. The hosted Claude clients (Claude.ai web,
+#                   Claude Desktop custom connectors) CANNOT use this — they
+#                   require the OAuth handshake below.
+#
+#   oauth-external  en-quire becomes an OAuth 2.1 Resource Server. It does NOT
+#                   issue tokens or run a login page — it validates JWT access
+#                   tokens minted by a trusted IdP and advertises discovery
+#                   metadata so a Claude connector can find the IdP and run the
+#                   authorization-code + PKCE flow. Identity → scopes is driven
+#                   by the `rbac` policy below, NOT by `callers`.
+auth:
+  mode: bearer                            # bearer | oauth-external
+
+  # Required for oauth-external: the canonical URL of THIS server. It is the
+  # audience tokens must carry (`aud`) and what gets advertised in
+  # /.well-known/oauth-protected-resource. Must be the public HTTPS URL.
+  # resource: "https://docs.example.com/mcp"
+
+  # One or more trusted IdPs. A request authenticates if its token validates
+  # against ANY provider — so a corporate Entra tenant and a set of Google
+  # individuals can be trusted by the same server simultaneously.
+  providers: []
+  #   - issuer: "https://your-tenant.auth0.com/"   # must equal the token `iss`
+  #     audience: "https://docs.example.com/mcp"    # must equal `auth.resource`
+  #     algorithms: [RS256]                          # default: [RS256]
+  #     subject_claim: email                         # claim used as the caller id (default: sub)
+  #     groups_claim: "https://docs.example.com/groups"  # optional; corp IdP group membership
+  #     # roles_claim: roles                         # optional; IdP role claim
+  #     # domain_claim: hd                           # optional; Google Workspace hosted-domain
+  #     # jwks_uri: "https://your-tenant.auth0.com/.well-known/jwks.json"  # derived from issuer if omitted
+
+# ─────────────────────────────────────────────────────────────────────────
+# Role-based access policy (used by oauth-external; optional under bearer)
+#
+# Layering: users → groups → roles → access-points. The IdP asserts identity
+# and (when it has them) group membership; en-quire decides what those grant.
+# Role DEFINITIONS and ASSIGNMENTS live here, inside your trust boundary —
+# never let the IdP define what a role permits.
+#
+# A binding carries exactly ONE selector plus the roles it grants:
+#   idp_group   — matches an IdP `groups` claim value   (corporate IdPs)
+#   idp_role    — matches an IdP `roles` claim value
+#   domain      — matches the verified `domain_claim` (e.g. Google `hd`)
+#   local_group — membership maintained HERE (for IdPs with no groups, e.g.
+#                 consumer Google), referencing `local_groups` below
+#   user        — a single identity (the subject_claim value)
+rbac:
+  roles: {}
+  #   admin:
+  #     - { path: "**",      permissions: [read, search, write, propose, approve] }
+  #   editor:
+  #     - { path: "sops/**", permissions: [read, search, propose] }
+  #   reader:
+  #     - { path: "**",      permissions: [read, search] }
+
+  # Deployer-maintained membership for IdPs that supply no groups. "Adding a
+  # user" to a consumer-Google deployment means adding their email here.
+  local_groups: {}
+  #   editors: [ "alice@gmail.com", "bob@gmail.com" ]
+
+  bindings: []
+  #   - { idp_group: "docs-editors", roles: [editor] }   # corporate Entra/Okta/Auth0
+  #   - { local_group: editors,      roles: [editor] }    # consumer Google individuals
+  #   - { domain: "example.com",     roles: [editor] }    # Google Workspace via hd
+  #   - { user: "andy@example.com",  roles: [admin] }     # single-user override
+
+  # Role applied when no binding matches. null = deny (no implicit access).
+  default_role: null
