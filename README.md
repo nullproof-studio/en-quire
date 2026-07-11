@@ -2,7 +2,7 @@
 
 **Structured document management for agent systems, with governance.**
 
-An MCP server that treats markdown and YAML files as structured, section-addressable documents with built-in RBAC, approval workflows via git, and semantic search. Designed for operational use cases where agents need to read, propose edits to, and maintain documents — SOPs, skill files, memory, runbooks, config files — under governance.
+An MCP server that treats markdown, YAML, and JSONL files as structured, section-addressable documents with built-in RBAC, approval workflows via git, and semantic search. Designed for operational use cases where agents need to read, propose edits to, and maintain documents — SOPs, skill files, memory, runbooks, config files — under governance.
 
 > A [Nullproof Studio](https://github.com/nullproof-studio) open-source project.
 
@@ -35,7 +35,7 @@ en-quire fills this gap: a server that understands document structure, supports 
 
 ## Key Features
 
-- **Multi-format support** — pluggable parser architecture handles markdown (`.md`, `.mdx`) and YAML (`.yaml`, `.yml`). Both produce the same section tree; all tools work uniformly across formats.
+- **Multi-format support** — pluggable parser architecture handles markdown (`.md`, `.mdx`), YAML (`.yaml`, `.yml`), and JSONL (`.jsonl`, `.ndjson`). All three produce the same section tree and are editable through the same tools. JSONL records are wrapped in a synthetic `__records` root, so appending a record is `doc_insert_section({ anchor: "__records", position: "child_end" })` (works on empty files too), and each write re-validates every line. JSONL is deliberately excluded from full-text search — record-oriented data (transcripts, training samples, event logs) is accessed record-by-index via `doc_read_section`, not substring search — so `doc_status` lists JSONL files under `unindexed` by design.
 - **Section-addressable editing** — read and write at the heading/key level, not the file level. Address sections by heading text (`## Checks`), breadcrumb path (`Procedures > Checks > Daily`), positional index (`[0, 1]`), or YAML dot-path (`services.api.environment.PORT`).
 - **Multi-root document management** — configure multiple named document roots with independent git repos, permissions, and search indices. Paths are prefixed by root name (`docs/sops/runbook.md`, `config/docker-compose.yaml`).
 - **Git-native governance** — edits from unprivileged callers land on branches, not main. Approval is a merge. Rejection is branch deletion. The audit trail is commit history.
@@ -635,6 +635,7 @@ curl http://localhost:3100/health
 - **v0.3 — Search & Intelligence** (shipped): Semantic vector search, cross-document reference tracking, inverse lookups, context bundle builder.
 - **Citations** (shipped): Verbatim source-span attestation (`doc_cite` / `doc_cite_reverify`) with content-free design and governed-egress controls (required allowlist, SSRF guards, secret-pattern redaction, per-caller rate limiting, dedicated audit log).
 - **Remote auth & RBAC** (shipped): OAuth 2.1 Resource Server mode (`auth.mode: oauth-external`) validating JWTs from multiple IdPs concurrently, role-based access model (roles / bindings / local groups / default role) with real per-user attribution. Self-hosted authorization-server mode (`oauth-internal`) for air-gapped deployments is planned ([#95](https://github.com/nullproof-studio/en-quire/issues/95)).
+- **Multi-format** (shipped): JSONL / NDJSON parser (`.jsonl`, `.ndjson`) — record-oriented documents editable through the full `doc_*` toolset via a synthetic `__records` root, deliberately excluded from full-text search.
 - **v0.4 — Scale & Polish**: Bulk operations, watch mode, plugin hooks.
 
 ## Contributing
