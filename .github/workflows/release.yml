@@ -54,8 +54,21 @@ jobs:
     name: Bump, publish & release
     runs-on: ubuntu-latest
     steps:
+      # Mint a short-lived token from the release GitHub App. The app is listed
+      # as a bypass actor on the `main` branch ruleset, so the version-bump
+      # commit can be pushed directly to main (the default GITHUB_TOKEN cannot —
+      # the ruleset requires PRs). Scoped to this repo's Contents: write only.
+      - name: Generate release-app token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v6
         with:
+          # Use the app token so pushes to main bypass the ruleset.
+          token: ${{ steps.app-token.outputs.token }}
           # Dispatch bumps & commits to main; a tag push checks out the tag.
           ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
           fetch-depth: 0
