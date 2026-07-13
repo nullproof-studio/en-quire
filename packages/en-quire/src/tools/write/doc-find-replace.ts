@@ -5,14 +5,15 @@ import { findReplace } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { loadDocument, executeWrite } from '@nullproof-studio/en-core';
 import { computeEtag } from '@nullproof-studio/en-core';
+import { booleanish } from '@nullproof-studio/en-core';
 
 export const DocFindReplaceSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
   find: z.string().describe('Text or regex pattern to search for.'),
   replace: z.string().describe('Replacement text. In regex mode, supports backreferences ($1, $2, etc.).'),
-  regex: z.boolean().default(false).describe('When true, treat find as a regular expression. When false (default), find is matched literally.'),
+  regex: booleanish().default(false).describe('When true, treat find as a regular expression. When false (default), find is matched literally.'),
   flags: z.string().default('g').describe('Regex flags (default: "g" for global). Allowed: g, i, m, s, u, y.'),
-  preview: z.boolean().default(false).describe('When true, return matches without applying replacements. Use this to verify matches before committing changes.'),
+  preview: booleanish().default(false).describe('When true, return matches without applying replacements. Use this to verify matches before committing changes.'),
   apply_matches: z.array(z.number().int()).optional().describe('Apply only specific matches by ID (from preview results). Omit to apply all matches.'),
   expected_count: z.number().int().optional().describe('Safety check: if the actual match count differs from this value, the operation fails. Use with preview to verify first.'),
   if_match: z.string().optional().describe('ETag from a prior read. Required when require_read_before_write is enabled. Obtain from doc_read, doc_read_section, doc_outline, or doc_find_replace preview.'),

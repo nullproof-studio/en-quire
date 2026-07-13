@@ -8,13 +8,14 @@ import { requirePermission } from '@nullproof-studio/en-core';
 import { resolveFilePath } from '@nullproof-studio/en-core';
 import { computeEtag } from '@nullproof-studio/en-core';
 import { countWords } from '@nullproof-studio/en-core';
+import { booleanish } from '@nullproof-studio/en-core';
 import { extname } from 'node:path';
 
 export const DocOutlineSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
   max_depth: z.number().int().positive().optional().describe('Maximum heading depth to return. Omit for full depth.'),
   root_section: z.string().optional().describe('Section address to use as the root of the outline. Omit to outline the entire document.'),
-  include_preview: z.boolean().optional().default(false).describe('When true, includes the first preview_chars characters of each section body in a "preview" field. Useful for summarisation without reading full sections.'),
+  include_preview: booleanish().optional().default(false).describe('When true, includes the first preview_chars characters of each section body in a "preview" field. Useful for summarisation without reading full sections.'),
   preview_chars: z.number().int().positive().optional().default(200).describe('Maximum characters to include in preview (default: 200). Only used when include_preview is true.'),
 });
 

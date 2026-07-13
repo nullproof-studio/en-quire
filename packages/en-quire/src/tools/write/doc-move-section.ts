@@ -6,12 +6,16 @@ import { moveSection } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { ValidationError } from '@nullproof-studio/en-core';
 import { loadDocument, executeWrite } from '@nullproof-studio/en-core';
+import { enumWithHint } from '@nullproof-studio/en-core';
 
 export const DocMoveSectionSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
   section: z.string().describe('Section address of the section to move — heading text (e.g. "Changelog") or path (e.g. "Parent > Child").'),
   anchor: z.string().describe('Section address of the destination reference point — heading text or path.'),
-  position: z.enum(['before', 'after', 'child_start', 'child_end']).describe(
+  position: enumWithHint(
+    ['before', 'after', 'child_start', 'child_end'],
+    "This tool only moves an existing section — it does not replace content. To replace an existing section's content, use doc_replace_section instead.",
+  ).describe(
     '"before"/"after" place the moved section as a sibling of the anchor. ' +
     '"child_start"/"child_end" place it as a child of the anchor. ' +
     'Heading levels are adjusted automatically (including all children). ' +
