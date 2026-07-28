@@ -144,6 +144,72 @@ export function replaceSection(
   return before + '\n\n' + ensureTrailingNewlines(normalized) + after;
 }
 
+/**
+ * Rename a section's heading in place, leaving body and children untouched.
+ *
+ * Only the heading line is rewritten. The body is never read, re-serialised,
+ * or re-sent by the caller, so a rename costs nothing in the size of the
+ * section and cannot lose content — unlike `replaceSection` with
+ * `replaceHeading`, which spans heading start to body end and therefore
+ * requires the caller to supply the body back.
+ *
+ * The stable `^id` anchor is carried across the rename, so existing addresses
+ * and inbound `[[doc#^id]]` links stay valid. A caller who writes an explicit
+ * anchor into `newHeading` overrides that.
+ */
+export function renameSection(
+  markdown: string,
+  tree: SectionNode[],
+  address: SectionAddress,
+  newHeading: string,
+  ops: OpsStrategy,
+): string {
+  const node = resolveSingleSection(tree, address);
+
+  if (/[\r\n]/.test(newHeading)) {
+    throw new ValidationError(
+      'new_heading must be a single line — this tool renames the heading only. '
+      + 'To change the section body, use doc_replace_section or doc_find_replace.',
+    );
+  }
+
+  const cleanHeading = ops.stripHeadingMarkers(newHeading).trim();
+  if (cleanHeading === '') {
+    throw new ValidationError(
+      'new_heading is empty. Provide the new heading text without "#" markers (e.g. "Motivation").',
+    );
+  }
+
+  // Sections with no heading line (e.g. a `__preamble` node) have nothing to
+  // rename — bodyStartOffset sitting on headingStartOffset is the signal.
+  if (node.headingStartOffset === node.bodyStartOffset) {
+    throw new ValidationError(
+      `Section "${node.heading.text}" has no heading line to rename.`,
+    );
+  }
+
+  // Compare against display text: the parser strips any `^id` into anchorId,
+  // so a supplied anchor must not count toward the uniqueness check.
+  const cleanDisplay = extractAnchor(cleanHeading).text;
+  const siblings = node.parent ? node.parent.children : tree;
+  if (siblings.some((s) => s !== node && s.heading.text === cleanDisplay)) {
+    const parentName = node.parent?.heading.text ?? 'top level';
+    throw new ValidationError(
+      `Section "${cleanDisplay}" already exists under "${parentName}". `
+      + 'Headings must be unique among siblings — choose a different name, '
+      + 'or use doc_replace_section if you meant to update that section instead.',
+    );
+  }
+
+  const newHeadingLine = ops.renderHeading(node.heading.level, preserveAnchor(cleanHeading, node, ops));
+
+  // Splice the heading line only — everything from the newline onward (body,
+  // children, and all surrounding whitespace) is left exactly as it was.
+  const lineEnd = markdown.indexOf('\n', node.headingStartOffset);
+  const end = lineEnd === -1 ? markdown.length : lineEnd;
+  return markdown.slice(0, node.headingStartOffset) + newHeadingLine + markdown.slice(end);
+}
+
 /** Collect every `^id` anchor currently in use across the section tree. */
 function collectAnchorIds(tree: SectionNode[]): Set<string> {
   const ids = new Set<string>();

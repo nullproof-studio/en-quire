@@ -52,7 +52,7 @@ en-quire fills this gap: a server that understands document structure, supports 
 `doc_outline` · `doc_read_section` · `doc_read` · `doc_list` · `doc_insert_text`
 
 ### Document Editing
-`doc_replace_section` · `doc_insert_section` · `doc_append_section` · `doc_delete_section` · `doc_move_section` · `doc_set_value` · `doc_create` · `doc_find_replace` · `doc_rename` · `doc_generate_toc` · `doc_status`
+`doc_replace_section` · `doc_insert_section` · `doc_append_section` · `doc_delete_section` · `doc_move_section` · `doc_rename_section` · `doc_set_value` · `doc_create` · `doc_find_replace` · `doc_rename` · `doc_generate_toc` · `doc_status`
 
 ### Search & Cross-Document
 `doc_search` (fulltext / semantic / hybrid) · `doc_references` · `doc_referenced_by` · `doc_context_bundle` · `doc_history` · `doc_list`

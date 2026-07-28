@@ -24,6 +24,7 @@ compatibility:
     - doc_rename
     - doc_set_value
     - doc_move_section
+    - doc_rename_section
     - doc_generate_toc
     - doc_status
 category: core platform
@@ -157,7 +158,17 @@ Use `doc_move_section` to atomically delete a section from its current location 
 
 Heading levels adjust automatically. Moving an h2 to become a child of another h2 makes it h3, and all its children shift accordingly.
 
-**After any structural change** (move, insert, or delete), regenerate the table of contents if one exists:
+## Renaming a Heading
+
+Use **`doc_rename_section`** — `file`, `section`, `new_heading`. It rewrites the heading line and nothing else. The body and children are untouched, the heading level is kept, and the stable `^id` anchor travels across, so existing addresses and inbound `[[doc#^id]]` links stay valid.
+
+It takes **no `content` parameter**. That is the point: a rename cannot overwrite the body, and you never need to read the body first. One call, whatever the section's size.
+
+**Do not use `doc_replace_section` with `replace_heading: true` just to rename.** That replaces the section from heading start to body end, so you must send the entire body back with the new heading — anything you omit is deleted. Reserve it for when you are deliberately rewriting heading *and* body together.
+
+Renaming several headings: each call returns a fresh `etag`; chain it as the next call's `if_match` without re-reading.
+
+**After any structural change** (move, insert, delete, or rename), regenerate the table of contents if one exists:
 1. `doc_outline` — check if the document has a TOC section
 2. `doc_generate_toc` — regenerate it in place
 
@@ -190,7 +201,7 @@ Address it as `^store-map` in any section-addressed tool, and link to it from ot
 
 - **Discovery:** `doc_outline` returns each section's `id`. Copy that, not the heading text, when you need a reference that will outlive edits.
 - **Assignment is automatic:** `doc_create` and `doc_insert_section` assign a slugged `^id` derived from the heading. You normally don't write them by hand (though you may, to choose a specific id).
-- **Renames preserve the id:** `doc_replace_section` (heading rename) and `doc_move_section` keep the existing `^id`. The address and any inbound `[[doc#^id]]` links stay valid.
+- **Renames preserve the id:** `doc_rename_section` (the heading-rename tool) and `doc_move_section` keep the existing `^id`. The address and any inbound `[[doc#^id]]` links stay valid.
 - **Backfill old docs:** `doc_assign_ids` adds anchors to every heading lacking one in a single call — use it before relying on `^id` references into a pre-existing document.
 
 Use `^id` for cross-document citations and any reference you expect to persist; use a path address for one-off in-document uniqueness.
@@ -348,6 +359,7 @@ The full-file read prevents tone drift between section edits.
 | Insert new section | `doc_insert_section` | `file`, `anchor`, `position`, `heading`, `content` |
 | Delete a section | `doc_delete_section` | `file`, `section` |
 | Move a section | `doc_move_section` | `file`, `section`, `anchor`, `position` |
+| Rename a heading | `doc_rename_section` | `file`, `section`, `new_heading` |
 | Generate/update TOC | `doc_generate_toc` | `file`, `max_depth?`, `style?` |
 | Backfill stable `^id` anchors | `doc_assign_ids` | `file` |
 | Rename a document | `doc_rename` | `source`, `destination` |

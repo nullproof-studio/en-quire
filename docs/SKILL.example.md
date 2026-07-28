@@ -24,6 +24,7 @@ compatibility:
     - doc_rename
     - doc_set_value
     - doc_move_section
+    - doc_rename_section
     - doc_generate_toc
     - doc_status
 ---
@@ -280,6 +281,7 @@ The full-file read prevents tone drift between section edits.
 | Insert new section | `doc_insert_section` | `file`, `anchor`, `position`, `heading`, `content` |
 | Delete a section | `doc_delete_section` | `file`, `section` |
 | Move a section | `doc_move_section` | `file`, `section`, `anchor`, `position` |
+| Rename a heading | `doc_rename_section` | `file`, `section`, `new_heading` |
 | Generate/update TOC | `doc_generate_toc` | `file`, `max_depth?`, `style?` |
 | Rename a document | `doc_rename` | `source`, `destination` |
 
