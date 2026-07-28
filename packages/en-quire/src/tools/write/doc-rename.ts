@@ -31,7 +31,11 @@ export async function handleDocRename(
   // Cross-root rename not supported (different git repos / governance)
   if (srcResolved.rootName !== destResolved.rootName) {
     throw new ValidationError(
-      `Cannot rename across roots ("${srcResolved.rootName}" → "${destResolved.rootName}"). Use doc_read + doc_create + doc_delete instead.`,
+      `Cannot rename across roots ("${srcResolved.rootName}" → "${destResolved.rootName}") — roots are separate git repositories with separate governance. `
+      + 'You can copy the content across: doc_read the source, then doc_create at the destination. '
+      + 'en-quire has no whole-file delete tool, so the original cannot be removed through en-quire — '
+      + 'if you need a move rather than a copy, remove the source outside en-quire (e.g. via git) after the copy lands. '
+      + 'To rename within a single root, pass a destination in the same root.',
     );
   }
 

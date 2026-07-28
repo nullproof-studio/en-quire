@@ -35,7 +35,8 @@ export async function handleDocMoveSection(
   const ext = extname(args.file).toLowerCase();
   if (ext === '.yaml' || ext === '.yml') {
     throw new ValidationError(
-      'Section move is not supported for YAML files.',
+      'Section move is not supported for YAML files. Key order is a property of the mapping, not of a movable node — '
+      + 'reorder by rewriting the parent mapping with doc_replace_section, or set individual values with doc_set_value.',
     );
   }
 
