@@ -1,6 +1,6 @@
 {
   "name": "@nullproof-studio/en-quire",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Structured document management for agent systems, with governance. An MCP server.",
   "type": "module",
   "main": "dist/bin.js",
@@ -44,7 +44,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "@nullproof-studio/en-core": "0.2.1",
+    "@nullproof-studio/en-core": "0.3.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.0",
     "remark-parse": "^11.0.0",
