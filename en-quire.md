@@ -20,6 +20,7 @@ compatibility:
     - doc_delete_section
     - doc_create
     - doc_rename
+    - doc_rename_section
     - doc_generate_toc
 ---
 # Skill: en-quire — Markdown Document Management
