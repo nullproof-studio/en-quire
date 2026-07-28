@@ -11,6 +11,7 @@ import type {
 import {
   allocateAndInsertCitation,
   appendToSection as _appendToSection,
+  booleanish,
   buildCitationAppend,
   CiteRateLimiter,
   computeEtag,
@@ -41,7 +42,7 @@ export const DocCiteSchema = z.object({
   if_match: z.string().optional().describe(
     'ETag of target_file from a prior read. Required when require_read_before_write is enabled and target_file is set.',
   ),
-  force: z.boolean().optional().describe(
+  force: booleanish().optional().describe(
     'Bypass dedupe. By default, re-citing the same (target_file, source, quote) returns the existing citation_id. force:true allocates a new number.',
   ),
   message: z.string().optional().describe('Commit message to use for the auto-append.'),

@@ -7,10 +7,11 @@ import { listDocumentFiles, readDocument } from '@nullproof-studio/en-core';
 import { parserRegistry } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { resolveScope } from '@nullproof-studio/en-core';
+import { booleanish } from '@nullproof-studio/en-core';
 
 export const DocListSchema = z.object({
   scope: z.string().optional().describe('Limit results to a root or path prefix (e.g. "root-name" or "root-name/subfolder"). Omit to list all documents across all roots.'),
-  include_outline: z.boolean().default(false).describe('When true, includes the heading outline for each document. Useful for understanding document structure without reading full content.'),
+  include_outline: booleanish().default(false).describe('When true, includes the heading outline for each document. Useful for understanding document structure without reading full content.'),
 });
 
 export async function handleDocList(

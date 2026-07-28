@@ -4,6 +4,7 @@ import type { ToolContext } from '@nullproof-studio/en-core';
 import { searchDocuments } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { getLogger } from '@nullproof-studio/en-core';
+import { booleanish } from '@nullproof-studio/en-core';
 
 export const DocSearchSchema = z.object({
   query: z.string().describe('Search query text.'),
@@ -11,7 +12,7 @@ export const DocSearchSchema = z.object({
   section_filter: z.string().optional().describe('Filter results to sections matching this heading text or path pattern.'),
   search_type: z.enum(['fulltext', 'semantic', 'hybrid']).default('fulltext').describe('Search mode: "fulltext" (default) for keyword matching, "semantic" for meaning-based search, "hybrid" for both. Semantic and hybrid require search.semantic.enabled in config; otherwise the request degrades to fulltext.'),
   max_results: z.number().int().positive().default(10).describe('Maximum number of results to return (default: 10).'),
-  include_context: z.boolean().default(true).describe('When true (default), includes surrounding text context with each result.'),
+  include_context: booleanish().default(true).describe('When true (default), includes surrounding text context with each result.'),
 });
 
 export async function handleDocSearch(

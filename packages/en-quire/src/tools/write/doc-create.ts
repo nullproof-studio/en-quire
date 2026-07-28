@@ -15,7 +15,7 @@ import { GitRequiredError, ValidationError } from '@nullproof-studio/en-core';
 import { resolveFilePath } from '@nullproof-studio/en-core';
 
 export const DocCreateSchema = z.object({
-  file: z.string().describe('Document path (e.g. "root/path/to/file.md"). Must not already exist — use doc_replace_section or doc_find_replace to modify existing files.'),
+  file: z.string().describe('Document path (e.g. "root/path/to/file.md"). Must not already exist. Existing files are edited in place: doc_find_replace or doc_replace_section for content, doc_move_section to reorder sections, doc_insert_section / doc_delete_section to add or remove them, doc_rename to move the file to a different path.'),
   content: z.string().describe('Full document content including headings. For markdown, start with a top-level heading (e.g. "# Title"). Structure is validated before writing.'),
   mode: z.enum(['write', 'propose']).optional().describe('Write mode: "write" applies immediately, "propose" creates a git branch for review.'),
   message: z.string().optional().describe('Commit message describing the change.'),
@@ -38,7 +38,15 @@ export async function handleDocCreate(
 
   const absolutePath = safePath(resolved.root.path, resolved.relativePath);
   if (existsSync(absolutePath)) {
-    throw new ValidationError(`File already exists: ${args.file}. Use doc_replace_section or doc_find_replace to modify existing files.`);
+    throw new ValidationError(
+      `File already exists: ${args.file}. This is not a dead end — existing files are edited in place, and every kind of change has a tool:\n`
+      + '- Change a section\'s text: doc_find_replace (targeted) or doc_replace_section (whole body).\n'
+      + '- Rename a heading: doc_replace_section with replace_heading=true.\n'
+      + '- Reorder or re-nest sections: doc_move_section — atomic cut-and-paste, heading levels and children adjust automatically.\n'
+      + '- Add or remove sections: doc_insert_section / doc_append_section / doc_delete_section.\n'
+      + '- Put this content at a different path: doc_rename (moves the file within its root), then edit.\n'
+      + 'Start with doc_outline to see the current structure. Do not archive-and-recreate the document to restructure it.',
+    );
   }
 
   // Ensure directory exists

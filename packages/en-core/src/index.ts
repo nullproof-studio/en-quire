@@ -8,6 +8,7 @@ export * from './shared/etag.js';
 export * from './shared/file-utils.js';
 export * from './shared/levenshtein.js';
 export * from './shared/logger.js';
+export * from './shared/schema-helpers.js';
 export * from './shared/tokenise-command.js';
 export * from './shared/types.js';
 export * from './shared/word-count.js';
