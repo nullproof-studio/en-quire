@@ -63,6 +63,20 @@ jobs:
       - run: npm run build -w @nullproof-studio/en-core
       - run: npm run test:integration
 
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Gate on moderate+ so advisories can't sit unnoticed between Dependabot
+      # runs. Relax to --audit-level=high if an unfixable moderate blocks PRs.
+      - run: npm audit --audit-level=moderate
+
   publish-dryrun:
     name: Publish dry-run
     runs-on: ubuntu-latest
