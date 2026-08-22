@@ -25,7 +25,7 @@
     "clean": "npm run clean -w @nullproof-studio/en-core --if-present && npm run clean -w @nullproof-studio/en-quire --if-present && npm run clean -w @nullproof-studio/en-scribe --if-present"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3",
+    "@types/node": "^26.2.0",
     "typescript": "^5.8.3",
     "vitest": "^4.1.0"
   },
