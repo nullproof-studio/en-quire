@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^13.0.3",
     "cheerio": "^1.2.0",
     "diff": "^8.0.3",
     "jose": "^6.0.0",
@@ -41,7 +41,7 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/diff": "^6.0.0",
     "@types/micromatch": "^4.0.9",
     "@types/node": "^22.15.3",
