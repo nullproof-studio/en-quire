@@ -7,9 +7,10 @@ FROM node:24-slim AS build
 
 WORKDIR /app
 
-# better-sqlite3 has no prebuilt binary for every node 24 target, so node-gyp
-# may compile it from source — which needs python3 + a C++ toolchain. These
-# live only in the build stage; the runtime stage below stays slim.
+# better-sqlite3 v13+ ships N-API prebuilds inside the package, so it normally
+# installs without compiling. Keep python3 + a C++ toolchain as the node-gyp
+# fallback for architectures with no prebuild. These live only in the build
+# stage; the runtime stage below stays slim.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
