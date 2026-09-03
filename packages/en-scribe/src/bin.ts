@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { parseArgs } from 'node:util';
+import { existsSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type Database from 'better-sqlite3';
@@ -14,6 +15,7 @@ import {
   getLogger,
   ToolRegistry,
   attachRegistry,
+  installStdioLifecycle,
 } from '@nullproof-studio/en-core';
 import type {
   ResolvedConfig,
@@ -72,6 +74,15 @@ async function main() {
 
   const roots: Record<string, RootContext> = {};
   for (const [name, root] of Object.entries(config.document_roots)) {
+    // A root whose directory is missing is a warning, not a fatal: the other
+    // roots must keep serving. Listing treats it as empty and git stays
+    // unavailable, so it becomes usable as soon as the directory appears.
+    if (!existsSync(root.path)) {
+      log.warn('Document root path does not exist — root will be empty until it is created', {
+        name,
+        path: root.path,
+      });
+    }
     const git = new GitOperations(
       root.path,
       root.git.enabled,
@@ -163,6 +174,17 @@ async function startStdioTransport(
     roots: Object.keys(config.document_roots),
   });
   await server.connect(transport);
+
+  // The spawning client is our only reason to exist: when its end of stdin
+  // closes (normal exit, crash, or SIGKILL of the parent), release the
+  // database and exit rather than lingering as an orphan.
+  const shutdown = installStdioLifecycle({
+    server: server.server,
+    cleanup: () => { db.close(); },
+    log,
+  });
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 
 async function startHttpTransport(
