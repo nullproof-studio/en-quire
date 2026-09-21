@@ -31,22 +31,21 @@
     "@modelcontextprotocol/sdk": "^1.12.1",
     "better-sqlite3": "^13.0.3",
     "cheerio": "^1.2.0",
-    "diff": "^8.0.3",
-    "jose": "^6.0.0",
+    "diff": "^9.0.0",
+    "jose": "^6.2.12",
     "micromatch": "^4.0.8",
     "simple-git": "^3.36.0",
-    "undici": "^8.1.0",
+    "undici": "^8.10.2",
     "winston": "^3.19.0",
-    "yaml": "^2.7.1",
-    "zod": "^3.24.4"
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
-    "@types/diff": "^6.0.0",
     "@types/micromatch": "^4.0.9",
-    "@types/node": "^22.15.3",
+    "@types/node": "^26.6.2",
     "@types/unist": "^3.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^7.0.2"
   },
   "optionalDependencies": {
     "sqlite-vec": "^0.1.9"
