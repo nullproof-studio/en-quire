@@ -16,7 +16,7 @@ export default defineConfig({
       '**/test/integration/**',
     ],
     alias: {
-      '@nullproof-studio/en-core': resolve(__dirname, 'packages/en-core/src/index.ts'),
+      '@nullproof-studio/en-core': resolve(import.meta.dirname, 'packages/en-core/src/index.ts'),
     },
   },
 });
