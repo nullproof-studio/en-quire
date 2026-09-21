@@ -10,7 +10,7 @@ import { detectGit } from './detector.js';
 const execFileAsync = promisify(execFile);
 
 export class GitOperations {
-  private git: SimpleGit;
+  private git!: SimpleGit;
   private _available: boolean;
   private _configuredDefault: string | null;
   private _defaultBranch?: string;
@@ -30,9 +30,16 @@ export class GitOperations {
     prHookSecret?: string | null,
   ) {
     this._documentRoot = documentRoot;
-    this.git = simpleGit(documentRoot);
+    // detectGit() is false for a missing directory as well as a non-repo, so
+    // checking it first means simple-git is never constructed on a path that
+    // does not exist (it throws synchronously) or one where git is disabled.
+    // Every method that touches `this.git` goes through requireGit(), so the
+    // uninitialised branch is unreachable when `_available` is false.
     const detection = detectGit(documentRoot);
     this._available = forceEnabled === false ? false : detection.available;
+    if (this._available) {
+      this.git = simpleGit(documentRoot);
+    }
     this._configuredDefault = configuredDefaultBranch ?? null;
     this._remote = remote ?? null;
     this._pushProposals = pushProposals === true;
