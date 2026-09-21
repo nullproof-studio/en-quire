@@ -93,11 +93,11 @@ const SemanticSearchSchema = z.object({
 });
 
 const SearchSchema = z.object({
-  semantic: SemanticSearchSchema.default({}),
+  semantic: SemanticSearchSchema.prefault({}),
   sync_on_start: z.enum(['blocking', 'background']).default('blocking'),
   batch_size: z.number().int().positive().default(500),
-}).passthrough();
-// `passthrough` keeps Zod from erroring on unrecognised keys —
+}).loose();
+// `loose` (zod 4; formerly `passthrough`) keeps Zod from erroring on unrecognised keys —
 // `search.fulltext` was a stale toggle that never gated any code path,
 // so it was removed in v0.3. Operators with `fulltext` in their config
 // get an explicit deprecation warning at load time (see
@@ -151,8 +151,8 @@ const CitationSchema = z.object({
   // `[[#^cite-N]]` self-links resolve in Obsidian. Off by default — the
   // suffix renders literally in non-Obsidian markdown viewers.
   obsidian_block_ids: z.boolean().default(false),
-  fetch: CitationFetchSchema.default({}),
-  rate_limit: CitationRateLimitSchema.default({}),
+  fetch: CitationFetchSchema.prefault({}),
+  rate_limit: CitationRateLimitSchema.prefault({}),
 });
 
 const RootGitSchema = z.object({
@@ -171,7 +171,7 @@ const RootGitSchema = z.object({
 const DocumentRootSchema = z.object({
   path: z.string(),
   description: z.string().optional(),
-  git: RootGitSchema.default({}),
+  git: RootGitSchema.prefault({}),
 });
 
 export const ConfigSchema = z.object({
@@ -184,13 +184,13 @@ export const ConfigSchema = z.object({
   // serve on a LAN. Set to "0.0.0.0" only if you intend network exposure —
   // Bearer auth is required in that case (enforced at startup).
   listen_host: z.string().default('127.0.0.1'),
-  search: SearchSchema.default({}),
-  logging: LoggingSchema.default({}),
+  search: SearchSchema.prefault({}),
+  logging: LoggingSchema.prefault({}),
   callers: z.record(z.string(), CallerConfigSchema).default({}),
   require_read_before_write: z.boolean().default(true),
-  citation: CitationSchema.default({}),
-  rbac: RbacSchema.default({}),
-  auth: AuthSchema.default({}),
+  citation: CitationSchema.prefault({}),
+  rbac: RbacSchema.prefault({}),
+  auth: AuthSchema.prefault({}),
 });
 
 export type RawConfig = z.input<typeof ConfigSchema>;

@@ -28,8 +28,12 @@ export function booleanish() {
  */
 export function enumWithHint<const T extends [string, ...string[]]>(values: T, hint: string) {
   return z.enum(values, {
-    errorMap: (issue, ctx) => issue.code === 'invalid_enum_value'
-      ? { message: `Invalid value "${ctx.data}". Valid values: ${values.join(', ')}. ${hint}` }
-      : { message: ctx.defaultError },
+    // zod 4: `error` replaces `errorMap`, and a wrong-type input (e.g. a
+    // number) now reports the same `invalid_value` code as an unknown string,
+    // so gate on the input being a string. Returning undefined keeps zod's
+    // default message for everything else.
+    error: (issue) => issue.code === 'invalid_value' && typeof issue.input === 'string'
+      ? `Invalid value "${issue.input}". Valid values: ${values.join(', ')}. ${hint}`
+      : undefined,
   });
 }

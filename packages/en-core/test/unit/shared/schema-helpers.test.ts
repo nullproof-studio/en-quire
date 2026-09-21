@@ -24,11 +24,11 @@ describe('booleanish', () => {
   });
 
   it('rejects strings that are not a recognised boolean form', () => {
-    expect(() => booleanish().parse('yes')).toThrow(/Expected boolean, received string/);
+    expect(() => booleanish().parse('yes')).toThrow(/expected boolean, received string/);
   });
 
   it('rejects non-boolean, non-string types with the standard zod message', () => {
-    expect(() => booleanish().parse(5)).toThrow(/Expected boolean, received number/);
+    expect(() => booleanish().parse(5)).toThrow(/expected boolean, received number/);
     expect(() => booleanish().parse(null)).toThrow();
   });
 
