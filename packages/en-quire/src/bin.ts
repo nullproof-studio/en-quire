@@ -9,6 +9,7 @@ import {
   loadConfig,
   openDatabase,
   syncIndex,
+  markRootWalked,
   syncEmbeddings,
   GitOperations,
   resolveCaller,
@@ -152,6 +153,7 @@ async function main() {
       setImmediate(() => {
         try {
           const syncResult = syncIndex(db, name, root.path, config.search.batch_size);
+          markRootWalked(db, name);
           log.info('Index sync complete', {
             root: name,
             indexed: syncResult.indexed,
@@ -165,6 +167,7 @@ async function main() {
       });
     } else {
       const syncResult = syncIndex(db, name, root.path, config.search.batch_size);
+      markRootWalked(db, name);
       log.info('Index sync', {
         root: name,
         indexed: syncResult.indexed,

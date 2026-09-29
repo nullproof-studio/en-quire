@@ -96,6 +96,12 @@ const SearchSchema = z.object({
   semantic: SemanticSearchSchema.prefault({}),
   sync_on_start: z.enum(['blocking', 'background']).default('blocking'),
   batch_size: z.number().int().positive().default(500),
+  // Before each doc_search, re-index files in scope that changed on disk
+  // outside en-quire (#137). Indexed files are re-checked every search;
+  // folders/roots are walked for NEW files at most once per interval
+  // (0 = every search).
+  refresh_on_search: z.boolean().default(true),
+  rescan_interval_ms: z.number().int().nonnegative().default(30_000),
 }).loose();
 // `loose` (zod 4; formerly `passthrough`) keeps Zod from erroring on unrecognised keys —
 // `search.fulltext` was a stale toggle that never gated any code path,

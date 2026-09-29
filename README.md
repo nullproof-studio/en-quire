@@ -476,6 +476,8 @@ port: 3100                          # For streamable-http
 search:
   sync_on_start: blocking           # "blocking" or "background" (use background for 100k+ docs)
   batch_size: 500                   # Files per index transaction batch
+  refresh_on_search: true           # Re-index files in scope that changed on disk outside en-quire before each doc_search
+  rescan_interval_ms: 30000         # Walk folders/roots for NEW files at most this often (0 = every search)
   semantic:
     enabled: false                  # Opt-in (sqlite-vec + OpenAI-compatible embeddings)
     # Base URL of an OpenAI-compatible embeddings server. The client

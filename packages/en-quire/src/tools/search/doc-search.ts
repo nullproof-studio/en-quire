@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import type { ToolContext } from '@nullproof-studio/en-core';
-import { searchDocuments } from '@nullproof-studio/en-core';
+import { searchDocuments, refreshIndexForScope } from '@nullproof-studio/en-core';
 import { requirePermission } from '@nullproof-studio/en-core';
 import { getLogger } from '@nullproof-studio/en-core';
 import { booleanish } from '@nullproof-studio/en-core';
@@ -38,6 +38,21 @@ export async function handleDocSearch(
       }
     } else {
       getLogger().debug('doc_search: semantic requested but no embeddings client configured — degrading to fulltext');
+    }
+  }
+
+  // Pick up files changed on disk outside en-quire since they were indexed
+  // (#137). Best-effort: a refresh failure must not fail the search.
+  if (ctx.config.search.refresh_on_search !== false) {
+    try {
+      refreshIndexForScope(ctx.db, ctx.config.document_roots, args.scope, {
+        rescanIntervalMs: ctx.config.search.rescan_interval_ms ?? 30_000,
+        batchSize: ctx.config.search.batch_size,
+      });
+    } catch (err) {
+      getLogger().warn('doc_search: index refresh failed — searching the existing index', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
