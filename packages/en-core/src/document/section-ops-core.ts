@@ -62,8 +62,12 @@ export function readSection(
  * preserving the correct heading level and markdown structure.
  * When `replaceHeading` is `true`, the newContent must include the full
  * heading line (e.g. "## New Heading\n\nBody"); the existing heading is
- * replaced from headingStart to bodyEnd.
+ * replaced along with the body.
  * When `replaceHeading` is `false` (default), only the body is replaced.
+ *
+ * In every mode, a body that contains child-level headings replaces the
+ * existing children too (up to sectionEnd); a plain-text body replaces only
+ * the section's own text (up to bodyEnd) and keeps the children.
  */
 export function replaceSection(
   markdown: string,
@@ -74,32 +78,38 @@ export function replaceSection(
   ops: OpsStrategy,
 ): string {
   const node = resolveSingleSection(tree, address);
+  const endOffsetFor = (body: string) =>
+    ops.hasChildHeadings(body, node.heading.level) ? node.sectionEndOffset : node.bodyEndOffset;
 
   if (typeof replaceHeading === 'string') {
     // Replace heading text only, then replace body. Carry the stable `^id`
     // anchor across the rename so links/addresses targeting it stay valid.
     const cleanHeading = preserveAnchor(ops.stripHeadingMarkers(replaceHeading), node, ops);
     const newHeadingLine = ops.renderHeading(node.heading.level, cleanHeading);
-    const before = markdown.slice(0, node.headingStartOffset);
-    const after = markdown.slice(node.bodyEndOffset);
     const normalized = newContent.replace(/^\n*/, '');
+    const before = markdown.slice(0, node.headingStartOffset);
+    const after = markdown.slice(endOffsetFor(normalized));
     return before + newHeadingLine + '\n\n' + ensureTrailingNewlines(normalized) + after;
   }
 
   if (replaceHeading === true) {
-    // Replace from heading start to body end — newContent must include heading line.
+    // Replace from heading start — newContent must include heading line.
     // Guard: if newContent doesn't start with a heading marker, preserve the
     // existing heading to prevent accidental heading deletion.
     const before = markdown.slice(0, node.headingStartOffset);
-    const after = markdown.slice(node.bodyEndOffset);
     if (!newContent.trimStart().startsWith('#')) {
       // Content doesn't include a heading — preserve the original heading
       const headingLine = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
       const normalized = newContent.replace(/^\n*/, '');
+      const after = markdown.slice(endOffsetFor(normalized));
       return before + headingLine + '\n\n' + ensureTrailingNewlines(normalized) + after;
     }
     // Content carries its own heading line — carry the stable anchor onto it.
+    // Judge child headings on the body only, so the heading line itself
+    // (whatever level the caller wrote) never counts as a child.
+    const body = newContent.trimStart().replace(/^[^\n]*\n?/, '');
     const preserved = preserveAnchorInContent(newContent, node, ops);
+    const after = markdown.slice(endOffsetFor(body));
     return before + ensureTrailingNewlines(preserved) + after;
   }
 
