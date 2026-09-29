@@ -43,6 +43,7 @@ export * from './search/link-storage.js';
 export * from './search/query.js';
 export * from './search/schema.js';
 export * from './search/sync.js';
+export * from './search/freshness.js';
 export * from './search/vector-store.js';
 
 // Document — format-agnostic pieces

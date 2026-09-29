@@ -201,6 +201,8 @@ export interface ResolvedConfig {
   search: {
     sync_on_start: 'blocking' | 'background';
     batch_size: number;
+    refresh_on_search: boolean;
+    rescan_interval_ms: number;
     semantic: {
       enabled: boolean;
       endpoint?: string;

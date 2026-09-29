@@ -8,6 +8,8 @@ export const DEFAULT_CONFIG: Omit<ResolvedConfig, 'document_roots' | 'database'>
   search: {
     sync_on_start: 'blocking',
     batch_size: 500,
+    refresh_on_search: true,
+    rescan_interval_ms: 30_000,
     semantic: {
       enabled: false,
       api_key: null,

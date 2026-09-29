@@ -2,7 +2,7 @@
 import type Database from 'better-sqlite3';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
-import { listDocumentFiles, readDocument } from '../shared/file-utils.js';
+import { listDocumentFiles, readDocument, safePath } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { indexDocument, removeFromIndex } from './indexer.js';
 import { storeLinks, resolveStaleLinks } from './link-storage.js';
@@ -39,18 +39,74 @@ export interface SyncResult {
  * - Batches index writes into transactions of BATCH_SIZE files
  * - Reports elapsed time for observability
  */
+function isFile(absolutePath: string): boolean {
+  try {
+    return statSync(absolutePath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export interface SyncOptions {
+  /**
+   * Limit the sync to one file or folder inside the root (root-relative).
+   * Only indexed files under it are considered for removal.
+   */
+  subPath?: string;
+  /**
+   * true (default): walk the directory tree, so new files are found.
+   * false: only re-check files already in the index — no directory walk,
+   * so it is cheap enough to run before every search, but new files are
+   * not discovered.
+   */
+  walk?: boolean;
+  /**
+   * Drop semantic-index rows for re-indexed files. Their vectors were
+   * embedded against the old bodies (same policy as the write path).
+   */
+  dropEmbeddings?: boolean;
+  /**
+   * 'always' (default): re-resolve `?`-tagged links index-wide after the
+   * sync. 'on-change': only when this sync indexed or removed a file —
+   * query-time refreshes use it, since the scan costs ~20ms per call on a
+   * root with hundreds of unresolved links and an unchanged sync has
+   * nothing new to resolve.
+   */
+  linkScan?: 'always' | 'on-change';
+}
+
 export function syncIndex(
   db: Database.Database,
   rootName: string,
   documentRoot: string,
   batchSize: number = BATCH_SIZE,
+  options: SyncOptions = {},
 ): SyncResult {
   const start = performance.now();
-  const prefix = rootName + '/';
+  const { subPath, walk = true, dropEmbeddings = false, linkScan = 'always' } = options;
+  const rootPrefix = rootName + '/';
+  const scopeKey = subPath ? rootPrefix + subPath : undefined;
+  const inScope = (prefixedPath: string) =>
+    prefixedPath.startsWith(rootPrefix)
+    && (!scopeKey || prefixedPath === scopeKey || prefixedPath.startsWith(scopeKey + '/'));
+
+  // Bulk-load indexed mtimes for this root (and sub-path) only (prefixed paths)
+  const allMtimes = db.prepare('SELECT file_path, mtime_ms FROM index_metadata').all() as Array<{ file_path: string; mtime_ms: number }>;
+  const indexedMtimes = new Map<string, number>(
+    allMtimes
+      .filter((row) => inScope(row.file_path))
+      .map((row) => [row.file_path, row.mtime_ms]),
+  );
 
   let files: string[];
   try {
-    files = listDocumentFiles(documentRoot);
+    if (!walk) {
+      files = [...indexedMtimes.keys()].map((p) => p.slice(rootPrefix.length));
+    } else if (subPath && isFile(safePath(documentRoot, subPath))) {
+      files = [subPath];
+    } else {
+      files = listDocumentFiles(documentRoot, subPath);
+    }
   } catch (err) {
     const log = getLogger();
     log.warn('Index sync skipped — cannot scan root', {
@@ -66,28 +122,22 @@ export function syncIndex(
   let skipped = 0;
   let removed = 0;
 
-  // Bulk-load indexed mtimes for this root only (prefixed paths)
-  const allMtimes = db.prepare('SELECT file_path, mtime_ms FROM index_metadata').all() as Array<{ file_path: string; mtime_ms: number }>;
-  const indexedMtimes = new Map<string, number>(
-    allMtimes
-      .filter((row) => row.file_path.startsWith(prefix))
-      .map((row) => [row.file_path, row.mtime_ms]),
-  );
-
   // Collect files that need (re-)indexing
   const toIndex: Array<{ file: string; prefixedPath: string; absolutePath: string; mtime: number }> = [];
   const prefixedFileSet = new Set<string>();
 
   for (const file of files) {
-    const prefixedPath = prefix + file;
-    prefixedFileSet.add(prefixedPath);
+    const prefixedPath = rootPrefix + file;
     const absolutePath = join(documentRoot, file);
     let mtime: number;
     try {
       mtime = statSync(absolutePath).mtimeMs;
     } catch {
+      // Gone since it was listed/indexed — left out of the set so the
+      // removal pass below drops it.
       continue;
     }
+    prefixedFileSet.add(prefixedPath);
 
     const lastIndexed = indexedMtimes.get(prefixedPath);
     if (lastIndexed !== undefined && lastIndexed >= mtime) {
@@ -141,6 +191,13 @@ export function syncIndex(
     const runBatch = db.transaction(() => {
       for (const p of prepared) {
         indexDocument(db, p.prefixedPath, p.tree, p.content, p.mtime, undefined);
+        if (dropEmbeddings) {
+          try {
+            removeEmbeddingsForFile(db, p.prefixedPath);
+          } catch {
+            /* sqlite-vec table absent (semantic disabled) — no-op */
+          }
+        }
         linkBacklog.push({ prefixedPath: p.prefixedPath, links: p.links });
         indexed++;
       }
@@ -196,10 +253,12 @@ export function syncIndex(
   // row stale when only the agents root is the one being synced. The
   // scan is idempotent and cheap; running it on every per-root sync is
   // a no-op once everything resolves.
-  const runResolveStale = db.transaction(() => {
-    resolveStaleLinks(db);
-  });
-  runResolveStale();
+  if (linkScan === 'always' || indexed > 0 || removed > 0) {
+    const runResolveStale = db.transaction(() => {
+      resolveStaleLinks(db);
+    });
+    runResolveStale();
+  }
 
   const elapsed_ms = Math.round(performance.now() - start);
   return { indexed, skipped, removed, elapsed_ms };

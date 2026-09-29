@@ -209,6 +209,8 @@ export function loadConfig(configPath: string): ResolvedConfig {
     search: {
       sync_on_start: validated.search.sync_on_start,
       batch_size: validated.search.batch_size,
+      refresh_on_search: validated.search.refresh_on_search,
+      rescan_interval_ms: validated.search.rescan_interval_ms,
       semantic: {
         enabled: validated.search.semantic.enabled,
         endpoint: validated.search.semantic.endpoint,
