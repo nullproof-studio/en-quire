@@ -104,16 +104,9 @@ export const markdownStrategy: OpsStrategy = {
   },
 
   stripLeadingDuplicateHeading(content, headingText) {
-    const trimmed = content.replace(/^\n*/, '');
-    const match = trimmed.match(/^#{1,6}\s+(.+?)(?:\s+#+\s*)?$/m);
-    if (!match) return content;
-    const contentHeadingText = match[1].trim();
-    if (contentHeadingText === headingText) {
-      const headingEnd = trimmed.indexOf('\n', match.index!);
-      if (headingEnd === -1) return '';
-      return trimmed.slice(headingEnd).replace(/^\n*/, '');
-    }
-    return content;
+    // Same matching as stripDuplicateHeading (code-fence aware, `^id`
+    // ignored, preamble kept); the target keeps its own heading and anchor.
+    return markdownStrategy.stripDuplicateHeading!(content, headingText)?.content ?? content;
   },
 
   stripDuplicateHeading(content, headingText) {

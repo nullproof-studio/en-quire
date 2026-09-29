@@ -769,6 +769,82 @@ describe('replaceSection — auto-strip duplicate heading from content (#27)', (
   });
 });
 
+describe('replaceSection — replace_heading replaces children when content has child headings (#136)', () => {
+  const md = '# Doc\n\n## A\n\nOld.\n\n### A1\n\nOld child.\n\n## B\n\nKeep.\n';
+  const count = (s: string, re: RegExp) => (s.match(re) ?? []).length;
+
+  it('replaceHeading=true with child headings replaces the existing children', () => {
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      '## A2\n\nNew.\n\n### New child\n\nx.', true);
+    expect(result).not.toContain('A1');
+    expect(result).not.toContain('Old child.');
+    expect(result).toContain('## A2\n\nNew.\n\n### New child\n\nx.');
+    expect(result).toContain('## B\n\nKeep.');
+  });
+
+  it('replaceHeading=true with plain-text body preserves the existing children', () => {
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, '## A2\n\nNew.', true);
+    expect(result).toContain('### A1\n\nOld child.');
+    expect(result).not.toContain('Old.\n');
+  });
+
+  it('replaceHeading as string with child headings replaces the existing children', () => {
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' },
+      'New.\n\n### New child\n\nx.', 'A2');
+    expect(result).not.toContain('A1');
+    expect(result).toContain('## A2\n\nNew.\n\n### New child');
+    expect(result).toContain('## B\n\nKeep.');
+  });
+
+  it('replaceHeading as string with plain-text body preserves the existing children', () => {
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'A' }, 'New.', 'A2');
+    expect(result).toContain('### A1\n\nOld child.');
+  });
+
+  it('replaceHeading=true on the root H1 rewrites the whole document without duplicates', () => {
+    const doc = '# Doc ^doc\n\nIntro.\n\n## A ^a\n\n## B ^b\n';
+    const tree = parse(doc);
+    const result = replaceSection(doc, tree, { type: 'text', text: 'Doc' },
+      '# Doc ^doc\n\nIntro.\n\n## A ^a\n\nupdated\n\n## B ^b\n', true);
+    expect(count(result, /^## A\b/gm)).toBe(1);
+    expect(count(result, /^## B\b/gm)).toBe(1);
+    expect(count(result, /\^a\b/g)).toBe(1);
+    expect(result).toContain('## A ^a\n\nupdated');
+  });
+});
+
+describe('replaceSection — duplicate-heading strip keeps preamble and matches anchors (#136)', () => {
+  it('keeps text that precedes a copy of the target heading', () => {
+    const md = '# Doc\n\n## Target\n\nold.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'Target' },
+      'Intro.\n\n## Target\n\nNew body.');
+    expect(result).toContain('## Target\n\nIntro.\n\nNew body.');
+    expect(result.match(/^## Target/gm)).toHaveLength(1);
+  });
+
+  it('strips a copy of the target heading that carries its ^id anchor', () => {
+    const md = '# Doc\n\n## Target ^target\n\nold.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'Target' },
+      '## Target ^target\n\nNew body.');
+    expect(result).toContain('## Target ^target\n\nNew body.');
+    expect(result.match(/^## Target/gm)).toHaveLength(1);
+  });
+
+  it('does not strip a matching heading inside a code fence', () => {
+    const md = '# Doc\n\n## Target\n\nold.\n';
+    const tree = parse(md);
+    const result = replaceSection(md, tree, { type: 'text', text: 'Target' },
+      '```md\n## Target\n```\n\nNew body.');
+    expect(result).toContain('```md\n## Target\n```\n\nNew body.');
+  });
+});
+
 describe('replaceSection — body-only replace duplicates child sections (#29)', () => {
   const fixtureName = 'financial-performance.md';
   let originalMd: string;
