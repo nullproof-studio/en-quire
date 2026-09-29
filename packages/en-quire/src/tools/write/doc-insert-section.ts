@@ -38,9 +38,10 @@ export async function handleDocInsertSection(
 
   const { content, encoding, tree, parser } = loadDocument(ctx, args.file);
   const address = parser.parseAddress(args.anchor);
+  const warnings: string[] = [];
   const newContent = insertSection(
     content, tree, address, args.position,
-    args.heading, args.content, parser.ops, args.level,
+    args.heading, args.content, parser.ops, args.level, warnings,
   );
 
   const result = await executeWrite(ctx, {
@@ -52,5 +53,5 @@ export async function handleDocInsertSection(
     if_match: args.if_match,
   }, content, newContent, encoding);
 
-  return { ...result, section: args.heading };
+  return { ...result, section: args.heading, ...(warnings.length > 0 && { warnings }) };
 }

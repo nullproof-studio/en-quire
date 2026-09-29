@@ -34,6 +34,16 @@ export interface OpsStrategy {
    */
   stripLeadingDuplicateHeading(content: string, headingText: string): string;
 
+  /**
+   * Remove a copy of a new section's own heading from its body content — the
+   * agent passed `heading` and also wrote that heading line into `content`.
+   * Matches the first heading outside code fences whose display text (anchor
+   * stripped, any level) equals headingText; text above it is kept as body.
+   * Returns null when there is nothing to strip. Optional — formats without
+   * heading syntax omit it.
+   */
+  stripDuplicateHeading?(content: string, headingText: string): { content: string; anchorId?: string } | null;
+
   /** Generate a table of contents from the section tree. Optional — not all formats support it. */
   generateToc?(tree: SectionNode[], maxDepth: number, style: 'links' | 'plain'): string;
 

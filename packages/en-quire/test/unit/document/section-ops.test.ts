@@ -124,6 +124,80 @@ describe('insertSection', () => {
   });
 });
 
+describe('insertSection — heading duplicated inside content (#138)', () => {
+  const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n';
+  const count = (s: string, re: RegExp) => (s.match(re) ?? []).length;
+
+  it('strips a leading copy of the heading from content', () => {
+    const tree = parse(md);
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', '## New\n\nBody.');
+    expect(count(result, /^## New\b/gm)).toBe(1);
+    expect(result).toContain('Body.');
+    expect(() => parse(result)).not.toThrow();
+  });
+
+  it('matches a content heading that carries a ^id anchor, and keeps that anchor', () => {
+    const tree = parse(md);
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', '## New ^custom-id\n\nBody.');
+    expect(count(result, /^## New\b/gm)).toBe(1);
+    expect(result).toContain('## New ^custom-id\n');
+  });
+
+  it('matches regardless of the heading level written in content', () => {
+    const tree = parse(md);
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', '### New\n\nBody.');
+    expect(count(result, /^#+ New\b/gm)).toBe(1);
+    expect(result).toMatch(/^## New/m);
+  });
+
+  it('strips the heading when it follows a preamble, keeping the preamble as body', () => {
+    const tree = parse(md);
+    const content = '> Status: proposed.\n\n## New ^new\n\n### Child\n\nChild body.';
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', content);
+    expect(count(result, /^## New\b/gm)).toBe(1);
+    expect(result).toMatch(/## New \^new\n\n> Status: proposed\.\n\n### Child\n\nChild body\./);
+  });
+
+  it('falls back to a fresh anchor when the content anchor is already taken', () => {
+    const doc = '# Doc\n\n## A ^taken\n\nContent A.\n';
+    const tree = parse(doc);
+    const result = insertSection(doc, tree, { type: 'text', text: 'A' }, 'after', 'New', '## New ^taken\n\nBody.');
+    expect(count(result, /\^taken\b/g)).toBe(1);
+    expect(result).toMatch(/^## New \^new$/m);
+  });
+
+  it('does not strip a matching heading inside a code fence', () => {
+    const tree = parse(md);
+    const content = '```md\n## New\n```\n\nBody.';
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', content);
+    expect(result).toContain('```md\n## New\n```');
+  });
+
+  it('leaves content alone when its first heading is a different section', () => {
+    const tree = parse(md);
+    const content = '### Other\n\n## New\n\nBody.';
+    const warnings: string[] = [];
+    const result = insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', content, undefined, warnings);
+    expect(result).toContain('### Other\n\n## New\n\nBody.');
+    expect(warnings).toEqual([]);
+  });
+
+  it('reports a warning when it strips the heading', () => {
+    const tree = parse(md);
+    const warnings: string[] = [];
+    insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', '## New\n\nBody.', undefined, warnings);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/removed.*heading "New"/i);
+  });
+
+  it('adds no warning when content has no duplicate heading', () => {
+    const tree = parse(md);
+    const warnings: string[] = [];
+    insertSection(md, tree, { type: 'text', text: 'A' }, 'after', 'New', 'Body.', undefined, warnings);
+    expect(warnings).toEqual([]);
+  });
+});
+
 describe('replaceSection — trailing newline preservation', () => {
   it('ensures next section heading is not concatenated when content lacks trailing newline', () => {
     const md = '# Doc\n\n## A\n\nContent A.\n\n## B\n\nContent B.\n';
