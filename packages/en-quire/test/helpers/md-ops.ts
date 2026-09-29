@@ -34,8 +34,9 @@ export function insertSection(
   heading: string,
   content: string,
   level?: number,
+  warnings?: string[],
 ): string {
-  return _insertSection(markdown, tree, anchor, position, heading, content, markdownStrategy, level);
+  return _insertSection(markdown, tree, anchor, position, heading, content, markdownStrategy, level, warnings);
 }
 
 export function appendToSection(

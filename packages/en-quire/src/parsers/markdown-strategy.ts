@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type { SectionNode } from '@nullproof-studio/en-core';
 import type { OpsStrategy, ParserCapabilities } from '@nullproof-studio/en-core';
-import { ValidationError, slugify, uniqueSlug } from '@nullproof-studio/en-core';
+import { ValidationError, extractAnchor, slugify, uniqueSlug } from '@nullproof-studio/en-core';
 
 /**
  * Markdown-specific rendering and heading logic.
@@ -114,6 +114,32 @@ export const markdownStrategy: OpsStrategy = {
       return trimmed.slice(headingEnd).replace(/^\n*/, '');
     }
     return content;
+  },
+
+  stripDuplicateHeading(content, headingText) {
+    const lines = content.split('\n');
+    let inCodeBlock = false;
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trimStart();
+      if (trimmed.startsWith('```')) {
+        inCodeBlock = !inCodeBlock;
+        continue;
+      }
+      if (inCodeBlock) continue;
+
+      const match = trimmed.match(/^#{1,6}\s+(.*?)(?:\s+#+)?\s*$/);
+      if (!match) continue;
+      // Only the first real heading is a candidate — a later match is a
+      // genuine child/sibling the agent meant to write.
+      const { text, anchorId } = extractAnchor(match[1]);
+      if (text.trim() !== headingText) return null;
+
+      const preamble = lines.slice(0, i).join('\n').trim();
+      const rest = lines.slice(i + 1).join('\n').replace(/^\n*/, '');
+      const stripped = preamble && rest ? `${preamble}\n\n${rest}` : preamble || rest;
+      return { content: stripped, ...(anchorId && { anchorId }) };
+    }
+    return null;
   },
 
   generateToc(tree, maxDepth, style) {

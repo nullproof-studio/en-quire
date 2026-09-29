@@ -286,9 +286,26 @@ export function insertSection(
   content: string,
   ops: OpsStrategy,
   level?: number,
+  warnings?: string[],
 ): string {
   const anchorNode = resolveSingleSection(tree, anchor);
-  const cleanHeading = ops.stripHeadingMarkers(heading);
+  let cleanHeading = ops.stripHeadingMarkers(heading);
+
+  // Recover when the agent also wrote the heading line into `content`:
+  // inserting as-is would emit the heading twice and fail validation.
+  const dup = ops.stripDuplicateHeading?.(content, extractAnchor(cleanHeading).text);
+  if (dup) {
+    content = dup.content;
+    // Keep the agent's own `^id` when it chose one and it is still free.
+    if (dup.anchorId && ops.formatAnchor && !extractAnchor(cleanHeading).anchorId
+      && !collectAnchorIds(tree).has(dup.anchorId)) {
+      cleanHeading += ops.formatAnchor(dup.anchorId);
+    }
+    warnings?.push(
+      `Removed a copy of the section heading "${extractAnchor(cleanHeading).text}" from content — ` +
+      '`heading` is written automatically, so pass the body only.',
+    );
+  }
 
   // Check for duplicate sibling
   const siblings = (position === 'child_start' || position === 'child_end')
