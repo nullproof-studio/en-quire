@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import '../../../src/parsers/markdown-parser.js';
 import '../../../src/parsers/yaml-parser.js';
+import '../../../src/parsers/jsonl-parser.js';
 import { parserRegistry } from '@nullproof-studio/en-core';
 
 describe('ParserRegistry', () => {
@@ -48,6 +49,13 @@ describe('ParserRegistry', () => {
     expect(exts).toContain('.mdx');
     expect(exts).not.toContain('.yaml');
     expect(exts).not.toContain('.yml');
+  });
+
+  it('lists extensions that are full-text indexed — JSONL is excluded by design (#146)', () => {
+    const exts = parserRegistry.extensionsSupporting('fullTextIndex');
+    expect(exts).toEqual(expect.arrayContaining(['.md', '.mdx', '.yaml', '.yml']));
+    expect(exts).not.toContain('.jsonl');
+    expect(exts).not.toContain('.ndjson');
   });
 });
 

@@ -31,4 +31,7 @@ export const jsonlStrategy: OpsStrategy = {
 
 export const jsonlCapabilities: ParserCapabilities = {
   generateToc: false,
+  // Record-oriented data (transcripts, training samples, event logs) is read
+  // by record via doc_read_section, not full-text search.
+  fullTextIndex: false,
 };

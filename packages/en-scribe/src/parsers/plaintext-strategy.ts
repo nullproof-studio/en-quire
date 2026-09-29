@@ -22,4 +22,5 @@ export const plaintextStrategy: OpsStrategy = {
 
 export const plaintextCapabilities: ParserCapabilities = {
   generateToc: false,
+  fullTextIndex: true,
 };

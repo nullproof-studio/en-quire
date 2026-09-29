@@ -174,4 +174,5 @@ export const markdownStrategy: OpsStrategy = {
 
 export const markdownCapabilities: ParserCapabilities = {
   generateToc: true,
+  fullTextIndex: true,
 };
