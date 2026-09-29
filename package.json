@@ -25,9 +25,9 @@
     "clean": "npm run clean -w @nullproof-studio/en-core --if-present && npm run clean -w @nullproof-studio/en-quire --if-present && npm run clean -w @nullproof-studio/en-scribe --if-present"
   },
   "devDependencies": {
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.2"
   },
   "overrides": {
     "hono": "^4.13.5"
