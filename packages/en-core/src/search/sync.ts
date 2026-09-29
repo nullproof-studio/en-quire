@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type Database from 'better-sqlite3';
 import { statSync } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { listDocumentFiles, readDocument, safePath } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { indexDocument, removeFromIndex } from './indexer.js';
@@ -39,6 +39,15 @@ export interface SyncResult {
  * - Batches index writes into transactions of BATCH_SIZE files
  * - Reports elapsed time for observability
  */
+/**
+ * Extensions that go into the search index: those whose registered parser
+ * declares `fullTextIndex`. Each binary therefore indexes exactly the formats
+ * it registers (en-quire: md/yaml, en-scribe: plain text); JSONL opts out.
+ */
+export function indexedExtensions(): string[] {
+  return parserRegistry.extensionsSupporting('fullTextIndex');
+}
+
 function isFile(absolutePath: string): boolean {
   try {
     return statSync(absolutePath).isFile();
@@ -98,14 +107,15 @@ export function syncIndex(
       .map((row) => [row.file_path, row.mtime_ms]),
   );
 
+  const extensions = indexedExtensions();
   let files: string[];
   try {
     if (!walk) {
       files = [...indexedMtimes.keys()].map((p) => p.slice(rootPrefix.length));
     } else if (subPath && isFile(safePath(documentRoot, subPath))) {
-      files = [subPath];
+      files = extensions.includes(extname(subPath).toLowerCase()) ? [subPath] : [];
     } else {
-      files = listDocumentFiles(documentRoot, subPath);
+      files = listDocumentFiles(documentRoot, subPath, extensions);
     }
   } catch (err) {
     const log = getLogger();
@@ -295,7 +305,7 @@ export async function syncEmbeddings(
 
   let files: string[];
   try {
-    files = listDocumentFiles(documentRoot);
+    files = listDocumentFiles(documentRoot, undefined, indexedExtensions());
   } catch (err) {
     log.warn('Embedding sync skipped — cannot scan root', {
       root: rootName,

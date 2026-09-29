@@ -62,4 +62,11 @@ export interface OpsStrategy {
 
 export interface ParserCapabilities {
   readonly generateToc: boolean;
+  /**
+   * Whether files of this format go into the full-text search index. The
+   * single source of truth for which files syncIndex walks and which
+   * doc_status counts as unindexed. Record-oriented formats (JSONL) opt out:
+   * they are read by record index, not substring search.
+   */
+  readonly fullTextIndex: boolean;
 }

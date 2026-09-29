@@ -37,4 +37,5 @@ export const yamlStrategy: OpsStrategy = {
 
 export const yamlCapabilities: ParserCapabilities = {
   generateToc: false,
+  fullTextIndex: true,
 };

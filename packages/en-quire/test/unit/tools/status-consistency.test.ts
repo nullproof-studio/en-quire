@@ -32,9 +32,10 @@ import {
  * unscoped result. Any divergence is a bug.
  *
  * The setup mirrors the reporter's layout: two roots, one with both md and
- * jsonl files, one with md only. sync() indexes md/yaml (per its hardcoded
- * listDocumentFiles default), so jsonl files should show up as "unindexed"
- * even though they're a first-class en-quire format.
+ * jsonl files, one with md only. sync() indexes md/yaml; one file per root
+ * is written after the sync so each root has a genuine unindexed file.
+ * JSONL/NDJSON is excluded from the index by design (#146), so it is
+ * reported as a count under excluded_from_index, never under unindexed.
  */
 
 interface TestEnv {
@@ -60,10 +61,14 @@ function makeMultiRootCtx(): TestEnv {
   const db = new Database(':memory:');
   initSearchSchema(db);
 
-  // Run sync on both roots — this uses the pre-registry DEFAULT_EXTENSIONS
-  // (md/mdx/yaml/yml) internally, so jsonl files are deliberately skipped.
+  // Run sync on both roots — only fullTextIndex formats (md/mdx/yaml/yml)
+  // are indexed, so jsonl files are deliberately skipped.
   syncIndex(db, 'docs', root1Dir, 500);
   syncIndex(db, 'configs', root2Dir, 500);
+
+  // Written after the sync: genuine unindexed files, one per root.
+  writeFileSync(join(root1Dir, 'late.md'), '# Late\n');
+  writeFileSync(join(root2Dir, 'late.yaml'), 'late: true\n');
 
   const config: ResolvedConfig = {
     document_roots: {
@@ -107,14 +112,17 @@ afterEach(() => { env.cleanup(); });
 describe('doc_status unscoped vs scoped consistency', () => {
   it('unscoped lists every unindexed file across every root', async () => {
     const result = await handleStatus({}, env.ctx) as { unindexed: string[] };
-    const sorted = [...result.unindexed].sort();
-    // jsonl files in docs are unindexed because sync uses DEFAULT_EXTENSIONS
-    expect(sorted).toContain('docs/chat.jsonl');
-    expect(sorted).toContain('docs/logs.ndjson');
-    // md + yaml are all indexed — should NOT appear in unindexed
-    expect(sorted).not.toContain('docs/notes.md');
-    expect(sorted).not.toContain('configs/readme.md');
-    expect(sorted).not.toContain('configs/sub/config.yaml');
+    // Only the searchable files written after the sync are unindexed.
+    // JSONL/NDJSON and the already-indexed md/yaml must not appear.
+    expect([...result.unindexed].sort()).toEqual(['configs/late.yaml', 'docs/late.md']);
+  });
+
+  it('reports JSONL/NDJSON as an excluded-by-design count, not as unindexed (#146)', async () => {
+    const result = await handleStatus({}, env.ctx) as {
+      excluded_from_index?: { count: number; by_extension: Record<string, number> };
+    };
+    expect(result.excluded_from_index?.count).toBe(2);
+    expect(result.excluded_from_index?.by_extension).toEqual({ '.jsonl': 1, '.ndjson': 1 });
   });
 
   it('scoped-to-root matches the subset of the unscoped result for that root', async () => {
@@ -126,6 +134,15 @@ describe('doc_status unscoped vs scoped consistency', () => {
     // is broken.
     const expected = unscoped.filter((f) => f.startsWith('docs/')).sort();
     expect([...scopedDocs].sort()).toEqual(expected);
+    expect(expected).toEqual(['docs/late.md']);
+  });
+
+  it('scoping narrows excluded_from_index to that root', async () => {
+    type R = { excluded_from_index?: { count: number } };
+    const docs = await handleStatus({ scope: 'docs' }, env.ctx) as R;
+    const configs = await handleStatus({ scope: 'configs' }, env.ctx) as R;
+    expect(docs.excluded_from_index?.count).toBe(2);
+    expect(configs.excluded_from_index).toBeUndefined();
   });
 
   it('reports a non-zero indexed count when md/yaml files were sync\'d', async () => {
