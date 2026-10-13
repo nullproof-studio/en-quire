@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type Database from 'better-sqlite3';
-import micromatch from 'micromatch';
+import picomatch from 'picomatch';
 import type { SearchResult } from '../shared/types.js';
 import { vectorSearch } from './vector-store.js';
 
@@ -128,8 +128,8 @@ function fulltextSearch(
   let filtered = rows;
   if (section_filter) {
     filtered = rows.filter((row) =>
-      micromatch.isMatch(row.section_heading, section_filter) ||
-      micromatch.isMatch(row.section_path, `*${section_filter}*`),
+      picomatch.isMatch(row.section_heading, section_filter) ||
+      picomatch.isMatch(row.section_path, `*${section_filter}*`),
     );
   }
 
@@ -189,8 +189,8 @@ function semanticSearch(
   let filtered = rows;
   if (section_filter) {
     filtered = rows.filter((row) =>
-      micromatch.isMatch(row.section_heading, section_filter) ||
-      micromatch.isMatch(row.section_path, `*${section_filter}*`),
+      picomatch.isMatch(row.section_heading, section_filter) ||
+      picomatch.isMatch(row.section_path, `*${section_filter}*`),
     );
   }
 

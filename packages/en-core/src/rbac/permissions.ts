@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import micromatch from 'micromatch';
+import picomatch from 'picomatch';
 import type { CallerIdentity, Permission } from '../shared/types.js';
 import { PermissionDeniedError } from '../shared/errors.js';
 
@@ -17,7 +17,7 @@ export function checkPermission(
   filePath: string,
 ): PermissionCheckResult {
   for (const scope of caller.scopes) {
-    if (micromatch.isMatch(filePath, scope.path)) {
+    if (picomatch.isMatch(filePath, scope.path)) {
       if (scope.permissions.includes(permission)) {
         return { allowed: true };
       }

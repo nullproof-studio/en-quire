@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import micromatch from 'micromatch';
+import picomatch from 'picomatch';
 
 export type UrlPolicyReason =
   | 'invalid_url'
@@ -165,7 +165,7 @@ export function evaluateUrlPolicy(uri: string, config: UrlPolicyConfig): UrlPoli
 }
 
 function matchesAllowlist(host: string, patterns: string[]): boolean {
-  return micromatch.isMatch(host, patterns);
+  return picomatch.isMatch(host, patterns);
 }
 
 /**

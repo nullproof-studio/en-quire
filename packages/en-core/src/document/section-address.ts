@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
-import micromatch from 'micromatch';
+import picomatch from 'picomatch';
 import type { SectionNode, SectionAddress } from '../shared/types.js';
 import { AddressResolutionError } from '../shared/errors.js';
 import { levenshtein } from '../shared/levenshtein.js';
@@ -138,10 +138,8 @@ function resolveIndexAddress(tree: SectionNode[], indices: number[]): SectionNod
 }
 
 function resolvePatternAddress(tree: SectionNode[], pattern: string): SectionNode[] {
-  const all = flattenTree(tree);
-  const headings = all.map((n) => n.heading.text);
-  const matched = micromatch(headings, pattern);
-  return all.filter((n) => matched.includes(n.heading.text));
+  const isMatch = picomatch(pattern);
+  return flattenTree(tree).filter((n) => isMatch(n.heading.text));
 }
 
 function resolveAnchorAddress(tree: SectionNode[], id: string): SectionNode[] {
