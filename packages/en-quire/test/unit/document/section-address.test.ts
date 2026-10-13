@@ -121,6 +121,28 @@ describe('resolveAddress', () => {
       const matches = resolveAddress(tree, { type: 'pattern', pattern: 'Nonexistent*' });
       expect(matches.length).toBe(0);
     });
+
+    it('matches brace alternation', () => {
+      const tree = loadTree('simple.md');
+      const matches = resolveAddress(tree, { type: 'pattern', pattern: 'Section {One,Three}' });
+      expect(matches.map((m) => m.heading.text)).toEqual(['Section One', 'Section Three']);
+    });
+
+    it('matches single-character wildcard', () => {
+      const tree = loadTree('simple.md');
+      const matches = resolveAddress(tree, { type: 'pattern', pattern: 'Subsection 2.?' });
+      expect(matches.map((m) => m.heading.text)).toEqual(['Subsection 2.1', 'Subsection 2.2']);
+    });
+
+    it('matches everything except a negated pattern', () => {
+      const tree = loadTree('simple.md');
+      const matches = resolveAddress(tree, { type: 'pattern', pattern: '!*Section*' });
+      expect(matches.map((m) => m.heading.text)).toEqual([
+        'Simple Document',
+        'Subsection 2.1',
+        'Subsection 2.2',
+      ]);
+    });
   });
 });
 

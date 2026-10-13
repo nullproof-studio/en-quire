@@ -33,7 +33,7 @@
     "cheerio": "^1.2.0",
     "diff": "^9.0.0",
     "jose": "^6.2.12",
-    "micromatch": "^4.0.8",
+    "picomatch": "^4.0.7",
     "simple-git": "^4.0.2",
     "undici": "^8.11.2",
     "winston": "^3.19.0",
@@ -42,8 +42,8 @@
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
-    "@types/micromatch": "^4.0.9",
     "@types/node": "^26.6.3",
+    "@types/picomatch": "^4.0.3",
     "@types/unist": "^3.0.0",
     "typescript": "^7.0.2"
   },

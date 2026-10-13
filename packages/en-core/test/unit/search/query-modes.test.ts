@@ -152,3 +152,24 @@ describe('searchDocuments — hybrid mode', () => {
     expect(hybrid.map((r) => r.file)).toEqual(['docs/sops/deployment.md']);
   });
 });
+
+describe('searchDocuments — section_filter globs', () => {
+  it('keeps rows whose heading matches the glob', () => {
+    const results = searchDocuments(db, 'deployment', { section_filter: 'Deploy*' });
+    expect(results.map((r) => r.section_heading)).toEqual(['Deployment']);
+  });
+
+  it('matches brace alternation in the heading glob', () => {
+    const results = searchDocuments(db, 'deployment', { section_filter: '{Observability,Nothing}' });
+    expect(results.map((r) => r.section_heading)).toEqual(['Observability']);
+  });
+
+  it('falls back to a substring match against the section path', () => {
+    const results = searchDocuments(db, 'deployment', { section_filter: 'servab' });
+    expect(results.map((r) => r.section_heading)).toEqual(['Observability']);
+  });
+
+  it('returns nothing when no heading or path matches', () => {
+    expect(searchDocuments(db, 'deployment', { section_filter: 'Nope*' })).toEqual([]);
+  });
+});
