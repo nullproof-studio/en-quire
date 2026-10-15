@@ -92,19 +92,19 @@ function pathForms(p: string): string[] {
 }
 
 /**
- * Map an absolute filesystem path onto the configured root that contains it
- * (#152). Only paths inside a root are accepted — this is a convenience for
- * callers that hold filesystem paths, never a way to address arbitrary files.
+ * Find the configured root containing an absolute filesystem path (#152).
+ * Only paths inside a root are accepted — this is a convenience for callers
+ * that hold filesystem paths, never a way to address arbitrary files.
  * Containment is by whole path segment (`/srv/spec` does not contain
- * `/srv/spec-local/x.md`), the deepest root wins when roots nest, and the
- * result still goes through safePath, which blocks symlink escapes below the
- * root. The rejection names roots but not their filesystem paths.
+ * `/srv/spec-local/x.md`) and the deepest root wins when roots nest. Returns
+ * the path relative to that root in `/` form (empty for the root itself).
+ * The rejection names roots but not their filesystem paths.
  */
-function resolveAbsolutePath(
+function matchAbsoluteToRoot(
   roots: Record<string, ResolvedRoot>,
-  filePath: string,
-): ResolvedFile {
-  const inputForms = pathForms(filePath);
+  absPath: string,
+): { name: string; rel: string } {
+  const inputForms = pathForms(absPath);
   let best: { name: string; rel: string; depth: number } | undefined;
 
   for (const [name, root] of Object.entries(roots)) {
@@ -121,21 +121,45 @@ function resolveAbsolutePath(
 
   if (!best) {
     throw new ValidationError(
-      `Path "${filePath}" is not inside any configured root. `
+      `Path "${absPath}" is not inside any configured root. `
       + `Configured roots: ${Object.keys(roots).join(', ')}. ${ROOT_FORMAT_HINT}`,
     );
   }
-  if (!best.rel) {
+  return { name: best.name, rel: best.rel.split(sep).join('/') };
+}
+
+/**
+ * Map an absolute file path onto its root. The result still goes through
+ * safePath, which blocks symlink escapes below the root.
+ */
+function resolveAbsolutePath(
+  roots: Record<string, ResolvedRoot>,
+  filePath: string,
+): ResolvedFile {
+  const { name, rel } = matchAbsoluteToRoot(roots, filePath);
+  if (!rel) {
     throw new ValidationError(`File path "${filePath}" is a root, not a file.`);
   }
-
-  const relativePath = best.rel.split(sep).join('/');
   return {
-    rootName: best.name,
-    root: roots[best.name],
-    relativePath,
-    prefixedPath: `${best.name}/${relativePath}`,
+    rootName: name,
+    root: roots[name],
+    relativePath: rel,
+    prefixedPath: `${name}/${rel}`,
   };
+}
+
+/**
+ * Rewrite an absolute directory or glob scope to root syntax ("root" or
+ * "root/sub/**"); anything else passes through unchanged. Without this an
+ * absolute scope reads as a cross-root glob that silently matches nothing.
+ */
+export function canonicaliseScope(
+  roots: Record<string, ResolvedRoot>,
+  scope: string | undefined,
+): string | undefined {
+  if (!scope || !isAbsolute(scope)) return scope;
+  const { name, rel } = matchAbsoluteToRoot(roots, scope);
+  return rel ? `${name}/${rel}` : name;
 }
 
 /**
@@ -144,8 +168,9 @@ function resolveAbsolutePath(
  */
 export function resolveScope(
   roots: Record<string, ResolvedRoot>,
-  scope?: string,
+  rawScope?: string,
 ): { rootName: string | null; scopeWithinRoot: string | undefined } {
+  const scope = canonicaliseScope(roots, rawScope);
   if (!scope || scope === '**') {
     return { rootName: null, scopeWithinRoot: undefined };
   }

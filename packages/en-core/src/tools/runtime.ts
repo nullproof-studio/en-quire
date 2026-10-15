@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { isAbsolute } from 'node:path';
-import { resolveFilePath } from '../config/roots.js';
+import { canonicaliseScope, resolveFilePath } from '../config/roots.js';
 import { EnquireError } from '../shared/errors.js';
 import { getLogger } from '../shared/logger.js';
 import type { ToolContext } from './context.js';
@@ -65,8 +65,8 @@ export function wrapHandler<T>(
 const PATH_ARGS = ['file', 'source', 'destination', 'target_file'] as const;
 
 /**
- * Rewrite absolute filesystem paths in document-path arguments to their
- * root-prefixed form (#152) before the handler runs, so RBAC checks, logs and
+ * Rewrite absolute filesystem paths in document-path and `scope` arguments to
+ * root syntax (#152) before the handler runs, so RBAC checks, logs and
  * resolution all see the same `root/relative` path. Paths outside every root
  * throw here, before any handler code. Relative paths pass through untouched.
  */
@@ -80,6 +80,10 @@ function canonicalisePathArgs<T>(args: T, ctx: ToolContext): T {
       out ??= { ...a };
       out[key] = resolveFilePath(ctx.config.document_roots, value).prefixedPath;
     }
+  }
+  if (typeof a.scope === 'string' && isAbsolute(a.scope)) {
+    out ??= { ...a };
+    out.scope = canonicaliseScope(ctx.config.document_roots, a.scope);
   }
   return (out ?? args) as T;
 }

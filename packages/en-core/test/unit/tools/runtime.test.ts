@@ -97,6 +97,7 @@ describe('wrapHandler absolute path canonicalisation', () => {
       source: '/data/docs/b.md',
       destination: '/data/memory/c.md',
       target_file: '/data/docs/d.md',
+      scope: '/data/memory/notes',
       section: '/not/a/path',
     });
     expect(seen).toEqual({
@@ -104,13 +105,14 @@ describe('wrapHandler absolute path canonicalisation', () => {
       source: 'docs/b.md',
       destination: 'memory/c.md',
       target_file: 'docs/d.md',
+      scope: 'memory/notes',
       section: '/not/a/path',
     });
   });
 
-  it('leaves root-prefixed paths untouched', async () => {
-    const { seen } = await seenArgs({ file: 'docs/a.md' });
-    expect(seen).toEqual({ file: 'docs/a.md' });
+  it('leaves root-prefixed paths and scopes untouched', async () => {
+    const { seen } = await seenArgs({ file: 'docs/a.md', scope: '**' });
+    expect(seen).toEqual({ file: 'docs/a.md', scope: '**' });
   });
 
   it('an RBAC scope written as a root-prefixed glob grants the absolute form', async () => {

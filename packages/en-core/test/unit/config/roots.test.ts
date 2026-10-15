@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  resolveFilePath, resolveScope, safePath,
+  resolveFilePath, resolveScope, canonicaliseScope, safePath,
   NotFoundError, PathTraversalError, ValidationError,
 } from '@nullproof-studio/en-core';
 import type { ResolvedRoot } from '@nullproof-studio/en-core';
@@ -247,5 +247,41 @@ describe('resolveScope', () => {
     const result = resolveScope(singleRoot, 'sops/**');
     expect(result.rootName).toBe('docs');
     expect(result.scopeWithinRoot).toBe('sops/**');
+  });
+});
+
+// #152 — an absolute scope used to fall through to a cross-root glob that
+// matched nothing: an empty result with no error. Convert or reject instead.
+describe('absolute scopes', () => {
+  it('canonicalises an absolute directory inside a root to root/sub', () => {
+    expect(canonicaliseScope(multiRoots, '/data/docs/sops')).toBe('docs/sops');
+  });
+
+  it('canonicalises a root directory to the bare root name', () => {
+    expect(canonicaliseScope(multiRoots, '/data/skills')).toBe('skills');
+    expect(canonicaliseScope(multiRoots, '/data/skills/')).toBe('skills');
+  });
+
+  it('keeps glob segments', () => {
+    expect(canonicaliseScope(multiRoots, '/data/docs/sops/**/*.md')).toBe('docs/sops/**/*.md');
+  });
+
+  it('passes root-syntax scopes and globs through unchanged', () => {
+    for (const scope of ['docs', 'docs/sops', '**', 'sops/**', undefined]) {
+      expect(canonicaliseScope(multiRoots, scope)).toBe(scope);
+    }
+  });
+
+  it('rejects an absolute scope outside every root', () => {
+    expect(() => canonicaliseScope(multiRoots, '/etc')).toThrow(ValidationError);
+    expect(() => canonicaliseScope(singleRoot, '/data/docs/../memory')).toThrow(ValidationError);
+  });
+
+  it('resolveScope accepts absolute scopes too', () => {
+    expect(resolveScope(multiRoots, '/data/docs/sops'))
+      .toEqual({ rootName: 'docs', scopeWithinRoot: 'sops' });
+    expect(resolveScope(multiRoots, '/data/memory'))
+      .toEqual({ rootName: 'memory', scopeWithinRoot: undefined });
+    expect(() => resolveScope(multiRoots, '/etc')).toThrow(ValidationError);
   });
 });
