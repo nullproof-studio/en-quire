@@ -123,14 +123,15 @@ export async function handleContextBundle(
     });
   }
 
-  // Phase 2 — BFS over the link graph (both directions).
+  // Phase 2 — BFS over the link graph (both directions). Same-document
+  // links are indexed for broken-link warnings but aren't traversed here.
   const outgoingStmt = ctx.db.prepare(
     `SELECT source_file, source_section, target_file, target_section
-     FROM doc_links WHERE source_file = ?`,
+     FROM doc_links WHERE source_file = ? AND target_file != source_file`,
   );
   const incomingStmt = ctx.db.prepare(
     `SELECT source_file, source_section, target_file, target_section
-     FROM doc_links WHERE target_file = ?`,
+     FROM doc_links WHERE target_file = ? AND target_file != source_file`,
   );
   // Document-level links (markdown `[text](file.md)` with no fragment,
   // and frontmatter relationship arrays) carry a null section. Without

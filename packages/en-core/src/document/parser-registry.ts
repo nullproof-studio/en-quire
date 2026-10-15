@@ -22,6 +22,12 @@ export interface RawLink {
   context: string | null;
   /** True when the parser knows the target is already a fully-qualified, root-prefixed indexed path. */
   prefixed?: boolean;
+  /**
+   * Link syntax, when the parser knows it. Markdown targets resolve relative
+   * to the source file in renderers (GitHub etc.); wiki targets by basename.
+   * Not stored — used to judge which links a file move breaks.
+   */
+  style?: 'markdown' | 'wiki';
 }
 
 /**

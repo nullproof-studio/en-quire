@@ -4,7 +4,8 @@ import { renameSync, existsSync } from 'node:fs';
 import type { ToolContext } from '@nullproof-studio/en-core';
 import { safePath, readDocument } from '@nullproof-studio/en-core';
 import { computeEtag, validateEtag } from '@nullproof-studio/en-core';
-import { removeFromIndex } from '@nullproof-studio/en-core';
+import { removeFromIndex, indexDocument, parserRegistry } from '@nullproof-studio/en-core';
+import { snapshotRenameLinks, renameLinkWarnings } from '@nullproof-studio/en-core';
 import { buildCommitMessage, buildProposalBranch } from '@nullproof-studio/en-core';
 import { runPostProposeHooks, getLogger } from '@nullproof-studio/en-core';
 import { requirePermission, resolveWriteMode } from '@nullproof-studio/en-core';
@@ -71,6 +72,8 @@ export async function handleDocRename(
   let branch: string | undefined;
   const originalBranch = git?.available ? await git.getCurrentBranch() : undefined;
   const renameWarnings: string[] = [];
+  // Capture links before the move so broken ones can be reported after (#154).
+  const linkSnapshot = snapshotRenameLinks(ctx, srcResolved.prefixedPath);
 
   try {
     if (mode === 'propose' && git?.available) {
@@ -104,8 +107,20 @@ export async function handleDocRename(
       }
     }
 
-    // Update search index (remove old prefixed path)
+    // Update search index: drop the old path, index the new one (with its
+    // links resolved from the new folder), then report links the move broke.
     removeFromIndex(ctx.db, srcResolved.prefixedPath);
+    try {
+      const parser = parserRegistry.getParser(destResolved.relativePath);
+      const links = parser.extractLinks?.(sourceContent) ?? [];
+      indexDocument(ctx.db, destResolved.prefixedPath, parser.parse(sourceContent), sourceContent, undefined, links);
+      renameWarnings.push(...renameLinkWarnings(
+        ctx, srcResolved.prefixedPath, destResolved.prefixedPath, linkSnapshot, links,
+      ));
+    } catch (indexErr) {
+      // Non-fatal, as in executeWrite — the next sync picks the file up.
+      getLogger().warn('rename:index-failed', { file: args.destination, error: String(indexErr) });
+    }
 
     return {
       success: true,

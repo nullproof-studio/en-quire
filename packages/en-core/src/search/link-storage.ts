@@ -13,6 +13,7 @@ import type { RawLink } from '../document/parser-registry.js';
  * - `prefixed: true` on a RawLink means the parser already produced a
  *   fully-qualified, root-prefixed path (e.g. from a frontmatter array).
  *   Stored verbatim.
+ * - An empty target is a same-document link and resolves to the source.
  * - Otherwise the target string is treated as either a relative path
  *   (contains a `/` or starts with `.`) or a bare basename (Obsidian
  *   wiki link form). Relative paths resolve against the source file's
@@ -53,6 +54,12 @@ function resolveTarget(
   link: RawLink,
 ): ResolvedTarget {
   const target = link.target_path;
+
+  // Same-document link (`#fragment`, `[[#Heading]]`) — targets its own file.
+  if (target === '') {
+    return { target_file: sourcePath, target_section: link.target_section };
+  }
+
   const indexed = listIndexedPaths(db);
 
   if (link.prefixed) {

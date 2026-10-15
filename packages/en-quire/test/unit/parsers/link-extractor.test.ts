@@ -192,3 +192,33 @@ describe('markdown link extractor — context', () => {
     expect(links[0].context).toContain('runbook');
   });
 });
+
+// Same-document links break on heading renames too; they're indexed against
+// their own file (empty target_path) so the backlink index sees them (#154).
+describe('markdown link extractor — same-document links', () => {
+  it('extracts a markdown fragment-only link with an empty target path', () => {
+    const links = extract('# Doc\n\n## A\n\nSee [below](#retry-policy).\n');
+    expect(links).toHaveLength(1);
+    expect(links[0].target_path).toBe('');
+    expect(links[0].target_section).toBe('retry-policy');
+    expect(links[0].source_section).toBe('Doc > A');
+  });
+
+  it('extracts a wiki fragment-only link with an empty target path', () => {
+    const links = extract('# Doc\n\nPer [[#Retry Policy]] and [[#^store-map|the map]].\n');
+    expect(links.map((l) => [l.target_path, l.target_section])).toEqual([
+      ['', 'Retry Policy'],
+      ['', '^store-map'],
+    ]);
+  });
+
+  it('records the link syntax, since markdown and wiki targets resolve differently', () => {
+    const links = extract('[a](a.md) and [[b]]\n');
+    expect(links.map((l) => l.style)).toEqual(['markdown', 'wiki']);
+  });
+
+  it('skips a bare "#" link (no fragment to resolve)', () => {
+    expect(extract('Top [link](#) here.\n')).toHaveLength(0);
+  });
+});
+

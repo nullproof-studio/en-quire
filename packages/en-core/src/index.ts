@@ -77,3 +77,5 @@ export * from './tools/registry.js';
 export * from './tools/runtime.js';
 export * from './tools/status.js';
 export * from './tools/write-helpers.js';
+export { snapshotRenameLinks, renameLinkWarnings } from './tools/link-breakage.js';
+export type { RenameLinkSnapshot } from './tools/link-breakage.js';

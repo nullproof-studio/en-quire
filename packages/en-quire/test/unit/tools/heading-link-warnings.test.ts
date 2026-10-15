@@ -14,6 +14,7 @@ import { handleDocRenameSection, DocRenameSectionSchema } from '../../../src/too
 import { handleDocFindReplace, DocFindReplaceSchema } from '../../../src/tools/write/doc-find-replace.js';
 import { handleDocDeleteSection, DocDeleteSectionSchema } from '../../../src/tools/write/doc-delete-section.js';
 import { handleDocAppendSection, DocAppendSectionSchema } from '../../../src/tools/write/doc-append-section.js';
+import { handleDocRename, DocRenameSchema } from '../../../src/tools/write/doc-rename.js';
 
 /**
  * #154 — changing a heading's text changes its slug, so inbound
@@ -166,3 +167,87 @@ describe('write warnings for inbound links to removed headings', () => {
     expect(w).toContain('docs/fresh.md');
   });
 });
+
+describe('same-document links', () => {
+  it('warns about in-document links to a renamed heading', async () => {
+    await create('self.md', '# Self\n\n## Intro\n\nSee [below](#details) and [[#Details]].\n\n## Details\n\nd.\n');
+    const result = await handleDocRenameSection(
+      DocRenameSectionSchema.parse({ file: 'docs/self.md', section: 'Details', new_heading: 'Specifics' }),
+      env.ctx,
+    );
+    const w = warningsOf(result);
+    expect(w).toMatch(/2 inbound links/);
+    expect(w).toContain('docs/self.md (§ Self > Intro)');
+  });
+
+  it('is silent when the same write updates the in-document links too', async () => {
+    await create('self.md', '# Self\n\n## Intro\n\nSee [[#Details]].\n\n## Details\n\nd.\n');
+    const result = await handleDocFindReplace(
+      DocFindReplaceSchema.parse({ file: 'docs/self.md', find: 'Details', replace: 'Specifics' }),
+      env.ctx,
+    );
+    expect(warningsOf(result)).toBe('');
+  });
+});
+
+// Renaming or moving a file breaks path links to it, and the moved file's own
+// relative links if it changes folder. Wiki links resolve by basename, so a
+// folder move alone leaves them working.
+describe('doc_rename', () => {
+  const rename = (source: string, destination: string) => handleDocRename(
+    DocRenameSchema.parse({ source: `docs/${source}`, destination: `docs/${destination}` }),
+    env.ctx,
+  );
+
+  it('warns about path links to the old location; wiki links survive a folder move', async () => {
+    await create('archive/index.md', '# Archive\n'); // doc_rename doesn't create folders
+    const w = warningsOf(await rename('spec.md', 'archive/spec.md'));
+    expect(w).toMatch(/2 inbound links/); // guide's two path links
+    expect(w).toContain('docs/guide.md (§ Guide > Overview)');
+    expect(w).not.toContain('docs/notes.md');
+    expect(w).toContain('docs/archive/spec.md');
+  });
+
+  it('warns about wiki links too when the basename changes', async () => {
+    const w = warningsOf(await rename('spec.md', 'design.md'));
+    expect(w).toMatch(/4 inbound links/); // guide's two path links + notes' two wiki links
+    expect(w).toContain('docs/notes.md');
+  });
+
+  it('warns about the moved file\'s relative links that no longer resolve', async () => {
+    await create('sub/b.md', '# B\n');
+    await create('sub/a.md', '# A\n\n## Links\n\n[b](b.md), [b again](./b.md), [spec](../spec.md), [[guide]], [self](#links).\n');
+    const w = warningsOf(await rename('sub/a.md', 'a.md'));
+    expect(w).toMatch(/3 links in docs\/a\.md no longer resolve/);
+    expect(w).toContain('docs/sub/b.md');
+    expect(w).toContain('docs/spec.md');
+    expect(w).not.toContain('guide');
+  });
+
+  it('indexes the destination so its links and backlinks are live straight away', async () => {
+    await rename('guide.md', 'handbook.md');
+    const rows = env.ctx.db.prepare('SELECT target_file FROM doc_links WHERE source_file = ?').all('docs/handbook.md');
+    expect(rows).toHaveLength(2);
+    const indexed = env.ctx.db.prepare('SELECT 1 FROM index_metadata WHERE file_path = ?').get('docs/handbook.md');
+    expect(indexed).toBeDefined();
+  });
+
+  it('does not reveal linking files the caller cannot read', async () => {
+    env.ctx.caller = {
+      id: 'scoped',
+      scopes: [
+        { path: 'docs/spec.md', permissions: ['read', 'write'] },
+        { path: 'docs/design.md', permissions: ['read', 'write'] },
+        { path: 'docs/guide.md', permissions: ['read'] },
+      ],
+    };
+    const w = warningsOf(await rename('spec.md', 'design.md'));
+    expect(w).toMatch(/2 inbound links/); // guide only
+    expect(w).not.toContain('notes');
+  });
+
+  it('is silent when nothing links to the file and its own links still resolve', async () => {
+    expect(warningsOf(await rename('notes.md', 'journal.md'))).toBe('');
+  });
+});
+

@@ -43,6 +43,19 @@ afterEach(() => {
 });
 
 describe('storeLinks resolution', () => {
+  it('resolves a same-document link (empty target path) to the source file', () => {
+    storeLinks(db, 'docs/spec.md', [{
+      source_section: 'Spec > Intro',
+      target_path: '',
+      target_section: 'retry-policy',
+      relationship: 'references',
+      context: 'See [below](#retry-policy)',
+    }]);
+    const rows = listLinks('docs/spec.md');
+    expect(rows[0].target_file).toBe('docs/spec.md');
+    expect(rows[0].target_section).toBe('retry-policy');
+  });
+
   it('resolves a relative markdown link against the source directory', () => {
     indexFakeFile('docs/sops/runbook.md');
     indexFakeFile('docs/skills/triage.md');
