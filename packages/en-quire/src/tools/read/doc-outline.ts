@@ -10,6 +10,7 @@ import { computeEtag } from '@nullproof-studio/en-core';
 import { countWords } from '@nullproof-studio/en-core';
 import { booleanish } from '@nullproof-studio/en-core';
 import { extname } from 'node:path';
+import { tablesBySection } from '../../tables/table-ops.js';
 
 export const DocOutlineSchema = z.object({
   file: z.string().describe('Document path (e.g. "root/path/to/file.md").'),
@@ -41,8 +42,10 @@ export async function handleDocOutline(
     isProse,
   );
 
+  // Markdown: list each section's tables so agents know doc_table_read applies (#155).
+  const tables = isMarkdown(resolved.relativePath) ? tablesBySection(content, tree) : new Map();
   const response: { headings: typeof headings; total_word_count?: number; etag: string } = {
-    headings,
+    headings: headings.map((h) => (tables.has(h.line_start) ? { ...h, tables: tables.get(h.line_start) } : h)),
     etag: computeEtag(content),
   };
   if (isProse) {
@@ -57,4 +60,9 @@ export async function handleDocOutline(
 function isProseFormat(filePath: string): boolean {
   const ext = extname(filePath).toLowerCase();
   return ext === '.md' || ext === '.mdx' || ext === '.markdown';
+}
+
+function isMarkdown(filePath: string): boolean {
+  const ext = extname(filePath).toLowerCase();
+  return ext === '.md' || ext === '.mdx';
 }
