@@ -14,6 +14,7 @@ import { GitRequiredError, ValidationError } from '../shared/errors.js';
 import { resolveFilePath } from '../config/roots.js';
 import { computeEtag, validateEtag } from '../shared/etag.js';
 import { getLogger } from '../shared/logger.js';
+import { brokenInboundLinkWarnings } from './link-breakage.js';
 export interface WriteOperationParams {
   file: string;
   operation: string;
@@ -145,6 +146,18 @@ export async function executeWrite(
     } catch (indexErr) {
       // Index update failure is non-fatal
       logger.warn('write:index-failed', { file: params.file, error: String(indexErr) });
+    }
+
+    // Warn about inbound links this write breaks (#154). Markdown only —
+    // links address markdown headings. Best-effort, never fails the write.
+    if (/\.mdx?$/i.test(resolved.relativePath)) {
+      try {
+        warnings.push(...brokenInboundLinkWarnings(
+          ctx, resolved.prefixedPath, params.operation, parser.parse(oldContent), parser.parse(newContent),
+        ));
+      } catch (linkErr) {
+        logger.warn('write:link-check-failed', { file: params.file, error: String(linkErr) });
+      }
     }
 
     // Generate diff

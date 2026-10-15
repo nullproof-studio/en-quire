@@ -63,6 +63,22 @@ export function slugify(text: string): string {
 }
 
 /**
+ * GitHub-flavour slug of a heading, as markdown links address it
+ * (`#tool-selection` for "Tool Selection"). Distinct from {@link slugify},
+ * which derives `^id` anchors: this one keeps `_` and existing hyphens as
+ * GitHub does, and folds accents. Used wherever a stored link fragment is
+ * matched back to a heading (context bundles, broken-link warnings).
+ */
+export function headingSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+/**
  * Strip a trailing closed-ATX closer — whitespace, a run of `#`, then optional
  * whitespace (`### Heading ###`) — from heading text. Written as a single
  * backward scan rather than `/\s+#+\s*$/`, whose unanchored greedy whitespace
