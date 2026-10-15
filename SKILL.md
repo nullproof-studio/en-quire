@@ -45,7 +45,7 @@ Start every session with:
 1. **`doc_status`** — see all configured roots, their git status, index health, and pending proposals
 2. **`doc_list`** — see all files, or scope to a specific root with `doc_list(scope: "skills")`
 
-File paths include the root prefix: `codex/en-quire.mdx`, `agents/researcher.md`, `skills/en-quire/SKILL.md`. Use the prefix in all tool calls.
+File paths include the root prefix: `codex/en-quire.mdx`, `agents/researcher.md`, `skills/en-quire/SKILL.md`. Use the prefix in all tool calls — or, if you already hold a filesystem path from another tool, pass the absolute path as-is: it resolves to the root that contains it. Absolute paths outside every configured root are rejected. Responses always use the root-prefixed form.
 
 Search works across all roots by default. Scope to a single root with `doc_search(query: "...", scope: "agents")`.
 

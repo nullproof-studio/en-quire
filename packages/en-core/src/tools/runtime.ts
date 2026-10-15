@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { isAbsolute } from 'node:path';
+import { resolveFilePath } from '../config/roots.js';
 import { EnquireError } from '../shared/errors.js';
 import { getLogger } from '../shared/logger.js';
 import type { ToolContext } from './context.js';
@@ -16,11 +18,11 @@ export function wrapHandler<T>(
   handler: (args: T, ctx: ToolContext) => Promise<unknown>,
 ) {
   const logger = getLogger();
-  return async (args: T) => {
+  return async (rawArgs: T) => {
     const start = performance.now();
-    const argsSummary = extractArgsSummary(args);
-    logger.info('tool:start', { tool, ...argsSummary });
     try {
+      const args = canonicalisePathArgs(rawArgs, ctx);
+      logger.info('tool:start', { tool, ...extractArgsSummary(args) });
       const result = await handler(args, ctx);
       const durationMs = Math.round(performance.now() - start);
       logger.info('tool:complete', { tool, durationMs });
@@ -57,6 +59,29 @@ export function wrapHandler<T>(
       };
     }
   };
+}
+
+/** Tool arguments that name a single document. */
+const PATH_ARGS = ['file', 'source', 'destination', 'target_file'] as const;
+
+/**
+ * Rewrite absolute filesystem paths in document-path arguments to their
+ * root-prefixed form (#152) before the handler runs, so RBAC checks, logs and
+ * resolution all see the same `root/relative` path. Paths outside every root
+ * throw here, before any handler code. Relative paths pass through untouched.
+ */
+function canonicalisePathArgs<T>(args: T, ctx: ToolContext): T {
+  if (!args || typeof args !== 'object') return args;
+  const a = args as Record<string, unknown>;
+  let out: Record<string, unknown> | undefined;
+  for (const key of PATH_ARGS) {
+    const value = a[key];
+    if (typeof value === 'string' && isAbsolute(value)) {
+      out ??= { ...a };
+      out[key] = resolveFilePath(ctx.config.document_roots, value).prefixedPath;
+    }
+  }
+  return (out ?? args) as T;
 }
 
 /** Extract loggable fields from tool args (file, section, scope, query) — avoids logging content blobs. */
