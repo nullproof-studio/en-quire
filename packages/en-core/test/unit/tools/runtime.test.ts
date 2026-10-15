@@ -6,8 +6,9 @@ import {
   NotFoundError,
   PreconditionFailedError,
   ValidationError,
+  requirePermission,
 } from '@nullproof-studio/en-core';
-import type { ToolContext } from '@nullproof-studio/en-core';
+import type { CallerIdentity, ToolContext } from '@nullproof-studio/en-core';
 
 const ctx = {} as ToolContext;
 
@@ -58,5 +59,71 @@ describe('wrapHandler error serialization', () => {
     expect(payload.conflicts).toEqual(['foo.md', 'bar.md']);
     expect(payload.message).toContain('foo.md');
     expect(payload.message).toContain('bar.md');
+  });
+});
+
+// #152 — absolute paths are canonicalised once, before the handler runs, so
+// RBAC checks, logging and resolution all see the same root-prefixed path.
+describe('wrapHandler absolute path canonicalisation', () => {
+  const git = { enabled: null, auto_commit: true, remote: null, pr_hook: null };
+  const rootsCtx = {
+    config: {
+      document_roots: {
+        docs: { name: 'docs', path: '/data/docs', git },
+        memory: { name: 'memory', path: '/data/memory', git },
+      },
+    },
+  } as unknown as ToolContext;
+
+  async function seenArgs(args: Record<string, unknown>) {
+    let seen: Record<string, unknown> | undefined;
+    const wrapped = wrapHandler<Record<string, unknown>>('test_tool', rootsCtx, async (a) => {
+      seen = a;
+      requirePermission(scopedCaller, 'read', a.file as string);
+      return { ok: true };
+    });
+    const result = await wrapped(args);
+    return { seen, result, payload: JSON.parse(result.content[0].text) };
+  }
+
+  const scopedCaller: CallerIdentity = {
+    id: 'scoped',
+    scopes: [{ path: 'docs/**', permissions: ['read'] }],
+  } as CallerIdentity;
+
+  it('rewrites absolute file/source/destination/target_file to root-prefixed form', async () => {
+    const { seen } = await seenArgs({
+      file: '/data/docs/a.md',
+      source: '/data/docs/b.md',
+      destination: '/data/memory/c.md',
+      target_file: '/data/docs/d.md',
+      scope: '/data/memory/notes',
+      section: '/not/a/path',
+    });
+    expect(seen).toEqual({
+      file: 'docs/a.md',
+      source: 'docs/b.md',
+      destination: 'memory/c.md',
+      target_file: 'docs/d.md',
+      scope: 'memory/notes',
+      section: '/not/a/path',
+    });
+  });
+
+  it('leaves root-prefixed paths and scopes untouched', async () => {
+    const { seen } = await seenArgs({ file: 'docs/a.md', scope: '**' });
+    expect(seen).toEqual({ file: 'docs/a.md', scope: '**' });
+  });
+
+  it('an RBAC scope written as a root-prefixed glob grants the absolute form', async () => {
+    const { result } = await seenArgs({ file: '/data/docs/a.md' });
+    expect(result.isError).toBeUndefined();
+  });
+
+  it('returns a validation error, without calling the handler, for a path outside every root', async () => {
+    const { seen, result, payload } = await seenArgs({ file: '/etc/passwd' });
+    expect(seen).toBeUndefined();
+    expect(result.isError).toBe(true);
+    expect(payload.error).toBe('validation_error');
   });
 });

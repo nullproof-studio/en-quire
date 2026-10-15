@@ -111,4 +111,19 @@ describe('validateEtag', () => {
       expect((err as PreconditionFailedError).code).toBe('precondition_failed');
     }
   });
+
+  // The agent hitting this error is mid-chain: tell it, in context, that it
+  // could have threaded the etag from its last write instead of re-reading.
+  it.each([
+    ['missing', undefined],
+    ['mismatched', 'stale'],
+  ])('%s if_match error hints that write responses return a fresh etag', (_label, ifMatch) => {
+    try {
+      validateEtag(ifMatch, currentEtag, file, true);
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect((err as PreconditionFailedError).message)
+        .toMatch(/every write response returns a fresh etag.*next write's if_match/i);
+    }
+  });
 });
