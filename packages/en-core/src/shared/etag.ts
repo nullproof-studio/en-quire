@@ -301,7 +301,7 @@ export function validateEtag(
     throw new PreconditionFailedError(
       file,
       currentEtag,
-      `Missing if_match — read the document first (doc_outline, doc_read_section, or doc_read) to obtain an ETag, then pass it as if_match.`,
+      `Missing if_match — read the document first (doc_outline, doc_read_section, or doc_read) to obtain an ETag, then pass it as if_match. Every write response returns a fresh etag — pass it as the next write's if_match to chain edits without re-reading.`,
     );
   }
 
@@ -309,7 +309,7 @@ export function validateEtag(
     throw new PreconditionFailedError(
       file,
       currentEtag,
-      `ETag mismatch — the document has been modified since your last read. Re-read with doc_outline or doc_read_section to get a current ETag, then retry.`,
+      `ETag mismatch — the document has been modified since your last read. Re-read the section you are editing (doc_outline or doc_read_section) — your change may conflict — then retry with current_etag. Every write response returns a fresh etag — pass it as the next write's if_match to chain edits without re-reading.`,
     );
   }
 }

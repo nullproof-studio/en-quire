@@ -79,6 +79,14 @@ Every interaction with a document follows this sequence:
 
 Every write tool returns a diff. You do not need to re-read the file to verify your edit landed correctly.
 
+### Etag Chaining
+
+Every write invalidates the document's previous etag — and every write tool returns the fresh one as `etag` in its response. **Pass that `etag` as the next write's `if_match`**, whichever write tool comes next. A run of edits to the same document (appends, renames, moves, deletes, find/replace) needs one read up front and no re-reads between writes.
+
+- Track the etag per document — a write to one file doesn't change another file's etag.
+- If a write fails with a stale-etag error, the error carries `current_etag`. Someone else changed the file since you read it: re-read the section you're editing (your change may now conflict), then retry with `current_etag`. Don't retry blindly — the guard exists to stop you overwriting a change you haven't seen.
+- A `doc_find_replace` preview also returns an etag; use it to apply the same replacement.
+
 For YAML files, en-quire validates the output before writing. If your edit would produce invalid YAML, the write is blocked with a clear error message showing the syntax problem. This means you can trust that successful writes produce valid files.
 
 ## Hybrid Pattern: Outline + Filesystem Read
@@ -214,17 +222,10 @@ When inserting content with nested sub-headings, **every sub-heading must be glo
 
 **Solution:** Use unique sub-heading names within inserted content. Instead of generic names like "How It Works", use descriptive names that include the capability or context: "How [Capability] Works", "How [Capability] Functions", "How [Capability] Operates". This prevents collisions without needing to rename existing sections.
 
-### Etag Chaining for doc_move_section
+### Chaining Moves
 
-Each `doc_move_section` call returns a fresh etag in the response. You can chain 7+ moves without re-fetching — just use the previous response's etag for the next call. This is efficient for large restructuring tasks.
+Large restructures chain cleanly: 7+ `doc_move_section` calls can run back to back, each using the previous response's `etag` (see [Etag Chaining](#etag-chaining)). Address sections by `^id` or path so each move still resolves as earlier moves shift the document.
 
-**Pattern:**
-1. Call `doc_move_section` with the current etag
-2. Capture the `etag` from the response
-3. Use that etag as `if_match` for the next `doc_move_section` call
-4. Repeat until all moves are complete
-
-This avoids the round-trip cost of `doc_outline` or `doc_read_section` between each move.
 ## YAML Operations
 
 
