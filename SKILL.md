@@ -23,6 +23,8 @@ compatibility:
     - doc_create
     - doc_rename
     - doc_set_value
+    - doc_table_read
+    - doc_table_write
     - doc_move_section
     - doc_rename_section
     - doc_generate_toc
@@ -70,7 +72,8 @@ Every interaction with a document follows this sequence:
 3. **Edit with the right tool:**
    - `doc_set_value` — change a single value (YAML scalar or markdown section body). The simplest edit tool — one path, one value.
    - `doc_replace_section` — rewrite a block's content (mapping values in YAML, section body in markdown)
-   - `doc_append_section` — add content to the end of a section (table rows, list items, new YAML keys)
+   - `doc_append_section` — add content to the end of a section (list items, new YAML keys)
+   - `doc_table_write` — insert, update or delete rows of a markdown table (see [Markdown Tables](#markdown-tables))
    - `doc_find_replace` — change a term or phrase across the whole document
    - `doc_insert_section` — add a new section before or after an existing one
    - `doc_delete_section` — remove a section entirely
@@ -230,6 +233,34 @@ When inserting content with nested sub-headings, **every sub-heading must be glo
 
 Large restructures chain cleanly: 7+ `doc_move_section` calls can run back to back, each using the previous response's `etag` (see [Etag Chaining](#etag-chaining)). Address sections by `^id` or path so each move still resolves as earlier moves shift the document.
 
+## Markdown Tables
+
+Never edit a table as a raw string with `doc_find_replace` or `doc_replace_section` — pipes, padding and alignment make it fragile. Rows are records keyed by the header row, picked like SQL, and edited in batches.
+
+`doc_outline` lists each section's tables (`tables: [{ index, columns, rows }]`). Read one with **`doc_table_read`**:
+
+```
+doc_table_read(file: "docs/specs/README.md", section: "Spec Index", where: {"Status": "Draft"}, columns: ["ID", "Title"])
+→ { columns: ["ID", "Title", "Status"], rows: [{"ID": "RFC-112", "Title": "Retry budgets"}], row_numbers: [3], row_count: 14, etag }
+```
+
+Edit with **`doc_table_write`** — `ops` run in order, all or nothing, one write and one etag:
+
+```
+doc_table_write(file: "docs/specs/README.md", section: "Spec Index", ops: [
+  {"op": "insert", "rows": [{"ID": "RFC-114", "Title": "Lease renewal", "Status": "Draft"}]},
+  {"op": "update", "where": {"ID": "RFC-113"}, "set": {"Status": "Accepted"}},
+  {"op": "delete", "where": {"ID": "RFC-099"}}
+])
+```
+
+- **Picking rows:** `where` matches cell values (markdown source or plain text, so `{"ID": "RFC-113"}` also matches `` `RFC-113` ``), ANDed across columns. For a table with no distinguishing column, use `row` — zero-based over the body rows, `-1` for the last. Positions shift as earlier ops insert or delete.
+- **Safety:** `update` and `delete` must match exactly one row. To change several on purpose, pass `expected_count`.
+- **Inserting:** appends by default. `position: "start"` for newest-first logs, or `"before"` / `"after"` a row picked by `where` / `row`. Missing columns are left empty.
+- **Values:** markdown, one line — use `<br>` for a break. Pipes are escaped for you. Unknown columns are an error; a write never adds one.
+- **Several tables in a section:** pass `table` (zero-based); the error lists them if you don't.
+- Untouched rows are left exactly as written; a column-aligned table is realigned.
+
 ## YAML Operations
 
 
@@ -359,6 +390,8 @@ The full-file read prevents tone drift between section edits.
 | Set a scalar value | `doc_set_value` | `file`, `path`, `value` |
 | Replace section content | `doc_replace_section` | `file`, `section`, `content` |
 | Append to a section | `doc_append_section` | `file`, `section`, `content` |
+| Read table rows | `doc_table_read` | `file`, `section`, `where?`, `row?`, `columns?` |
+| Insert / update / delete table rows | `doc_table_write` | `file`, `section`, `ops` |
 | Find and replace | `doc_find_replace` | `file`, `find`, `replace`, `preview?` |
 | Create new document | `doc_create` | `file`, `content` |
 | Insert new section | `doc_insert_section` | `file`, `anchor`, `position`, `heading`, `content` |
