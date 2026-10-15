@@ -109,7 +109,9 @@ function nodeToLink(node: Link, content: string, headings: Heading[]): RawLink |
   if (isExternalScheme(url)) return null;
 
   const [target, fragment] = splitFragment(url);
-  if (target === '') return null;
+  // `#fragment` alone is a same-document link: kept with an empty target so
+  // it's indexed against its own file. A bare `#` addresses nothing.
+  if (target === '' && !fragment) return null;
 
   const offset = node.position?.start?.offset;
   return {
@@ -118,6 +120,7 @@ function nodeToLink(node: Link, content: string, headings: Heading[]): RawLink |
     target_section: fragment,
     relationship: 'references',
     context: offset !== undefined ? buildContext(content, offset) : null,
+    style: 'markdown',
   };
 }
 
@@ -144,6 +147,7 @@ function wikiToLink(
     target_section: fragment,
     relationship: 'references',
     context: buildContext(content, offset),
+    style: 'wiki',
   };
 }
 

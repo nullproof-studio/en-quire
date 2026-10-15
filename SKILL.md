@@ -176,6 +176,10 @@ It takes **no `content` parameter**. That is the point: a rename cannot overwrit
 
 Renaming several headings: each call returns a fresh `etag`; chain it as the next call's `if_match` without re-reading.
 
+**Slug links still break.** A rename changes the heading's slug, so inbound `[text](doc.md#old-slug)` and `[[doc#Old Heading]]` links — and same-document `[text](#old-slug)` links — stop resolving; only `^id` links survive. Any write that removes a heading something links to (rename, delete, find/replace, replace) returns a `warnings` entry naming the linking files and sections. The write still lands; fix the listed links next, or link by `^id` in future.
+
+**Renaming a file** (`doc_rename`) warns the same way: path links to the old location, and the moved file's own relative links that no longer resolve from its new folder. Wiki `[[name]]` links resolve by basename, so they survive a folder move but not a basename change.
+
 **After any structural change** (move, insert, delete, or rename), regenerate the table of contents if one exists:
 1. `doc_outline` — check if the document has a TOC section
 2. `doc_generate_toc` — regenerate it in place

@@ -8,25 +8,10 @@ import { readDocument } from '../shared/file-utils.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { readSection } from '../document/section-ops-core.js';
 import { flattenTree } from '../document/section-tree.js';
+import { headingSlug } from '../document/anchors.js';
 import { AddressResolutionError } from '../shared/errors.js';
 import { getLogger } from '../shared/logger.js';
 import type { SectionNode, SectionAddress } from '../shared/types.js';
-
-/**
- * Convert heading text to a GitHub-flavour markdown slug. Used as the
- * fallback resolution path when a stored target_section is a slugified
- * URL fragment (`#tool-selection`) rather than the actual heading text
- * ("Tool Selection") — markdown links use slugs, our addresses use
- * heading text, so the consumer has to bridge.
- */
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^\w\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-');
-}
 
 /**
  * Find a section whose slugified heading text matches the input
@@ -47,9 +32,9 @@ function findHeadingBySlug(tree: SectionNode[], fragment: string): SectionNode |
     // Malformed percent escape — fall through with the raw value rather
     // than throw, so callers always get a deterministic null/match.
   }
-  const targetSlug = slugify(decoded);
+  const targetSlug = headingSlug(decoded);
   for (const node of flattenTree(tree)) {
-    if (slugify(node.heading.text) === targetSlug) return node;
+    if (headingSlug(node.heading.text) === targetSlug) return node;
   }
   return null;
 }
@@ -138,14 +123,15 @@ export async function handleContextBundle(
     });
   }
 
-  // Phase 2 — BFS over the link graph (both directions).
+  // Phase 2 — BFS over the link graph (both directions). Same-document
+  // links are indexed for broken-link warnings but aren't traversed here.
   const outgoingStmt = ctx.db.prepare(
     `SELECT source_file, source_section, target_file, target_section
-     FROM doc_links WHERE source_file = ?`,
+     FROM doc_links WHERE source_file = ? AND target_file != source_file`,
   );
   const incomingStmt = ctx.db.prepare(
     `SELECT source_file, source_section, target_file, target_section
-     FROM doc_links WHERE target_file = ?`,
+     FROM doc_links WHERE target_file = ? AND target_file != source_file`,
   );
   // Document-level links (markdown `[text](file.md)` with no fragment,
   // and frontmatter relationship arrays) carry a null section. Without
