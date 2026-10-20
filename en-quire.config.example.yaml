@@ -223,17 +223,21 @@ callers:
 auth:
   mode: bearer                            # bearer | oauth-external
 
-  # Required for oauth-external: the canonical URL of THIS server. It is the
-  # audience tokens must carry (`aud`) and what gets advertised in
-  # /.well-known/oauth-protected-resource. Must be the public HTTPS URL.
+  # Required for oauth-external: the canonical URL of THIS server, advertised
+  # in /.well-known/oauth-protected-resource. Must be the public HTTPS URL.
+  # The `aud` tokens must carry is set per provider (`audience`) below.
   # resource: "https://docs.example.com/mcp"
 
-  # One or more trusted IdPs. A request authenticates if its token validates
-  # against ANY provider — so a corporate Entra tenant and a set of Google
-  # individuals can be trusted by the same server simultaneously.
+  # The trusted IdP. Configure one per instance: a Claude connector signs in
+  # through the first issuer advertised in discovery. (The list form exists so
+  # tokens from further issuers can still be accepted, e.g. during a migration.)
   providers: []
   #   - issuer: "https://your-tenant.auth0.com/"   # must equal the token `iss`
-  #     audience: "https://docs.example.com/mcp"    # must equal `auth.resource`
+  #     audience: "https://docs.example.com/mcp"    # the exact `aud` minted for this server:
+  #                                                  # usually `auth.resource`; Entra ID v2 = app client id
+  #     scopes: ["docs:read"]                        # advertised in the 401 challenge + scopes_supported.
+  #                                                  # REQUIRED for Keycloak / Entra, which bind `aud` from the
+  #                                                  # requested scope (Entra: "api://<client-id>/docs.read")
   #     algorithms: [RS256]                          # default: [RS256]
   #     subject_claim: email                         # claim used as the caller id (default: sub)
   #     groups_claim: "https://docs.example.com/groups"  # optional; corp IdP group membership

@@ -73,4 +73,41 @@ auth:
 `);
     expect(() => loadConfig(path)).toThrow(/provider/i);
   });
+
+  it('loads provider scopes, defaulting to none', () => {
+    const config = loadConfig(writeConfig(`
+document_roots:
+  notes:
+    path: .
+auth:
+  mode: oauth-external
+  resource: "https://docs.example.com/mcp"
+  providers:
+    - issuer: "https://auth.example.com/realms/example"
+      audience: "https://docs.example.com/mcp"
+      scopes: ["docs:read", "docs:write"]
+    - issuer: "https://idp.example.com/"
+      audience: "https://docs.example.com/mcp"
+`));
+    expect(config.auth!.providers[0].scopes).toEqual(['docs:read', 'docs:write']);
+    expect(config.auth!.providers[1].scopes).toEqual([]);
+  });
+
+  it('accepts a provider audience that differs from the resource (Entra client id)', () => {
+    const config = loadConfig(writeConfig(`
+document_roots:
+  notes:
+    path: .
+auth:
+  mode: oauth-external
+  resource: "https://docs.example.com/mcp"
+  providers:
+    - issuer: "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0"
+      audience: "66666666-7777-8888-9999-000000000000"
+      subject_claim: oid
+      roles_claim: roles
+      scopes: ["api://66666666-7777-8888-9999-000000000000/docs.read"]
+`));
+    expect(config.auth!.providers[0].audience).toBe('66666666-7777-8888-9999-000000000000');
+  });
 });

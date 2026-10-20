@@ -44,10 +44,15 @@ const RoleBindingSchema = z.object({
 );
 
 // OAuth provider trusted for token validation under `auth.mode: oauth-external`.
-// `audience` MUST match this server's resource identifier — it is what stops a
-// token minted for another service being replayed here. `subject_claim` selects
-// the identity; the optional *_claim fields select group/role/domain facts when
-// the IdP supplies them (corporate directories do; consumer Google does not).
+// `audience` is the exact `aud` value this provider mints for THIS server — it
+// is what stops a token minted for another service being replayed here. It is
+// usually `auth.resource`, but not always: Entra ID v2 tokens carry the API
+// app's client id (a GUID). `scopes` are advertised to clients (challenge +
+// scopes_supported); IdPs that bind the audience from the requested scope
+// (Keycloak, Entra) need them or clients obtain tokens without our audience.
+// `subject_claim` selects the identity; the optional *_claim fields select
+// group/role/domain facts when the IdP supplies them (corporate directories
+// do; consumer Google does not).
 const OAuthProviderSchema = z.object({
   issuer: z.string(),
   jwks_uri: z.string().optional(), // derived from issuer's discovery doc when omitted
@@ -57,6 +62,7 @@ const OAuthProviderSchema = z.object({
   groups_claim: z.string().optional(),
   roles_claim: z.string().optional(),
   domain_claim: z.string().optional(), // e.g. Google Workspace "hd"
+  scopes: z.array(z.string()).default([]),
 });
 
 // Authentication backend selector. `bearer` (default) keeps the static
@@ -66,7 +72,7 @@ const OAuthProviderSchema = z.object({
 // supported concurrently (a request authenticates against any of them).
 const AuthSchema = z.object({
   mode: z.enum(['bearer', 'oauth-external']).default('bearer'),
-  resource: z.string().optional(), // canonical RS URL advertised in discovery + expected as aud
+  resource: z.string().optional(), // canonical RS URL advertised in discovery (the expected aud is per provider)
   providers: z.array(OAuthProviderSchema).default([]),
 });
 

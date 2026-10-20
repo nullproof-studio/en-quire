@@ -80,6 +80,7 @@ function makeConfig(rootDir: string): ResolvedConfig {
         algorithms: ['RS256'],
         subject_claim: 'email',
         groups_claim: 'groups',
+        scopes: ['docs:read', 'docs:write'],
       }],
     },
   };
@@ -150,12 +151,13 @@ describe('HTTP transport — oauth-external (integration)', () => {
   it('serves protected-resource discovery metadata unauthenticated', async () => {
     const res = await fetch(`${baseUrl}/.well-known/oauth-protected-resource/mcp`);
     expect(res.status).toBe(200);
-    const body = await res.json() as { resource: string; authorization_servers: string[] };
+    const body = await res.json() as { resource: string; authorization_servers: string[]; scopes_supported: string[] };
     expect(body.resource).toBe(RESOURCE);
     expect(body.authorization_servers).toContain(issuer);
+    expect(body.scopes_supported).toEqual(['docs:read', 'docs:write']);
   });
 
-  it('rejects /mcp without a token, advertising resource_metadata', async () => {
+  it('rejects /mcp without a token, advertising resource_metadata and scope', async () => {
     const res = await fetch(`${baseUrl}/mcp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
@@ -163,6 +165,7 @@ describe('HTTP transport — oauth-external (integration)', () => {
     });
     expect(res.status).toBe(401);
     expect(res.headers.get('WWW-Authenticate')).toContain('resource_metadata=');
+    expect(res.headers.get('WWW-Authenticate')).toContain('scope="docs:read docs:write"');
     expect(sessions.size).toBe(0);
   });
 

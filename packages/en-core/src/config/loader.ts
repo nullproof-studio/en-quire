@@ -244,6 +244,7 @@ export function loadConfig(configPath: string): ResolvedConfig {
         groups_claim: p.groups_claim,
         roles_claim: p.roles_claim,
         domain_claim: p.domain_claim,
+        scopes: p.scopes,
       })),
     },
     citation: {

@@ -200,4 +200,76 @@ describe('OAuthExternalBackend discovery + challenge', () => {
       'resource_metadata="https://docs.example.com/.well-known/oauth-protected-resource/mcp"',
     );
   });
+
+  // Keycloak and Entra bind the token audience from the requested scope, not
+  // RFC 8707 `resource` — a client that requests no scope gets a token this
+  // server rejects. Advertising the scopes is what makes the flow work.
+  it('advertises the provider scopes as scopes_supported', () => {
+    const b = backend({ providers: [provider({ scopes: ['docs:read', 'docs:write'] })] });
+    const doc = b.discovery().find((d) => d.path === '/.well-known/oauth-protected-resource/mcp');
+    expect(doc!.body).toMatchObject({ scopes_supported: ['docs:read', 'docs:write'] });
+  });
+
+  it('includes the provider scopes in the WWW-Authenticate challenge', () => {
+    const b = backend({ providers: [provider({ scopes: ['docs:read', 'docs:write'] })] });
+    expect(b.challenge()).toContain('scope="docs:read docs:write"');
+  });
+
+  it('omits scopes_supported and the scope parameter when no scopes are configured', () => {
+    const b = backend();
+    const doc = b.discovery().find((d) => d.path === '/.well-known/oauth-protected-resource/mcp');
+    expect(doc!.body).not.toHaveProperty('scopes_supported');
+    expect(b.challenge()).not.toContain('scope=');
+  });
+});
+
+describe('OAuthExternalBackend — Entra ID token shape', () => {
+  // Entra v2 access tokens carry the API app's client id (a GUID) as `aud`,
+  // not the server URL, so the provider audience legitimately differs from
+  // `auth.resource`. Scopes are fully qualified with the Application ID URI.
+  const ENTRA_ISSUER = 'https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0';
+  const ENTRA_CLIENT_ID = '66666666-7777-8888-9999-000000000000';
+
+  function entraBackend() {
+    return backend({
+      providers: [provider({
+        issuer: ENTRA_ISSUER,
+        audience: ENTRA_CLIENT_ID,
+        subject_claim: 'oid',
+        groups_claim: undefined,
+        domain_claim: undefined,
+        roles_claim: 'roles',
+        scopes: [`api://${ENTRA_CLIENT_ID}/docs.read`],
+      })],
+    }, {
+      ...RBAC,
+      bindings: [{ idp_role: 'Docs.Editor', roles: ['editor'] }],
+    });
+  }
+
+  it('authenticates a token whose aud is the app client id rather than the resource URL', async () => {
+    const token = await sign(
+      { oid: 'aaaa-bbbb', roles: ['Docs.Editor'] },
+      { iss: ENTRA_ISSUER, aud: ENTRA_CLIENT_ID },
+    );
+    const out = await entraBackend().authenticate(`Bearer ${token}`);
+    expect(out.ok).toBe(true);
+    if (out.ok) {
+      expect(out.caller.id).toBe('aaaa-bbbb');
+      expect(out.caller.scopes).toEqual(RBAC.roles.editor);
+    }
+  });
+
+  it('rejects a token whose aud is the resource URL instead of the configured client id', async () => {
+    const token = await sign(
+      { oid: 'aaaa-bbbb', roles: ['Docs.Editor'] },
+      { iss: ENTRA_ISSUER, aud: RESOURCE },
+    );
+    const out = await entraBackend().authenticate(`Bearer ${token}`);
+    expect(out.ok).toBe(false);
+  });
+
+  it('advertises the fully qualified Entra scope', () => {
+    expect(entraBackend().challenge()).toContain(`scope="api://${ENTRA_CLIENT_ID}/docs.read"`);
+  });
 });
