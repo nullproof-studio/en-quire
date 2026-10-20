@@ -110,10 +110,13 @@ export function attachRegistry(
   ctx: ToolContext,
 ): void {
   for (const tool of registry.all()) {
-    server.tool(
+    server.registerTool(
       tool.name,
-      tool.description,
-      tool.schema,
+      {
+        description: tool.description,
+        inputSchema: tool.schema,
+        annotations: tool.annotations,
+      },
       wrapHandler(tool.name, ctx, tool.handler as ToolDefinition['handler']),
     );
   }

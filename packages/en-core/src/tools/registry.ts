@@ -1,16 +1,20 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
+import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 import type { ZodRawShape } from 'zod';
 import type { ToolContext } from './context.js';
 
 /**
  * Declarative description of an MCP tool: name, description, argument schema,
- * and handler. The registry holds these; transport attachment (server.tool call)
- * happens later, so the same registry can be bound to any MCP server instance.
+ * annotations, and handler. The registry holds these; transport attachment
+ * (registerTool call) happens later, so the same registry can be bound to any
+ * MCP server instance.
  */
 export interface ToolDefinition<Args = any> {
   name: string;
   description: string;
   schema: ZodRawShape;
+  /** Required so no tool ships without approval hints. See annotations.ts. */
+  annotations: ToolAnnotations;
   handler: (args: Args, ctx: ToolContext) => Promise<unknown>;
 }
 
