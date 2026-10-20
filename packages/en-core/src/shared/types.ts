@@ -261,6 +261,8 @@ export interface ResolvedOAuthProvider {
   groups_claim?: string;
   roles_claim?: string;
   domain_claim?: string;
+  /** Scopes advertised to clients; empty when the IdP needs none requested. */
+  scopes?: string[];
 }
 
 /** Resolved (validated) authentication backend configuration. */

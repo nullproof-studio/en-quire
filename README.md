@@ -106,23 +106,26 @@ en-quire supports two authentication backends, selected by `auth.mode`:
 | `oauth-external` | en-quire is an OAuth 2.1 **Resource Server**: it validates JWT access tokens from a trusted IdP and advertises discovery metadata. | Claude.ai web / Claude Desktop custom connectors, which require the OAuth handshake and cannot use a static token. |
 
 Under `oauth-external`, en-quire does **not** issue tokens or run a login page —
-your IdP (Entra ID, Okta, Auth0, WorkOS, Google, Keycloak, …) handles login,
-MFA, consent, and refresh. en-quire validates the resulting JWT (`iss`, `aud`,
-signature, expiry) against one or more trusted providers — **multiple IdPs are
-supported concurrently** — and maps the verified identity to permissions via the
-[role-based `rbac` policy](en-quire.config.example.yaml). Minimal config:
+your IdP (Entra ID, Okta, Auth0, WorkOS, Keycloak, …) handles login, MFA,
+consent, and refresh. en-quire validates the resulting JWT (`iss`, `aud`,
+signature, expiry) against the trusted provider and maps the verified identity
+to permissions via the [role-based `rbac` policy](en-quire.config.example.yaml).
+Configure **one provider per instance**: a connector signs in through the first
+authorization server en-quire advertises, so further providers would only be
+reachable by clients that obtain tokens some other way. Minimal config:
 
 ```yaml
 transport: streamable-http
 listen_host: "0.0.0.0"          # serve the connector (put TLS in front — OAuth requires HTTPS)
 auth:
   mode: oauth-external
-  resource: "https://docs.example.com/mcp"   # this server's public URL = token audience
+  resource: "https://docs.example.com/mcp"   # this server's public URL
   providers:
     - issuer: "https://your-tenant.auth0.com/"
-      audience: "https://docs.example.com/mcp"
+      audience: "https://docs.example.com/mcp"   # the exact `aud` your IdP mints for this server
       subject_claim: email
       groups_claim: "https://docs.example.com/groups"
+      scopes: ["docs:read"]                      # advertised to clients; see below
 rbac:
   roles:
     editor: [ { path: "sops/**", permissions: [read, search, propose] } ]
@@ -137,10 +140,25 @@ Google), maintain membership in en-quire via `rbac.local_groups` and bind on
 `local_group` / `user`. See [`en-quire.config.example.yaml`](en-quire.config.example.yaml)
 for the full `auth` + `rbac` reference.
 
-> **Note:** Claude's connector flow expects OAuth Dynamic Client Registration,
-> which most corporate IdPs support but consumer Google does not — Google needs
-> a pre-registered client. A self-hosted authorization-server mode
-> (`oauth-internal`) for fully offline / air-gapped deployments is planned; see
+Many IdPs ignore the RFC 8707 `resource` parameter that MCP clients send and
+decide the token audience from the **requested scope** instead. en-quire
+advertises `scopes` in its `401` challenge and in `scopes_supported`, so the
+client asks for a scope that yields a token carrying en-quire's audience.
+Without them the client gets a token en-quire rejects, and every request
+fails with `401`.
+
+| IdP | `audience` | `scopes` | Notes |
+|---|---|---|---|
+| Keycloak | `auth.resource` (via an Audience mapper on an **Optional** client scope) | that client scope, e.g. `docs:read` | Map realm roles to a top-level `roles` claim and bind with `idp_role`. |
+| Entra ID | the API app's **client id** (v2 tokens carry the GUID, not the URL) | `api://<client-id>/<scope>` | Issuer is `https://login.microsoftonline.com/<tenant-id>/v2.0`. Prefer app roles (`roles_claim: roles`) over `groups`, which are object ids and drop out of the token above 200 groups. Use `oid` as `subject_claim`. |
+| Auth0 / Okta | `auth.resource` (API identifier) | optional | These IdPs honour `resource`/`audience` directly. |
+
+> **Note:** Entra ID has no Dynamic Client Registration, so register a client
+> app and enter its client id in the connector's advanced settings. Consumer
+> Google issues opaque (non-JWT) access tokens, which `oauth-external` cannot
+> validate. Use it as an upstream login behind a broker such as Keycloak. A
+> self-hosted authorization-server mode (`oauth-internal`) for fully offline /
+> air-gapped deployments is planned; see
 > [issue #95](https://github.com/nullproof-studio/en-quire/issues/95).
 
 ## Usage

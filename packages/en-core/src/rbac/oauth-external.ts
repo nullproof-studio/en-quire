@@ -70,6 +70,11 @@ export class OAuthExternalBackend implements AuthBackend {
     );
   }
 
+  /** Union of the providers' advertised scopes, in configuration order. */
+  private scopes(): string[] {
+    return [...new Set(this.auth.providers.flatMap((p) => p.scopes ?? []))];
+  }
+
   challenge(): string {
     let value = `Bearer realm="${this.realm}"`;
     if (this.auth.resource) {
@@ -77,16 +82,20 @@ export class OAuthExternalBackend implements AuthBackend {
       const metadataUrl = origin + protectedResourceMetadataPath(this.auth.resource);
       value += `, resource_metadata="${metadataUrl}"`;
     }
+    const scopes = this.scopes();
+    if (scopes.length > 0) value += `, scope="${scopes.join(' ')}"`;
     return value;
   }
 
   discovery(): DiscoveryDocument[] {
     if (!this.auth.resource) return [];
+    const scopes = this.scopes();
     const body = {
       resource: this.auth.resource,
       authorization_servers: [...new Set(this.auth.providers.map((p) => p.issuer))],
       bearer_methods_supported: ['header'],
       resource_name: this.realm,
+      ...(scopes.length > 0 ? { scopes_supported: scopes } : {}),
     };
     // Serve both the path-suffixed form (what clients derive from a resource
     // with a path) and the bare form, so discovery resolves either way.
