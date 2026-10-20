@@ -80,3 +80,46 @@ describe('tool registration', () => {
     expect(duplicates).toEqual([]);
   });
 });
+
+/**
+ * Mirrors the en-quire annotation guard: every tool declares all four hints,
+ * describing the worst case (write mode). A new tool must be added here.
+ */
+describe('tool annotations', () => {
+  const R = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  const ADD = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+  const SAFE = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  const OVER = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+
+  const expected: Record<string, typeof R> = {
+    text_read: R,
+    text_find: R,
+    text_head: R,
+    text_tail: R,
+    text_list: R,
+    text_status: R,
+    text_proposals_list: R,
+    text_proposal_diff: R,
+    text_append: ADD,
+    text_insert_at_anchor: ADD,
+    text_create: SAFE,
+    text_rename: SAFE,
+    text_replace_range: OVER,
+    text_edit: OVER,
+    text_delete: OVER,
+    text_proposal_approve: OVER,
+    text_proposal_reject: OVER,
+  };
+
+  const registry = new ToolRegistry();
+  registerEnScribeTools(registry);
+  const tools = registry.all();
+
+  it('lists every registered tool', () => {
+    expect(tools.map(t => t.name).sort()).toEqual(Object.keys(expected).sort());
+  });
+
+  it.each(Object.entries(expected))('%s declares the expected annotations', (name, hints) => {
+    expect(tools.find(t => t.name === name)?.annotations).toEqual(hints);
+  });
+});

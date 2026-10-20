@@ -85,3 +85,69 @@ describe('tool registration', () => {
     expect(duplicates).toEqual([]);
   });
 });
+
+/**
+ * Clients use MCP tool annotations to decide which calls need user approval,
+ * so every tool declares all four hints. Hints describe the worst case (write
+ * mode); a write in propose mode is gentler than its hints say.
+ * A new tool must be added here deliberately.
+ */
+describe('tool annotations', () => {
+  const R = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  // Adds content; repeating the call adds it again.
+  const ADD = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
+  // Changes without losing content; repeating it changes nothing more (or fails).
+  const SAFE = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+  // Overwrites or removes content; repeating it changes nothing more (or fails).
+  const OVER = { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false };
+  // Overwrites or removes content; repeating it may change more.
+  const DESTROY = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
+  // Fetches https sources; records citations (deduped unless force).
+  const CITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+
+  const expected: Record<string, typeof R> = {
+    doc_outline: R,
+    doc_read_section: R,
+    doc_read: R,
+    doc_list: R,
+    doc_references: R,
+    doc_referenced_by: R,
+    doc_context_bundle: R,
+    doc_history: R,
+    doc_table_read: R,
+    doc_status: R,
+    doc_search: R,
+    doc_proposals_list: R,
+    doc_proposal_diff: R,
+    doc_append_section: ADD,
+    doc_insert_section: ADD,
+    doc_insert_text: ADD,
+    doc_create: SAFE,
+    doc_rename: SAFE,
+    doc_rename_section: SAFE,
+    doc_move_section: SAFE,
+    doc_generate_toc: SAFE,
+    doc_assign_ids: SAFE,
+    doc_replace_section: OVER,
+    doc_set_value: OVER,
+    doc_delete_section: OVER,
+    doc_proposal_approve: OVER,
+    doc_proposal_reject: OVER,
+    doc_find_replace: DESTROY,
+    doc_table_write: DESTROY,
+    doc_cite: CITE,
+    doc_cite_reverify: CITE,
+  };
+
+  const registry = new ToolRegistry();
+  registerEnQuireTools(registry);
+  const tools = registry.all();
+
+  it('lists every registered tool', () => {
+    expect(tools.map(t => t.name).sort()).toEqual(Object.keys(expected).sort());
+  });
+
+  it.each(Object.entries(expected))('%s declares the expected annotations', (name, hints) => {
+    expect(tools.find(t => t.name === name)?.annotations).toEqual(hints);
+  });
+});

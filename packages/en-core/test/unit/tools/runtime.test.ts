@@ -7,7 +7,15 @@ import {
   PreconditionFailedError,
   ValidationError,
   requirePermission,
+  attachRegistry,
+  ToolRegistry,
+  READ_ONLY,
+  OVERWRITE,
 } from '@nullproof-studio/en-core';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { z } from 'zod';
 import type { CallerIdentity, ToolContext } from '@nullproof-studio/en-core';
 
 const ctx = {} as ToolContext;
@@ -125,5 +133,46 @@ describe('wrapHandler absolute path canonicalisation', () => {
     expect(seen).toBeUndefined();
     expect(result.isError).toBe(true);
     expect(payload.error).toBe('validation_error');
+  });
+});
+
+// Clients read tool annotations from tools/list to decide which calls need
+// approval, so they must survive attachment to a real MCP server.
+describe('attachRegistry tool annotations', () => {
+  it('publishes each tool\'s annotations in tools/list', async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: 'probe_read',
+      description: 'read probe',
+      schema: { file: z.string() },
+      annotations: READ_ONLY,
+      handler: async () => ({}),
+    });
+    registry.register({
+      name: 'probe_overwrite',
+      description: 'overwrite probe',
+      schema: {},
+      annotations: OVERWRITE,
+      handler: async () => ({}),
+    });
+
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    attachRegistry(server, registry, ctx);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    const client = new Client({ name: 'test-client', version: '0.0.0' });
+    await client.connect(clientTransport);
+
+    const { tools } = await client.listTools();
+    const byName = Object.fromEntries(tools.map(t => [t.name, t]));
+    expect(byName.probe_read.annotations).toEqual({
+      readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false,
+    });
+    expect(byName.probe_overwrite.annotations).toEqual({
+      readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false,
+    });
+    expect(byName.probe_read.inputSchema.properties).toHaveProperty('file');
+
+    await client.close();
   });
 });
