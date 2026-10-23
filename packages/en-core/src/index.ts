@@ -4,6 +4,7 @@
 export * from './shared/diff.js';
 export * from './shared/encoding.js';
 export * from './shared/errors.js';
+export * from './shared/package-version.js';
 export * from './shared/etag.js';
 export * from './shared/file-utils.js';
 export * from './shared/levenshtein.js';

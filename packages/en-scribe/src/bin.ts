@@ -16,6 +16,7 @@ import {
   ToolRegistry,
   attachRegistry,
   installStdioLifecycle,
+  readPackageVersion,
 } from '@nullproof-studio/en-core';
 import type {
   ResolvedConfig,
@@ -38,7 +39,7 @@ interface ServerDependencies {
 function createServer(deps: ServerDependencies): McpServer {
   const server = new McpServer({
     name: 'en-scribe',
-    version: '0.2.0',
+    version: readPackageVersion(import.meta.url),
   });
 
   const ctx: ToolContext = {
