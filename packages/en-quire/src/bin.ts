@@ -22,6 +22,7 @@ import {
   loadVectorExtension,
   initVectorSchema,
   CiteRateLimiter,
+  readPackageVersion,
 } from '@nullproof-studio/en-core';
 import type {
   ResolvedConfig,
@@ -47,7 +48,7 @@ interface ServerDependencies {
 function createServer(deps: ServerDependencies): McpServer {
   const server = new McpServer({
     name: 'en-quire',
-    version: '0.2.0',
+    version: readPackageVersion(import.meta.url),
   });
 
   // Cite runtime — process-wide. The rate limiter must be shared across all
