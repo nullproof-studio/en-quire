@@ -58,6 +58,14 @@ export interface OpsStrategy {
    */
   deriveAnchorId?(headingText: string, taken: ReadonlySet<string>): string;
   formatAnchor?(id: string): string;
+
+  /**
+   * True when blocks in a section body are separated by blank lines (prose
+   * formats such as markdown), so appended content must be followed by a
+   * blank line before the next heading. Omit for formats whose bodies are
+   * contiguous (YAML, JSONL) — appended content then abuts what is there.
+   */
+  readonly blankLineSeparated?: boolean;
 }
 
 export interface ParserCapabilities {

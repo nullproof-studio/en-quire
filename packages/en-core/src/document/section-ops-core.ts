@@ -392,7 +392,8 @@ export function appendToSection(
   // Ensure proper spacing.
   // For YAML (no blank line between heading and body), keep content contiguous.
   const headingToBody = markdown.slice(node.headingStartOffset, node.bodyStartOffset);
-  const isContiguous = node.headingStartOffset !== node.bodyStartOffset && !headingToBody.includes('\n\n');
+  const isContiguous = !ops.blankLineSeparated
+    && node.headingStartOffset !== node.bodyStartOffset && !headingToBody.includes('\n\n');
 
   let separator: string;
   if (isContiguous) {
@@ -403,7 +404,11 @@ export function appendToSection(
     separator = before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
   }
 
-  return before + separator + content + (content.endsWith('\n') ? '' : '\n') + after;
+  const trailing = content.endsWith('\n') ? '' : '\n';
+  // Prose formats: never butt the appended block up against the next heading.
+  const gapAfter = !isContiguous && after.length > 0 && !after.startsWith('\n') ? '\n' : '';
+
+  return before + separator + content + trailing + gapAfter + after;
 }
 
 /**

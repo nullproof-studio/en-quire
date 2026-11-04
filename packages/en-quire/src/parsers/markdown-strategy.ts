@@ -8,6 +8,8 @@ import { ValidationError, extractAnchor, slugify, uniqueSlug } from '@nullproof-
  * Extracted from section-ops.ts so that section-ops stays format-agnostic.
  */
 export const markdownStrategy: OpsStrategy = {
+  blankLineSeparated: true,
+
   renderHeading(level, text) {
     return '#'.repeat(level) + ' ' + text;
   },
