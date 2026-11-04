@@ -342,6 +342,41 @@ describe('appendToSection', () => {
   });
 });
 
+describe('appendToSection — blank line before the following heading', () => {
+  const append = (md: string, section: string, content: string) =>
+    appendToSection(md, parse(md), { type: 'text', text: section }, content);
+
+  it('keeps a blank line between appended content and the next sibling', () => {
+    const out = append('# Doc\n\n## A\n\nOld.\n\n## B\n\nb.\n', 'A', 'New.\n');
+    expect(out).toBe('# Doc\n\n## A\n\nOld.\n\nNew.\n\n## B\n\nb.\n');
+  });
+
+  it('adds the blank line when content has no trailing newline', () => {
+    const out = append('# Doc\n\n## A\n\nOld.\n\n## B\n\nb.\n', 'A', 'New.');
+    expect(out).toBe('# Doc\n\n## A\n\nOld.\n\nNew.\n\n## B\n\nb.\n');
+  });
+
+  it('adds the blank line when the next heading sat directly under the body', () => {
+    const out = append('# Doc\n\n## A\n\nOld.\n## B\n\nb.\n', 'A', 'New.\n');
+    expect(out).toBe('# Doc\n\n## A\n\nOld.\n\nNew.\n\n## B\n\nb.\n');
+  });
+
+  it('adds the blank line before a child heading', () => {
+    const out = append('# Doc\n\n## A\n\nOld.\n\n### Kid\n\nk.\n', 'A', 'New.\n');
+    expect(out).toBe('# Doc\n\n## A\n\nOld.\n\nNew.\n\n### Kid\n\nk.\n');
+  });
+
+  it('adds the blank line when the section body was empty', () => {
+    const out = append('# Doc\n\n## A\n\n## B\n\nb.\n', 'A', 'New.\n');
+    expect(out).toBe('# Doc\n\n## A\n\nNew.\n\n## B\n\nb.\n');
+  });
+
+  it('does not add a trailing blank line at the end of the document', () => {
+    const out = append('# Doc\n\n## A\n\nOld.\n', 'A', 'New.\n');
+    expect(out).toBe('# Doc\n\n## A\n\nOld.\n\nNew.\n');
+  });
+});
+
 describe('deleteSection', () => {
   it('removes a section and its children', () => {
     const md = loadFixture('simple.md');
