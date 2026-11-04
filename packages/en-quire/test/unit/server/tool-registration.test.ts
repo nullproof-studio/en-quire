@@ -135,6 +135,7 @@ describe('tool annotations', () => {
     doc_proposal_reject: OVER,
     doc_find_replace: DESTROY,
     doc_table_write: DESTROY,
+    doc_batch: DESTROY,
     doc_cite: CITE,
     doc_cite_reverify: CITE,
   };

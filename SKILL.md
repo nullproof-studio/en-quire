@@ -28,6 +28,7 @@ compatibility:
     - doc_set_value
     - doc_table_read
     - doc_table_write
+    - doc_batch
     - doc_move_section
     - doc_rename_section
     - doc_generate_toc
@@ -91,6 +92,7 @@ Every interaction with a document follows this sequence:
    - `doc_append_section` — add content to the end of a section (list items, new YAML keys)
    - `doc_insert_text` — add a paragraph `before` or `after` an existing passage inside a section body. The `anchor` must be literal text that appears exactly once in the document; a few words at a paragraph boundary work best.
    - `doc_table_write` — insert, update or delete rows of a markdown table (see [Markdown Tables](#markdown-tables))
+   - `doc_batch` — several section edits (replace / insert / append / delete / move / rename) to one document in a single all-or-nothing call (see [Batching Edits](#batching-edits))
    - `doc_find_replace` — change a term or phrase across the whole document
    - `doc_insert_section` — add a new section before or after an existing one
    - `doc_delete_section` — remove a section entirely
@@ -263,6 +265,22 @@ When inserting content with nested sub-headings, **every sub-heading must be glo
 > "Duplicate sibling heading 'How It Works' under 'Capabilities' — index [0,8,X] and [0,8,Y] both match."
 
 **Solution:** Use unique sub-heading names within inserted content. Instead of generic names like "How It Works", use descriptive names that include the capability or context: "How [Capability] Works", "How [Capability] Functions", "How [Capability] Operates". This prevents collisions without needing to rename existing sections.
+
+### Batching Edits
+
+More than one structural edit to the same document? Use **`doc_batch`** — one call, one write, one commit, one etag, instead of N calls chained by etag. `ops` run in order, each against the document as earlier ops left it, and the whole batch is all or nothing (a failure names the op as `ops[i]` and writes nothing):
+
+```
+doc_batch(file: "docs/rfc.md", ops: [
+  {"op": "rename", "section": "Problem Statement", "new_heading": "Motivation"},
+  {"op": "insert", "anchor": "Motivation", "position": "after", "heading": "Goals", "content": "…"},
+  {"op": "move",   "section": "Risks", "anchor": "Goals", "position": "after"},
+  {"op": "replace","section": "Goals", "content": "…"},
+  {"op": "delete", "section": "Appendix"}
+])
+```
+
+Ops: `replace` (`section`, `content`, `replace_heading?`), `insert` (`anchor`, `position`, `heading`, `content`, `level?`), `append` (`section`, `content`), `delete` (`section`), `move` (`section`, `anchor`, `position`), `rename` (`section`, `new_heading`). Up to 100 ops, markdown only. Reach for the single-section tools only for a one-off edit.
 
 ### Chaining Moves
 
@@ -443,6 +461,7 @@ The full-file read prevents tone drift between section edits.
 | Insert a paragraph mid-section | `doc_insert_text` | `file`, `anchor`, `position`, `content` |
 | Read table rows | `doc_table_read` | `file`, `section`, `where?`, `row?`, `columns?` |
 | Insert / update / delete table rows | `doc_table_write` | `file`, `section`, `ops` |
+| Several section edits at once | `doc_batch` | `file`, `ops` |
 | Find and replace | `doc_find_replace` | `file`, `find`, `replace`, `preview?` |
 | Create new document | `doc_create` | `file`, `content` |
 | Insert new section | `doc_insert_section` | `file`, `anchor`, `position`, `heading`, `content` |
