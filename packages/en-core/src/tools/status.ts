@@ -2,11 +2,12 @@
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
 import { listDocumentFiles } from '../shared/file-utils.js';
-import { getIndexedCount, getIndexedFiles } from '../search/indexer.js';
-import { requirePermission } from '../rbac/permissions.js';
+import { getIndexedFiles } from '../search/indexer.js';
+import { requirePermission, checkPermission } from '../rbac/permissions.js';
 import { resolveScope } from '../config/roots.js';
 import { parserRegistry } from '../document/parser-registry.js';
 import { indexedExtensions } from '../search/sync.js';
+import { parseProposalBranch } from '../git/commit-message.js';
 import { extname } from 'node:path';
 
 export const StatusSchema = z.object({
@@ -35,6 +36,9 @@ export async function handleStatus(
   ctx: ToolContext,
 ) {
   requirePermission(ctx.caller, 'read', args.scope ?? '**');
+  // Every file reported or counted below is checked individually, not just
+  // the scope argument (see filterPermitted).
+  const canRead = (path: string) => checkPermission(ctx.caller, 'read', path).allowed;
 
   const { rootName, scopeWithinRoot } = resolveScope(ctx.config.document_roots, args.scope);
 
@@ -49,11 +53,13 @@ export async function handleStatus(
   for (const [name, root] of Object.entries(rootsToCheck)) {
     const files = listDocumentFiles(root.path, scopeWithinRoot, extensions);
     for (const file of files) {
-      allFiles.push(`${name}/${file}`);
+      const prefixed = `${name}/${file}`;
+      if (canRead(prefixed)) allFiles.push(prefixed);
     }
   }
 
-  const indexed = getIndexedCount(ctx.db);
+  const indexedFiles = getIndexedFiles(ctx.db);
+  const indexed = indexedFiles.filter(canRead).length;
 
   const modified: string[] = [];
   let pendingProposals = 0;
@@ -65,20 +71,29 @@ export async function handleStatus(
 
     try {
       const rootModified = await git.getModifiedFiles();
-      modified.push(...rootModified.map((f) => `${name}/${f}`));
+      modified.push(...rootModified.map((f) => `${name}/${f}`).filter(canRead));
     } catch {
       // Non-fatal
     }
 
     try {
       const branches = await git.listBranches('propose/');
-      pendingProposals += branches.length;
+      for (const branch of branches) {
+        // Count only proposals on files the caller can read. A branch name
+        // that doesn't parse can't be attributed to a file, so it isn't
+        // counted (doc_proposals_list can't list it either).
+        try {
+          if (canRead(parseProposalBranch(branch, name).file)) pendingProposals++;
+        } catch {
+          // Malformed proposal branch — skip.
+        }
+      }
     } catch {
       // Non-fatal
     }
   }
 
-  const indexedFileSet = new Set(getIndexedFiles(ctx.db));
+  const indexedFileSet = new Set(indexedFiles);
   const unindexed: string[] = [];
   const excludedByExtension: Record<string, number> = {};
   let excludedCount = 0;
