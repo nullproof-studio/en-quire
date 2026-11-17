@@ -31,6 +31,34 @@ export function checkPermission(
 }
 
 /**
+ * Keep only the items whose path the caller holds `permission` on.
+ *
+ * Tools that return many files (list, search, status, proposals) must run
+ * every result through this — checking the `scope` argument alone is not
+ * enough, because a scope string can satisfy a pattern such as `docs/*`
+ * while the results it selects extend beneath it.
+ */
+export function filterPermitted<T>(
+  caller: CallerIdentity,
+  permission: Permission,
+  items: readonly T[],
+  pathOf: (item: T) => string,
+): T[] {
+  return items.filter((item) => checkPermission(caller, permission, pathOf(item)).allowed);
+}
+
+/**
+ * Build a per-path predicate for `permission`, for APIs that take a filter
+ * function (e.g. `searchDocuments`'s `file_filter`).
+ */
+export function permittedPathFilter(
+  caller: CallerIdentity,
+  permission: Permission,
+): (path: string) => boolean {
+  return (path) => checkPermission(caller, permission, path).allowed;
+}
+
+/**
  * Assert a caller has a permission, throwing if denied.
  */
 export function requirePermission(

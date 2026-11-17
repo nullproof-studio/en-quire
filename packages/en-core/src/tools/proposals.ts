@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
-import { requirePermission } from '../rbac/permissions.js';
+import { requirePermission, filterPermitted } from '../rbac/permissions.js';
 import { GitRequiredError, MergeConflictError, ValidationError } from '../shared/errors.js';
 import { getProductName } from '../shared/logger.js';
 import { parseProposalBranch, parseCommitMessage } from '../git/commit-message.js';
@@ -112,7 +112,8 @@ export async function handleProposalsList(
 
   const proposals = await collectProposals(ctx);
 
-  const filtered = proposals
+  // Every proposal is checked, not just the scope argument (see filterPermitted).
+  const filtered = filterPermitted(ctx.caller, 'read', proposals, (p) => p.file)
     .filter((p) => (args.caller ? p.caller === args.caller : true))
     .filter((p) => (args.scope ? p.file.startsWith(args.scope.replace(/\*+/g, '')) : true));
 

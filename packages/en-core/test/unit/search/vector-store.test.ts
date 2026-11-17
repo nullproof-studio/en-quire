@@ -196,6 +196,30 @@ describe('vector store CRUD (sqlite-vec required)', () => {
     expect(results[0].file_path).toBe('docs/sops/runbook.md');
   });
 
+  it('vectorSearch applies fileFilter before the limit (excluded files never take a slot)', async () => {
+    if (!vectorOk) return;
+
+    // Same shape as the expansion test above, but the exclusion comes from a
+    // per-file predicate (a permission check) rather than a scope string.
+    for (let i = 0; i < 200; i++) {
+      upsertEmbedding(db, {
+        file_path: `docs/secret/n${i}.md`,
+        section_path: 'X', section_heading: 'X', section_level: 1, line_start: 1, line_end: 1,
+      }, unitVec([1, 0.001 * i, 0, 0]));
+    }
+    upsertEmbedding(db, {
+      file_path: 'docs/public/runbook.md',
+      section_path: 'Procedure', section_heading: 'Procedure',
+      section_level: 1, line_start: 1, line_end: 1,
+    }, unitVec([0, 1, 0, 0]));
+
+    const results = vectorSearch(
+      db, unitVec([1, 0.001, 0, 0]), 5, undefined,
+      (file) => !file.startsWith('docs/secret/'),
+    );
+    expect(results.map((r) => r.file_path)).toEqual(['docs/public/runbook.md']);
+  });
+
   it('vectorSearch honours scope as a file_path prefix filter', async () => {
     if (!vectorOk) return;
     upsertEmbedding(db, {

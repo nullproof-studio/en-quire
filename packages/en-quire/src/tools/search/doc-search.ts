@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import type { ToolContext } from '@nullproof-studio/en-core';
 import { searchDocuments, refreshIndexForScope } from '@nullproof-studio/en-core';
-import { requirePermission } from '@nullproof-studio/en-core';
+import { requirePermission, permittedPathFilter } from '@nullproof-studio/en-core';
 import { getLogger } from '@nullproof-studio/en-core';
 import { booleanish } from '@nullproof-studio/en-core';
 
@@ -63,6 +63,8 @@ export async function handleDocSearch(
     include_context: args.include_context,
     search_type: query_embedding ? search_type : 'fulltext',
     query_embedding,
+    // Every hit is checked, not just the scope argument (see filterPermitted).
+    file_filter: permittedPathFilter(ctx.caller, 'search'),
   });
 
   return { results };

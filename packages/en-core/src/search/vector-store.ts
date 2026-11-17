@@ -223,12 +223,16 @@ const VECTOR_MAX_K = 10_000;
  * the global top-k window. The trade-off is more work per query when
  * the scope is selective, which is correct: the caller asked for hits
  * within a narrow slice, so we have to look harder.
+ *
+ * `fileFilter` (e.g. a per-file permission check) is applied inside the
+ * same loop, so files the caller cannot see never consume the `limit`.
  */
 export function vectorSearch(
   db: Database.Database,
   query: Float32Array,
   limit: number,
   scope?: string,
+  fileFilter?: (file: string) => boolean,
 ): VectorSearchResult[] {
   const queryBlob = Buffer.from(query.buffer, query.byteOffset, query.byteLength);
 
@@ -254,7 +258,8 @@ export function vectorSearch(
     ? compileSqliteGlob(scope.includes('*') ? scope : `${scope}*`)
     : null;
 
-  let k = scopeRegex ? Math.max(limit * 3, 50) : limit;
+  const selective = scopeRegex !== null || fileFilter !== undefined;
+  let k = selective ? Math.max(limit * 3, 50) : limit;
   if (k > VECTOR_MAX_K) k = VECTOR_MAX_K;
 
   let filtered: Row[] = [];
@@ -263,7 +268,9 @@ export function vectorSearch(
   // fewer rows than asked (exhausted), or we hit the safety cap.
   for (;;) {
     const rows = knnStmt.all(queryBlob, k) as Row[];
-    filtered = scopeRegex ? rows.filter((r) => scopeRegex.test(r.file_path)) : rows;
+    filtered = rows.filter((r) =>
+      (!scopeRegex || scopeRegex.test(r.file_path)) &&
+      (!fileFilter || fileFilter(r.file_path)));
 
     if (filtered.length >= limit) break;
     if (rows.length < k) break; // index is smaller than the candidate window

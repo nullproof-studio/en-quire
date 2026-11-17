@@ -19,6 +19,12 @@ export interface SearchOptions {
    * search function stays synchronous and dependency-free.
    */
   query_embedding?: Float32Array;
+  /**
+   * Per-file predicate (typically a permission check). Applied to the
+   * candidate pool *before* ranking and `max_results`, so excluded files
+   * never take a result slot.
+   */
+  file_filter?: (file: string) => boolean;
 }
 
 /**
@@ -86,7 +92,7 @@ function fulltextSearch(
   query: string,
   options: SearchOptions,
 ): SearchResult[] {
-  const { scope, section_filter, max_results = 10, include_context = true } = options;
+  const { scope, section_filter, max_results = 10, include_context = true, file_filter } = options;
 
   const ftsQuery = sanitiseFts5Query(query);
 
@@ -111,10 +117,7 @@ function fulltextSearch(
     params.push(scope.includes('*') ? scope : `${scope}*`);
   }
 
-  sql += ` ORDER BY rank LIMIT ?`;
-  params.push(max_results * 3);
-
-  const rows = db.prepare(sql).all(...params) as Array<{
+  type FtsRow = {
     file_path: string;
     section_heading: string;
     section_path: string;
@@ -123,7 +126,27 @@ function fulltextSearch(
     rank: number;
     line_start: number;
     line_end: number;
-  }>;
+  };
+
+  // The re-ranking below works on a candidate pool of `max_results * 3`.
+  // Without a file filter, LIMIT builds that pool in SQL. With one, stream
+  // rows in rank order and keep only permitted files until the pool is
+  // full — otherwise excluded files could crowd permitted ones out.
+  const poolSize = max_results * 3;
+  let rows: FtsRow[];
+  if (file_filter) {
+    sql += ` ORDER BY rank`;
+    rows = [];
+    for (const row of db.prepare(sql).iterate(...params) as IterableIterator<FtsRow>) {
+      if (!file_filter(row.file_path)) continue;
+      rows.push(row);
+      if (rows.length >= poolSize) break;
+    }
+  } else {
+    sql += ` ORDER BY rank LIMIT ?`;
+    params.push(poolSize);
+    rows = db.prepare(sql).all(...params) as FtsRow[];
+  }
 
   let filtered = rows;
   if (section_filter) {
@@ -180,7 +203,7 @@ function semanticSearch(
 
   let rows;
   try {
-    rows = vectorSearch(db, options.query_embedding, max_results * 3, scope);
+    rows = vectorSearch(db, options.query_embedding, max_results * 3, scope, options.file_filter);
   } catch {
     // sqlite-vec failed (extension missing or query corrupt) — degrade gracefully.
     return [];

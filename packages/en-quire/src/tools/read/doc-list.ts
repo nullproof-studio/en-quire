@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { ToolContext } from '@nullproof-studio/en-core';
 import { listDocumentFiles, readDocument } from '@nullproof-studio/en-core';
 import { parserRegistry } from '@nullproof-studio/en-core';
-import { requirePermission } from '@nullproof-studio/en-core';
+import { requirePermission, checkPermission } from '@nullproof-studio/en-core';
 import { resolveScope } from '@nullproof-studio/en-core';
 import { booleanish } from '@nullproof-studio/en-core';
 
@@ -39,6 +39,10 @@ export async function handleDocList(
     const files = listDocumentFiles(root.path, scopeWithinRoot);
 
     for (const file of files) {
+      const prefixedPath = `${name}/${file}`;
+      // Every entry is checked, not just the scope argument (see filterPermitted).
+      if (!checkPermission(ctx.caller, 'read', prefixedPath).allowed) continue;
+
       const absolutePath = join(root.path, file);
       let stat;
       try {
@@ -47,7 +51,6 @@ export async function handleDocList(
         continue;
       }
 
-      const prefixedPath = `${name}/${file}`;
 
       const entry: typeof fileList[number] = {
         path: prefixedPath,

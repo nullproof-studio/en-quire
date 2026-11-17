@@ -4,6 +4,7 @@ import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ToolContext } from '@nullproof-studio/en-core';
 import {
+  checkPermission,
   listDocumentFiles,
   requirePermission,
   resolveScope,
@@ -33,6 +34,10 @@ export async function handleTextList(
   for (const [name, root] of Object.entries(rootsToList)) {
     const files = listDocumentFiles(root.path, scopeWithinRoot, TEXT_EXTENSIONS);
     for (const file of files) {
+      const prefixedPath = `${name}/${file}`;
+      // Every entry is checked, not just the scope argument (see filterPermitted).
+      if (!checkPermission(ctx.caller, 'read', prefixedPath).allowed) continue;
+
       const absolutePath = join(root.path, file);
       let stat;
       try {
@@ -41,7 +46,7 @@ export async function handleTextList(
         continue;
       }
       fileList.push({
-        path: `${name}/${file}`,
+        path: prefixedPath,
         root: name,
         size: stat.size,
         modified: stat.mtime.toISOString(),

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Nullproof Studio. MIT License — see LICENSE
 import { z } from 'zod';
 import type { ToolContext } from './context.js';
-import { checkPermission } from '../rbac/permissions.js';
+import { checkPermission, permittedPathFilter } from '../rbac/permissions.js';
 import { searchDocuments } from '../search/query.js';
 import { resolveFilePath } from '../config/roots.js';
 import { readDocument } from '../shared/file-utils.js';
@@ -111,6 +111,10 @@ export async function handleContextBundle(
     scope: args.scope,
     max_results: max_sections * 2,
     include_context: false,
+    // Seeds are search results: each must be searchable by the caller, not
+    // just covered by the scope argument. Graph neighbours are gated by
+    // `read` at emission below.
+    file_filter: permittedPathFilter(caller, 'search'),
   });
 
   if (hits.length === 0) return { sections: [] };
